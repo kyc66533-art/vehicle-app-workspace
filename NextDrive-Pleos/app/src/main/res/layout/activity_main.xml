@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#101820"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="32dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:accessibilityHeading="true"
+            android:text="@string/app_name"
+            android:textColor="#FFFFFF"
+            android:textSize="32sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/test_screen_title"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp" />
+
+        <TextView
+            android:id="@+id/platform_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/platform_checking"
+            android:textColor="#D6E1EC"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/data_origin"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/vehicle_data_unavailable"
+            android:textColor="#D6E1EC"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/door_label"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp" />
+        <TextView
+            android:id="@+id/door_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/value_waiting"
+            android:textColor="#D6E1EC"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/fuel_label"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp" />
+        <TextView
+            android:id="@+id/fuel_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/value_waiting"
+            android:textColor="#D6E1EC"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/odometer_label"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp" />
+        <TextView
+            android:id="@+id/odometer_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/value_waiting"
+            android:textColor="#D6E1EC"
+            android:textSize="20sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/parked_testing_notice"
+            android:textColor="#D6E1EC"
+            android:textSize="20sp" />
+    </LinearLayout>
+</ScrollView>

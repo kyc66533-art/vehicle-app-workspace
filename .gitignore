@@ -1,0 +1,45 @@
+# IDE, build products and local tooling
+**/.idea/
+*.iml
+**/.gradle/
+**/.gradle-user-home/
+**/.kotlin/
+**/build/
+**/local.properties
+.tools/
+.sync/
+*.log
+*.apk
+*.aab
+*.ap_
+*.class
+
+# Credentials, developer sessions and local configuration
+.codex/
+.agents/
+.aws/
+.ssh/
+**/.env
+**/.env.*
+**/credentials
+**/credentials.*
+**/secrets.*
+**/token.json
+**/tokens.json
+**/google-services.json
+**/service-account*.json
+**/client_secret*.json
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+**/keystore.properties
+**/.git-credentials
+**/.netrc
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,5 +1,13 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 2026-11-07 실제 연동 시도 결과
+
+- 공식 시작 가이드의 Maven URL, `Vehicle:2.3.1`, 읽기 권한 `pleos.car.permission.CAR_DOORS`, `getDoor()`/`getCurrentDoorPosition()` 및 도어 Capability 예제를 재확인했습니다.
+- 최소 수신 시험 후보는 **앞 왼쪽 도어 위치**입니다. `DoorArea(DoorValue.ROW_1_LEFT)`의 지원 영역과 `READ`/`READ_WRITE` 접근을 확인한 뒤 조회하는 흐름입니다. 도어 제어/set API는 대상이 아닙니다.
+- Vehicle 2.3.1 POM 다운로드 요청은 이 세션에서 연결 실패했습니다. SDK AAR·실제 클래스·API별 어노테이션·빌드·권한 허용·Capability·값 수신은 여전히 검증하지 못했습니다. 일반 앱에서 실제로 접근 가능하다고 확정하지 않습니다.
+- JBR 경로를 수정한 뒤에도 컴파일 SDK 설치가 원격 manifest 수신 실패로 종료됐고 ADB 서버 시작도 권한 오류로 실패했습니다. 앱 매니페스트/Gradle/SDK 어댑터에 미검증 변경을 추가하지 않았으며 실제 차량 값으로 표시한 데이터도 없습니다.
+- API Reference의 클래스 탐색 경로(`Vehicle`, `DoorArea`, `AccessType`)는 확인했지만 조회한 상세 페이지에는 함수 시그니처 본문이 노출되지 않았습니다. 추측으로 인자를 보충하지 않고 SDK 확보 후 실제 AAR와 함수별 권한을 확인합니다.
+
 현재 Vehicle SDK는 다운로드·설치하지 못했습니다. 아래 '공식 문서 확인'과 '실제 런타임 지원'은 다른 검증입니다. 현재 테스트 앱에는 공식 SDK 호출이나 차량 권한을 추가하지 않았습니다.
 
 | 대상 | 공식 문서 확인 | 설치 / 컴파일 | 실제 Capability / 수신 | 현재 화면 |

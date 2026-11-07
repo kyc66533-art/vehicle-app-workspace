@@ -1,8 +1,42 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-07 09:48:30 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-07 10:07:05 +09:00 (Asia/Seoul).
 
-## 최신 작업 — GitHub 연결 도구로 게시 경로 확정
+## 최신 작업 — Pleos 정식 빌드·Vehicle SDK 수신 준비 시도
+
+### 성공한 작업
+
+- 설치 상태와 공식 문서를 대조했습니다. 현재 Android Studio/JBR은 `C:\Program Files\Android\Android Studio` 아래에 있고 포함 Java 21.0.8 실행에 성공했습니다. 이전 Desktop1 경로가 없음을 확인해 활성 README의 경로를 바로잡았습니다.
+- 기존 Pleos API 34 시스템 이미지/AVD(RAM 4 GB, Cold Boot) 설정을 확인했습니다. 사용자 세션의 기존 부팅 성공 사실은 유지하고 이번 Codex 세션의 앱 실행 성공과 구분했습니다.
+- 시스템 SDK를 변경하지 않는 프로젝트 내부 `.tools/android-sdk` 설치 대상, Java/Android 사용자/임시 경로를 준비했습니다. 기존 수락 라이선스만 사용했고 새 라이선스를 자동 수락하지 않았습니다. 전역 환경 변수·PowerShell 정책·드라이버는 바꾸지 않았습니다.
+- 공식 시작 가이드의 Vehicle 2.3.1 Maven 좌표, 도어 조회 권한, Capability 및 앞 왼쪽 도어 조회 흐름을 재확인했습니다. 확인한 문서와 실제 아티팩트/권한/수신을 구분했습니다.
+
+### 실패한 작업과 미수행 단계
+
+| 요청 단계 | 실제 결과 |
+| --- | --- |
+| SDK Platform 34 / Build Tools 35.0.0 | 첫 시도는 과거 JAVA_HOME 경로로 실패. 현재 JBR로 수정한 설치 요청도 원격 목록/manifest 다운로드 실패 후 종료 코드 1. 프로젝트 내부 SDK의 두 패키지 파일 없음 |
+| Gradle 8.11.1 / 정식 Wrapper | 공식 CDN SHA-256 URL 연결 실패. 배포본/Wrapper 미확보. 전체 Gradle 빌드·Lint·Gradle 테스트 미수행 |
+| 정식 APK | SDK/Wrapper 선행 조건이 없어 생성하지 못함. 기존 오프라인 리소스·Kotlin 검사 산출물을 APK라고 표현하지 않음 |
+| Pleos 실제 앱 실행 | ADB 서버 시작 실패, 종료 코드 1. 로그는 `Cannot mkdir '\.android': Permission denied`. 프로젝트 내 Android 사용자 경로·호환 경로 지정 후에도 같은 결과. APK 설치·시작 미수행 |
+| Vehicle SDK 실수신 | 공식 Nexus의 Vehicle 2.3.1 POM 연결 실패. AAR/함수별 권한/Capability/일반 앱 접근/값 수신 모두 미검증. 가상 값으로 대체하지 않음 |
+
+이 세션에서 일반 앱이 접근 가능한 차량 정보 1개를 실제 수신했다는 결과는 없습니다. 문서상 최소 후보는 앞 왼쪽 도어 위치이며, 실제 SDK 확보 후 읽기 권한·영역·Capability·조회 응답을 차례로 검증해야 합니다. 상세 Reference 일부는 본문 시그니처가 노출되지 않아 추측으로 코드를 만들지 않았습니다.
+
+### 변경 파일 및 검사 범위
+
+- 수정: `NextDrive-Pleos/README.md`, `PLATFORM_VALIDATION.md`, `SDK_CAPABILITY_MATRIX.md`, `docs/CODEX_PROGRESS.md`.
+- 생성: `docs/PLEOS_ENVIRONMENT_RECOVERY.md` — 일반 Windows 환경에서 SDK·정식 Wrapper·APK·ADB·최소 SDK 조회를 이어갈 절차. 실행하지 않은 명령은 안내로 표시했습니다.
+- 이번 게시 대상은 문서 5개입니다. 앱 소스·매니페스트·Gradle 설정은 바꾸지 않았고 미검증 소스도 게시하지 않습니다. 문서 내용·명시적 경로·용량·링크·바이너리·민감정보 패턴 검사를 통과했습니다. 안내의 PowerShell 예제 2개는 구문 검사만 통과했으며 실행 성공으로 표현하지 않습니다.
+- 도구용 파일·로그·라이선스는 Git 제외 경로 `.tools` 아래에만 남겼습니다. 기존 프로젝트·Google AI Studio 앱·Aside 연구 파일을 삭제하거나 초기화하지 않았습니다.
+
+### 다음 작업 및 공유
+
+현재 접근 제한으로 공통 환경 완성을 달성하지 못했습니다. 동일한 실패를 반복하거나 권한/네트워크 제한을 우회하지 않습니다. 일반 Windows 사용자 환경에서 문서의 SDK/Gradle/ADB 준비를 완료한 뒤 실제 기본 APK 실행, 공식 SDK 읽기 전용 어댑터 컴파일과 최소 1개 신호 수신을 검증해야 합니다. 가족 인계·진단·정비사 연동 등 서비스 기능은 계속 보류합니다.
+
+원격 작업 기준 main은 `8081743d7322c251e2fdacaf7d17ffed43b1cbfb`입니다. 검증된 문서만 기존 Codex/Aside 이력을 잇는 커밋으로 **GitHub 연결 도구를 통해 게시**하고 파일 해시·나머지 파일 보존을 확인합니다. 커밋 ID는 최종 응답에 보고하며 로컬 Git 연결/443 접근을 다시 시도하지 않습니다.
+
+## 이전 작업 — GitHub 연결 도구로 게시 경로 확정
 
 ### 완료한 작업 및 변경 파일
 

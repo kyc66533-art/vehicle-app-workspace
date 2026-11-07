@@ -1,5 +1,25 @@
 # Pleos / AAOS 공통 기반 검증 현황
 
+## 2026-11-07 공통 환경 구축·실행 시도
+
+**현재 완료하지 못한 목표:** 정식 Gradle 빌드, APK 설치·실행, Vehicle SDK 연동 및 최소 1개 차량 정보 수신. 실패/미수행을 성공으로 표현하지 않습니다.
+
+| 점검/시도 | 실제 결과 |
+| --- | --- |
+| Android Studio/JDK 위치 | 설치 레지스트리는 `C:\Program Files\Android\Android Studio`. 이전 `C:\Users\kyc66\Desktop1\jbr`는 없어 첫 sdkmanager 시도가 invalid JAVA_HOME으로 종료. 실제 포함 JBR로 수정 후 OpenJDK 21.0.8 실행 성공 |
+| 컴파일 SDK/Build Tools | 기존 사용자 SDK에는 Platform 36 / Build Tools 36.1.0만 확인. API 34 시스템 이미지는 별개로 설치되어 있음 |
+| SDK 설치 시도 | 시스템 SDK를 건드리지 않고 `.tools/android-sdk`에 Platform 34 / Build Tools 35.0.0 설치 요청. 기존 수락 라이선스만 복사해 사용. 올바른 JDK에서도 `Failed to download any source lists`, manifest IO 오류, `Failed to find package 'platforms;android-34'`로 종료 코드 1. 실제 패키지 파일 없음 |
+| Gradle 준비 | 공식 CDN의 8.11.1 SHA-256 URL에 연결 실패. 배포본·Wrapper JAR/스크립트 미확보. 정식 Gradle 명령은 실행하지 못함 |
+| 공식 Vehicle SDK | 공식 Maven의 Vehicle 2.3.1 POM에 연결 실패. AAR 다운로드·의존성 해석·SDK 초기화·권한/Capability 수신 모두 미검증 |
+| ADB 접근 | `adb devices -l` 종료 코드 1. 서버 로그에 `Cannot mkdir '\.android': Permission denied`. 프로젝트 내부 임시 경로 및 문서화된 Android 사용자/호환 경로 지정 후에도 같은 오류. 에뮬레이터 연결·APK 설치 미수행 |
+| Pleos AVD/실행 상태 | 기존 설정은 API 34 / RAM 4096 MB / Cold Boot. 사용자 세션에서 정상 부팅 확인된 사실 유지. 이번 프로세스 목록에는 실행 중 Studio/Emulator/QEMU가 없었으며 Codex에서 새 부팅 성공을 주장하지 않음 |
+
+SDK 목록 수신 실패 뒤 '패키지를 찾지 못했다'는 결과는 API 34 자체가 제공되지 않는다는 뜻이 아닙니다. ADB 오류 역시 사용자 세션의 에뮬레이터 설치 불량으로 단정하지 않습니다.
+
+이번에 생성한 도구용 폴더는 `.tools/android-sdk`, `.tools/android-user`, `.tools/tmp`, `.tools/adb-user`, `.tools/adb-home`, `.tools/adb-temp`입니다. 모두 Git 제외 대상이며 인증 파일·로그·라이선스·패키지를 공유하지 않습니다. 전역 환경 변수/PowerShell 정책/드라이버/루트 `.git`을 바꾸지 않았습니다. 로컬 Git/443 연결도 재시도하지 않았습니다.
+
+일반 사용자 환경에서 이어갈 단계는 `docs/PLEOS_ENVIRONMENT_RECOVERY.md`에 정리했습니다. SDK/Gradle이 확보되고 ADB가 실제 Pleos 대상에 연결된 뒤에 APK 및 읽기 전용 도어 신호를 검증해야 합니다. 현재 앱 소스와 미연결 데이터 소스는 변경하지 않았습니다.
+
 ## 최신 환경 정정 — 사용자 확인 및 로컬 설정 재확인
 
 - 사용자 직접 확인: Android Studio 정상 실행, Pleos Connect v2.1.0 시스템 이미지 설치, API 34 AVD 생성, RAM 4 GB / Cold Boot 설정, 차량용 디스플레이 에뮬레이터 정상 부팅.

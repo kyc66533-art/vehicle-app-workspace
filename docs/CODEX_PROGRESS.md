@@ -1,5 +1,43 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-07 17:13:57 +09:00 (Asia/Seoul).
+
+## 최신 작업 — CARITDA v0.2 SDK 수신 시도 및 기반 구현 (핵심 목표 미완료)
+
+### 완료 작업 / 변경 파일
+
+- 로컬 사용자 PC NextDrive-Pleos에 구현: MainActivity의 차량 연결 확인 화면, vehicle/ObservationStore.kt의 별도 append-only SQLite, MvpScenarioInstrumentation.kt의 추가 5개 관측 검사. 기존 수동 문제 DB·테이블·데이터를 변경/삭제하지 않았습니다.
+- AGENTS.md에 현재 v0.2 범위와 Aside 병렬 커밋 보존 규칙을 추가했습니다.
+- SDK_CAPABILITY_MATRIX.md, docs/CARITDA_V02_VALIDATION.md, docs/CODEX_PROGRESS.md에 현재 사실과 다운로드 절차를 기록했습니다. 총 게시 대상 7파일. Aside 연구·Google AI Studio 앱·기존 기록은 수정하지 않았습니다.
+- 관측 필드는 종류/원본/단위/수신시각/기록시각/출처/지원/유효성/세션/nullable 미래 운전자 ID입니다. 수신 실패 기록에는 값과 수신 시각이 null입니다. 운전자 A/B 재설계·자동 이상 감지 엔진은 구현하지 않았습니다.
+
+### 실제 검사 결과
+
+- 최종 assembleDebug + assembleDebugAndroidTest: BUILD SUCCESSFUL, 45초, exit 0. Windows JBR21.0.8/Gradle8.11.1/API34/Build-Tools35.0.0, 기존 캐시 offline 사용. SDK 없이 동작하는 현재 기반 앱 빌드 성공입니다.
+- Pleos Connect v2.1.0 emulator-5554에 앱·테스트 APK 교체 설치 성공. 실제 UI 실행.
+- CARITDA_MVP_PASS checks=24: 기존 저장·인계·조치·재발·상담·입력 제한·화면 폭 검사 모두 재통과했습니다.
+- CARITDA_OBSERVATION_PASS checks=5: 실패 상태에 가상값 없음, 별도 TEST_ONLY DB의 필드 저장/재연결 복원, 잘못된 수신값 거부, 실제 화면에서 SDK_UNAVAILABLE 진단 저장, Activity 재시작 후 복원 통과. 테스트 숫자 42%는 독립 DB 저장 검사이며 실제 센서/SDK 응답이 아닙니다.
+- 초기 확장 계측 실행은 종료 응답 없이 대기하여 force-stop으로 중단했습니다(중단 결과 Process crashed). 기존 시나리오 끝에서 Activity 종료를 명시하도록 테스트를 수정하고 재빌드·재설치한 최종 실행은 24+5 모두 통과했습니다. 기존 데이터를 삭제하지 않았습니다.
+- 최종 앱 APK SHA256: 29812d449d92fb827c81b3ba157c102b31880d141f15be510fca81eb30618b46. 앱/테스트 APK와 v02-build.txt, v02-instrumentation.txt, v02-sdk-download.txt는 로컬 build 아래에만 있습니다.
+- 현재 AVD의 ai.pleos.playground.service.vehicle versionName 2.3.22와 공개 권한 CAR_ENERGY/CAR_DRIVE/CAR_DOORS의 prot=normal 정의를 dumpsys로 확인했습니다. 설치된 서비스 존재는 앱 연결/권한 허용/Capability 성공과 다릅니다.
+
+### 실패 / 미구현
+
+- 공식 Maven 두 버전 POM 요청 연결 실패. Gradle 2.3.1 실제 resolve도 Nexus/Google/Maven Central에서 Permission denied: getsockopt로 실패(exit 1). 초기 probe 경로와 PowerShell 인자 문제는 수정했으며 최종 실패 원인은 네트워크입니다. 제한을 우회하거나 같은 다운로드를 반복하지 않았습니다.
+- 샘플 README는 2.3.2, 실제 Gradle 버전 파일은 2.3.1입니다. 시작 가이드와 Gradle 기준 2.3.1을 다운로드 후보로 택했으나 바이너리 확보·이미지 호환성 검증은 실패/보류입니다.
+- SDK 설치·SDK 의존성 포함 Sync/컴파일·초기화·서비스 연결·Capability·실제 읽기 모두 미완료. SOC/주행거리/연료/도어 원본 수신 0개. 실제 센서값 저장·복원도 미수행입니다. SDK 없이 현재 화면은 미설치/미확인을 안내합니다.
+- Lint는 기존 미캐시 의존성/네트워크 제한 상태로 이번에 재실행하지 않았습니다. Release/실차/실제 주행 전환 미검증. AI·Gleo·자동 감지·운전자 관리 개편·외부 공유는 미구현입니다.
+
+### 다음 작업 / 게시
+
+일반 Android Studio에서 v0.2 검증 문서의 임시 Vehicle 2.3.1 dependency를 추가하고 Sync하여 아티팩트 확보 여부를 먼저 확인해야 합니다. 현재 기본 빌드에는 미확보 SDK를 영구 추가하지 않았습니다. 다운로드만으로 현재 앱이 센서를 읽지는 않습니다. 확보 후 AAR 기준 typed 읽기 어댑터를 구현하고 Capability·권한·실수신·저장 순으로 검증하는 것이 다음 최우선 작업입니다.
+
+GitHub 연결 도구를 통한 게시만 사용합니다. 작업 시작 main a07d3234cbf6d4f2e7c4e93553e391ff13c652e7. 게시 직전 최신 HEAD와 대상 SHA를 재확인하고 Aside의 다른 파일 변경은 최신 트리에 보존합니다. 게시 커밋은 최종 응답으로 보고하며 자기 SHA 기록을 위한 반복 커밋은 하지 않습니다. APK/DB/인증/디버그 키/캐시/init probe/로그는 게시하지 않습니다. 로컬 Git push를 수행하지 않았습니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 16:14:00 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — CARITDA v0.1 구현 및 Pleos 실제 실행

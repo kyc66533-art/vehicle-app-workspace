@@ -1,0 +1,64 @@
+package com.nextdrive.pleos.vehicle
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import java.util.UUID
+
+enum class ObservationStatus { RECEIVED, SDK_UNAVAILABLE, UNSUPPORTED, PERMISSION_DENIED, CONNECTION_FAILED, TIMEOUT, INVALID }
+enum class ObservationSource { PLEOS_EMULATOR_SDK, PLEOS_VEHICLE_SDK, TEST_ONLY, NONE }
+
+data class VehicleObservation(
+    val kind: String, val raw: String?, val unit: String?, val receivedAt: Long?,
+    val source: ObservationSource, val supported: Boolean?, val valid: Boolean,
+    val session: String, val status: ObservationStatus, val detail: String,
+    val recordedAt: Long = System.currentTimeMillis(), val driverId: String? = null,
+)
+
+/** Separate append-only database: the v0.1 incident schema and records remain untouched. */
+class ObservationStore(context: Context, name: String = "caritda-observations.db") :
+    SQLiteOpenHelper(context.applicationContext, name, null, 1) {
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL("""CREATE TABLE observations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, raw TEXT, unit TEXT,
+            received_at INTEGER, source TEXT NOT NULL, supported INTEGER, valid INTEGER NOT NULL,
+            session TEXT NOT NULL, status TEXT NOT NULL, detail TEXT NOT NULL, recorded_at INTEGER NOT NULL,
+            driver_id TEXT)""")
+        db.execSQL("CREATE INDEX observations_recent ON observations(id DESC)")
+    }
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        error("관측 기록 버전이 지원되지 않습니다. 기존 데이터는 보존됩니다.")
+    }
+    fun append(value: VehicleObservation) {
+        require(value.kind.isNotBlank() && value.session.isNotBlank())
+        if (value.status == ObservationStatus.RECEIVED) {
+            require(!value.raw.isNullOrBlank() && !value.unit.isNullOrBlank() && value.receivedAt != null &&
+                value.supported == true && value.valid && value.source != ObservationSource.NONE)
+        } else {
+            require(value.raw == null && value.unit == null && value.receivedAt == null && !value.valid)
+        }
+        val values = ContentValues().apply {
+            put("kind", value.kind); put("raw", value.raw); put("unit", value.unit)
+            put("received_at", value.receivedAt); put("source", value.source.name)
+            if (value.supported == null) putNull("supported") else put("supported", if (value.supported) 1 else 0)
+            put("valid", if (value.valid) 1 else 0); put("session", value.session)
+            put("status", value.status.name); put("detail", value.detail)
+            put("recorded_at", value.recordedAt); put("driver_id", value.driverId)
+        }
+        writableDatabase.insertOrThrow("observations", null, values)
+    }
+    fun latest(limit: Int = 20): List<VehicleObservation> {
+        require(limit in 1..100)
+        return readableDatabase.rawQuery("SELECT * FROM observations ORDER BY id DESC LIMIT ?", arrayOf(limit.toString())).use { c ->
+            fun s(name: String) = c.getString(c.getColumnIndexOrThrow(name))
+            fun number(name: String): Long? { val i = c.getColumnIndexOrThrow(name); return if (c.isNull(i)) null else c.getLong(i) }
+            buildList { while (c.moveToNext()) add(VehicleObservation(
+                s("kind"), s("raw"), s("unit"), number("received_at"), ObservationSource.valueOf(s("source")),
+                number("supported")?.let { it != 0L }, number("valid") == 1L, s("session"),
+                ObservationStatus.valueOf(s("status")), s("detail"), number("recorded_at")!!, s("driver_id"),
+            )) }
+        }
+    }
+    companion object { fun sessionId(): String = UUID.randomUUID().toString() }
+}

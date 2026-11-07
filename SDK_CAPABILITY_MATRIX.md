@@ -1,5 +1,26 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## v0.2 검증 — 2026-11-07 (아래 과거 기록 보존)
+
+실제 SDK 값 수신은 미완료입니다. 공식 샘플 README의 2.3.2와 Gradle 버전 파일의 2.3.1 불일치를 확인했습니다. 2.3.1을 첫 다운로드 후보로 선택했으나 두 버전 POM 요청 모두 연결 실패, Gradle 2.3.1 resolve도 공식 Nexus에서 Permission denied: getsockopt로 실패했습니다. SDK 바이너리 호환 버전 확정은 보류합니다.
+
+| 대상 | 실제 확인 | Capability/값 수신 |
+| --- | --- | --- |
+| Vehicle SDK | AAR 미확보, 초기화·Sync·SDK 컴파일 미수행 | 미수행 |
+| 에뮬레이터 서비스 | dumpsys package로 ai.pleos.playground.service.vehicle 2.3.22 설치 확인. 앱 bind/initialize 성공과 별개 | 미수행 |
+| EV SOC | 후보 조회 권한 CAR_ENERGY. API별 권한·단위는 AAR 확인 필요 | 지원 미확인 / 미수신 |
+| 누적 주행거리 | 기존 문서의 CAR_DRIVE 매핑을 확정하지 않음. API별 권한·단위 확인 필요 | 지원 미확인 / 미수신 |
+| 연료 잔량 | 후보 CAR_ENERGY. 리터/% 또는 범위 환산 규칙 미확정 | 지원 미확인 / 미수신 |
+| 도어 | 공식 typed 예제의 CAR_DOORS, checkDoorPositionCapabilities/getCurrentDoorPosition 흐름 확인 | 지원 미확인 / 미수신 |
+| 권한 정의 | 현재 AVD Vehicle Service의 CAR_ENERGY/CAR_DRIVE/CAR_DOORS가 prot=normal인 것을 dumpsys로 확인. 앱에는 미선언·미요청이며 API 사용 허용을 의미하지 않음 | 실제 앱 권한 판정 미수행 |
+| 공개 AAOS UX 제한 | v0.1 연동 유지. 정차 응답 및 기존 입력 잠금 회귀 통과 | Vehicle SDK 센서값 수신과 별개 |
+
+차량 데이터 화면과 분리 SQLite 관측 저장소를 추가했습니다. 현 앱은 SDK_UNAVAILABLE 진단 상태만 숫자 없이 저장합니다. 실패 상태 저장·재실행 복원 등 5개 추가 계측 검사와 기존 24개 회귀 검사를 통과했습니다. TEST_ONLY 출처의 숫자는 독립 시험 DB 저장 형식 검증이며 SDK 실제 수신이 아닙니다. 실제 권한 거부·타임아웃·미지원 SDK 응답을 실행했다고 주장하지 않습니다.
+
+자세한 근거·일반 Android Studio 다운로드 절차는 [v0.2 검증 기록](docs/CARITDA_V02_VALIDATION.md)을 참고하세요.
+
+# 공식 SDK 및 실제 지원 기능 점검표
+
 ## 2026-11-07 실제 연동 시도 결과
 
 - 공식 시작 가이드의 Maven URL, `Vehicle:2.3.1`, 읽기 권한 `pleos.car.permission.CAR_DOORS`, `getDoor()`/`getCurrentDoorPosition()` 및 도어 Capability 예제를 재확인했습니다.

@@ -11,6 +11,7 @@ import android.widget.*
 import com.nextdrive.pleos.data.SqliteIssueRepository
 import com.nextdrive.pleos.domain.*
 import com.nextdrive.pleos.model.*
+import com.nextdrive.pleos.vehicle.*
 import java.util.UUID
 
 /** Framework-only instrumentation: real SQLite, restart, local handover and real production UI. */
@@ -24,6 +25,9 @@ class MvpScenarioInstrumentation : Instrumentation() {
             databaseScenario()
             uiScenario(result)
             result.putString("stream", "CARITDA_MVP_PASS checks=$checks\n$output")
+            val baseline = checks
+            observationScenario()
+            result.putString("stream", "CARITDA_MVP_PASS checks=$baseline\n$output\nCARITDA_OBSERVATION_PASS checks=${checks - baseline}\n")
             finish(Activity.RESULT_OK, result)
         } catch (failure: Throwable) {
             result.putString("stream", "CARITDA_MVP_FAIL checks=$checks\n$output\n${failure.stackTraceToString()}")
@@ -148,7 +152,46 @@ class MvpScenarioInstrumentation : Instrumentation() {
         result.putString("createdIssueId", issue.id)
         output.appendLine("UI_ISSUE_ID=${issue.id}")
         probe.close()
+        main { activity.finish() }; waitForIdleSync()
     }
+    private fun observationScenario() {
+        val name = "observation-test-${UUID.randomUUID()}.db"
+        var store = ObservationStore(targetContext, name)
+        val session = ObservationStore.sessionId()
+        ObservationStatus.entries.filter { it != ObservationStatus.RECEIVED }.forEach { status ->
+            store.append(VehicleObservation("TEST_CONNECTION", null, null, null, ObservationSource.NONE,
+                null, false, session, status, "계측 시험 전용 실패 상태"))
+        }
+        verify(store.latest().all { it.raw == null && it.receivedAt == null && !it.valid }, "failure states never invent a sensor value")
+        // Test-only data in isolated DB, never presented as an actual Vehicle SDK response.
+        store.append(VehicleObservation("TEST_SOC", "42", "%", 12345L, ObservationSource.TEST_ONLY,
+            true, true, session, ObservationStatus.RECEIVED, "저장 형식 시험용이며 SDK 수신이 아닙니다.", driverId = "future-test-driver"))
+        store.close(); store = ObservationStore(targetContext, name)
+        val value = store.latest().first()
+        verify(value.raw == "42" && value.unit == "%" && value.receivedAt == 12345L &&
+            value.source == ObservationSource.TEST_ONLY && value.supported == true && value.valid &&
+            value.session == session && value.driverId == "future-test-driver", "isolated observation metadata survives SQLite reopen")
+        val count = store.latest().size
+        val rejected = runCatching { store.append(value.copy(source = ObservationSource.NONE)) }.isFailure
+        verify(rejected && store.latest().size == count, "invalid received observation rejected without insert")
+        store.close()
+        val activity = launch()
+        await("parked UX before connection screen") { main { tagged(activity, "vehicle_data")?.isEnabled == true } }
+        click(activity, "vehicle_data")
+        val production = ObservationStore(targetContext)
+        val original = production.latest(100)
+        click(activity, "save_connection_status")
+        verify(production.latest().first().status == ObservationStatus.SDK_UNAVAILABLE && production.latest().first().raw == null,
+            "real UI stores SDK unavailable without fake reading")
+        main { activity.finish() }; waitForIdleSync()
+        val restarted = launch()
+        await("parked UX after restart") { main { tagged(restarted, "vehicle_data")?.isEnabled == true } }
+        click(restarted, "vehicle_data")
+        verify(production.latest(100).size >= original.size && production.latest().first().source == ObservationSource.NONE,
+            "connection status persists after app activity restart")
+        production.close()
+    }
+
     private fun launch(): MainActivity = startActivitySync(Intent(Intent.ACTION_MAIN).apply {
         setClassName(targetContext, MainActivity::class.java.name)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

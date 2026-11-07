@@ -15,12 +15,14 @@ import com.nextdrive.pleos.data.SqliteIssueRepository
 import com.nextdrive.pleos.domain.*
 import com.nextdrive.pleos.model.*
 import com.nextdrive.pleos.safety.*
+import com.nextdrive.pleos.vehicle.*
 import java.time.ZoneId
 import java.util.Calendar
 
 /** Local, manual incident journal. No sensor readings, diagnosis or remote transmission. */
 class MainActivity : Activity() {
-    private enum class Screen { HOME, RECORD, DETAIL, SUMMARY }
+    private enum class Screen { HOME, RECORD, DETAIL, SUMMARY, VEHICLE }
+    private lateinit var observations: ObservationStore
     private data class Draft(var type: SymptomType = SymptomType.NOISE, var situation: String = "",
                              var foundAt: Long = System.currentTimeMillis(), var memo: String = "")
     private lateinit var repository: SqliteIssueRepository
@@ -44,6 +46,7 @@ class MainActivity : Activity() {
         root = column().apply { setBackgroundColor(Color.rgb(14, 23, 34)); setPadding(dp(24), dp(16), dp(24), dp(16)) }
         setContentView(root, ViewGroup.LayoutParams(-1, -1))
         repository = SqliteIssueRepository(this)
+        observations = ObservationStore(this)
         safety = CarSafetyGate(this) { state ->
             if (state != displayedSafety) {
                 captureDraft()
@@ -77,7 +80,7 @@ class MainActivity : Activity() {
         safety.start()
     }
     override fun onStop() { captureDraft(); activeDialog?.dismiss(); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
-    override fun onDestroy() { repository.close(); super.onDestroy() }
+    override fun onDestroy() { repository.close(); observations.close(); super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putString("screen", screen.name); outState.putString("issue", selectedIssue)
@@ -119,6 +122,7 @@ class MainActivity : Activity() {
                 Screen.RECORD -> recordForm(body)
                 Screen.DETAIL -> detail(body)
                 Screen.SUMMARY -> summary(body)
+                Screen.VEHICLE -> vehicleScreen(body)
             }
         } catch (e: Exception) {
             android.util.Log.e("Caritda", "Cannot load local records", e)
@@ -138,6 +142,7 @@ class MainActivity : Activity() {
         body.addView(button("정비 상담용 요약 보기", "all_summary", enabled = canEdit() && all.isNotEmpty()) {
             openScreen(Screen.SUMMARY) { selectedIssue = null }
         })
+        body.addView(button("차량 데이터 연결 확인", "vehicle_data", enabled = canEdit()) { openScreen(Screen.VEHICLE) {} })
         body.addView(label("미해결 차량 문제 ${open.size}건", 26, true))
         if (open.isEmpty()) body.addView(label("등록된 미해결 문제가 없습니다. 차량의 정상 여부를 진단한 결과는 아닙니다.", 20))
         (if (includeResolved) all else open).forEach { issue ->
@@ -156,6 +161,30 @@ class MainActivity : Activity() {
             includeResolved = !includeResolved; draw()
         })
         body.addView(label("출처: 운전자가 직접 입력한 기록입니다. 차량 센서나 AI 진단 결과가 아닙니다.", 18))
+    }
+
+    private fun vehicleScreen(body: LinearLayout) {
+        body.addView(label("차량 데이터 · 연결 준비 중", 26, true))
+        body.addView(label("SDK 미설치 · 서비스 미연결 · Capability 미확인 · 마지막 수신 없음", 20))
+        body.addView(label("SOC, 누적 주행거리, 연료 잔량, 도어 모두 지원 미확인입니다. 가상 수치를 표시하지 않습니다.", 20))
+        body.addView(label("현재 빌드에는 Pleos Vehicle SDK가 없습니다. 공식 Maven 다운로드 실패로 실제 읽기는 아직 실행할 수 없습니다.", 18))
+        body.addView(button("현재 미연결 상태 기록하기", "save_connection_status", enabled = canEdit()) {
+            edit {
+                observations.append(VehicleObservation("SDK_CONNECTION", null, null, null,
+                    ObservationSource.NONE, null, false, ObservationStore.sessionId(),
+                    ObservationStatus.SDK_UNAVAILABLE, "공식 SDK 아티팩트 미확보. 연결·권한·Capability·읽기 미수행."))
+                draw()
+            }
+        })
+        observations.latest().forEach { item ->
+            val card = panel()
+            card.addView(label("${item.kind} · ${item.status}", 22, true))
+            card.addView(label("출처: ${item.source} · 지원: ${item.supported?.toString() ?: "미확인"} · 유효: ${item.valid}", 18))
+            card.addView(label("원본: ${item.raw ?: "미수신"} · 단위: ${item.unit ?: "없음"}", 20))
+            card.addView(label("수신: ${item.receivedAt?.let(ConsultationSummary::time) ?: "없음"}\n상태 기록: ${ConsultationSummary.time(item.recordedAt)}\n세션: ${item.session}", 18))
+            card.addView(label(item.detail, 18))
+            body.addView(card)
+        }
     }
 
     private fun recordForm(body: LinearLayout) {

@@ -32,6 +32,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
     private fun snapshot(repo:SqliteIssueRepository)=listOf("drivers","issues","events","settings","drafts").associateWith{rows(repo.readableDatabase,it)}
     private fun navigate(a:MainActivity,target:String){if(main{tagged(a,"nav_$target")==null})click(a,"menu");click(a,"nav_$target")}
     fun run():List<String>{
+        ValidationEnvironment.requireIsolated(context)
         val repo=SqliteIssueRepository(context);val obs=ObservationStore(context)
         val baseline=snapshot(repo);val oldObservations=rows(obs.readableDatabase,"observations")
         val prefs=context.getSharedPreferences("caritda_help",Context.MODE_PRIVATE)
@@ -67,9 +68,8 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             val driver=repo.currentDriver()?:repo.drivers().first()
             click(a,"driver_${driver.id}");click(a,"start_driving")
             verify(text(a).contains("지금은 차량의 이상을 자동으로 찾아주지는 않아요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
-            click(a,"all_issues");click(a,"toggle_resolved");navigate(a,"HOME");click(a,"all_issues")
-            val expectedManaged=repo.issues().any{it.status!=com.nextdrive.pleos.model.IssueStatus.RESOLVED}
-            verify(main{(tagged(a,"toggle_resolved") as Button).text.startsWith(if(expectedManaged)"✓ 관리 중인 기록" else "✓ 완료한 기록")},"ON home record action resets an unrelated previous filter")
+            click(a,"all_issues");click(a,"filter_COMPLETED");navigate(a,"HOME");click(a,"all_issues")
+            verify(main{(tagged(a,"filter_ALL") as Button).text.startsWith("✓ ")},"ON home record action opens all records instead of hiding a previous selection")
             navigate(a,"HOME")
             click(a,"vehicle_data")
             val basic=text(a)

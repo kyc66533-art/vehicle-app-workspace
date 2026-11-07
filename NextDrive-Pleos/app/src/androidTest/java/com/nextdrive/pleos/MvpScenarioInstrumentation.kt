@@ -21,13 +21,21 @@ class MvpScenarioInstrumentation : Instrumentation() {
     private var migrationOnly=false
     private var verifyProduction=false
     private var onboardingOnly=false
-    override fun onCreate(arguments: Bundle?) { onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
+    private var reliabilityOnly=false
+    private var coldOnly=false
+    private var preservationOnly=false
+    override fun onCreate(arguments: Bundle?) { coldOnly=arguments?.getString("coldOnly")=="true";preservationOnly=arguments?.getString("preservationOnly")=="true";reliabilityOnly=arguments?.getString("reliabilityOnly")=="true";onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
     override fun onStart() {
         val result = Bundle()
         try {
+            ValidationEnvironment.requireIsolated(targetContext)
+            if(preservationOnly){result.putString("stream",RecordMigrationChecks.verifyAfter(targetContext));finish(Activity.RESULT_OK,result);return}
+            if(coldOnly){val lines=ReliabilityChecks(this).coldCheck();result.putString("stream","CARITDA_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            ValidationEnvironment.prepare(targetContext)
+            if(reliabilityOnly){val lines=RecordMigrationChecks.run(targetContext)+ReliabilityChecks(this).run();result.putString("stream","CARITDA_RECORD_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(onboardingOnly){val lines=OnboardingChecks(this).run();result.putString("stream","CARITDA_ON_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(migrationOnly){val lines=MigrationChecks.run(targetContext);result.putString("stream","MIGRATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
-            if(verifyProduction)output.appendLine(MigrationChecks.productionBaseline(targetContext))
+            check(!verifyProduction) { "Production testing has been retired; use the isolated validation application" }
             databaseScenario()
             uiScenario(result)
             result.putString("stream", "CARITDA_MVP_PASS checks=$checks\n$output")

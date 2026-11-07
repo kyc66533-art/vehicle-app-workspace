@@ -14,6 +14,7 @@ object MigrationChecks {
     private fun snapshot(db:SQLiteDatabase,table:String,columns:String):List<List<String?>> =
         db.rawQuery("SELECT $columns FROM $table ORDER BY 1",null).use{c-> buildList{while(c.moveToNext())add((0 until c.columnCount).map{if(c.isNull(it))null else c.getString(it)})} }
     fun run(context:Context):List<String> {
+        ValidationEnvironment.requireIsolated(context)
         val results=mutableListOf<String>()
         fun verify(value:Boolean,label:String){check(value){label};results.add("PASS $label")}
         val name="legacy-fixture-${UUID.randomUUID()}.db"
@@ -76,6 +77,7 @@ object MigrationChecks {
         clean.close();return results
     }
     fun productionBaseline(context:Context):String {
+        ValidationEnvironment.requireIsolated(context)
         val backup=java.io.File(context.filesDir,"ui-before-v1.db")
         check(backup.exists()){ "Private pre-migration baseline missing" }
         val old=SQLiteDatabase.openDatabase(backup.path,null,SQLiteDatabase.OPEN_READONLY)

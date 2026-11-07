@@ -1,5 +1,80 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 01:35:34 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 사용자 기록 신뢰성·본인 수정/논리 삭제·테스트 격리
+
+### 재현한 원인과 실제 변경
+
+- 기준 main 5f753a2ebf97283993d8a6f97eb8214b98af25db와 로컬 필수 파일25개 해시가 일치함을 확인하고 시작했습니다. 현재 Android user10의 실제 앱을 force-stop한 뒤 DB/journal·설정·files를 .tools/reliability-backup에 바이너리 백업했습니다. user0의 빈 폴더를 데이터 부재로 오인하지 않았습니다.
+- 수정 전 동일 앱 소스를 독립 validation 앱으로 실행해 RELIABILITY_BASELINE checks=4를 확인했습니다. 정상 입력의 commit/상세 이동은 성공했습니다. 완료 필터가 새 관리 중 기록을 숨기는 현상, 새 기록→홈→초안 이어쓰기→저장→뒤로 두 번으로 초안이 없는 입력 화면이 되살아나 journal ?: return이 아무 안내 없이 끝나는 현상을 재현했습니다. 사용자 환경의 모든 과거 실패가 SQLite 손실이라는 증거는 없었습니다.
+- 저장 결과/등록 이력을 commit 후 읽어 확인하고 ‘저장되었습니다’와 상세 이동을 제공합니다. 저장한 폼의 과거 경로를 제거하고 전체 기록으로 돌아갑니다. 지속 피드백을 스크롤 밖 상단에 두고, 빈 본문 필드 오류·다시 저장·입력/초안 보존을 구현했습니다. 새 입력에서 과거 성공 메시지는 지웁니다. 연속 탭/같은 초안 ID는 중복을 만들지 않습니다.
+- 전체 기록/관리 중/완료/내가 작성한 기록 필터와 명시적 선택/건수/전체 복귀를 추가했습니다. 홈·저장 후 목록은 전체 기록을 열고 다른 메뉴 복귀의 선택 필터는 화면에 표시합니다.
+- 확정 운전자 영구 ID가 원 작성자와 같을 때 카테고리/본문/메모 수정·삭제를 허용합니다. 발견 시각은 유지합니다. 수정 전후 내용/시각/수정자 이벤트와 revision을 남겨 이전 읽음과 구분합니다. 이름 변경 뒤에도 ID 권한과 원 작성 snapshot을 보존합니다.
+- 삭제는 대상 문구가 있는 확인창 승인 후 논리 삭제이며 일반 목록/상담에서 제외합니다. 원본/ID/연결 이력과 사전 백업은 남습니다. 복구·영구 파기 UI는 없으며 개인정보의 영구 삭제라고 표시하지 않습니다. 기존 기록을 개발 중 임의 삭제하지 않았습니다.
+- 문제 DB v3는 v2에 deleted_at/deleted_by_id만 추가합니다. 운전자·문제·인계·점검·재발·초안과 관측 DB/Vehicle SDK2.3.2/PleosReadClient/CarSafetyGate는 유지했습니다.
+
+### 테스트 격리와 기존 데이터 보존
+
+- validation 빌드(applicationId com.nextdrive.pleos.validation, 표시명 CARITDA 검증 전용)에서 같은 앱 UI/SDK/안전 코드를 실행합니다. DB/preferences/files/UID가 일반 앱과 다르며 runner는 다른 패키지를 DB 준비 전 거부합니다. validation fixture만 준비/초기화합니다. 정상 자동화는 assembleValidationAndroidTest를 사용합니다.
+- 예전 운영 대상 계측 APK도 새 보호 코드로 교체했습니다. 실제 운영 대상 거부 검사에서 checks=0/Refusing tests against the user's application을 확인했고 문제/관측 해시가 그대로였습니다. 의도한 거부 검사이며 운영 UI를 테스트한 성공으로 표현하지 않습니다.
+- 백업 사본은 문제22건입니다. 보존 로그의 UI_ISSUE_ID와 일치하는5건만 Codex 작성 입증, 나머지17건은 출처 미확정으로 보존했습니다. 사용자 작성 확인 ID가 없다는 것은 실제 사용자 기록이 없다는 뜻이 아닙니다. ‘검증용’ 문구만으로 자동 삭제/숨김을 하지 않았습니다. 개인 검토 목록은 .tools/reliability-backup/RECORD_CLEANUP_REVIEW.md와 JSON에만 저장했습니다.
+- validation 전체 검사 뒤 운영 문제/관측 DB 해시가 사전 백업과 동일해 테스트 데이터 미유입을 확인했습니다. 기존 프로필의 이름/보관 상태도 바꾸지 않았습니다.
+- 운영 적용 전 v2 백업 사본에서 실패 주입 rollback/원본 모든 필드/관계/반복 이전을 검사했습니다. 이후 일반 앱 APK install -r Success, 기존 Pleos Connect v2.1.0/API34 emulator-5554 user10의 COLD 실행 Status ok를 확인했습니다.
+- 운영 v3 DB를 다시 사본으로 가져와 v2와 모든 기존 driver/issue/event/setting/draft 열과 행이 동일함을 검증했습니다. PRODUCTION_V3_PRESERVED, 삭제 표식0건·외래키 정상입니다. 관측 DB SHA256 dd89e12f70919ed6b997cffcd89dfc520f4eb3824b6eb70372375d64df6d4263도 불변입니다.
+
+### 빌드·실제 검사 결과
+
+- 기존 Windows/JBR21.0.8/Gradle8.11.1/API34/Build-Tools35.0.0 캐시 offline assembleDebug+assembleValidation+assembleValidationAndroidTest: 기능 소스 빌드1m22s 성공, 최종 보호 runner 구성 확인41s(93개 up-to-date) exit0. 보호용 debugAndroidTest45s 빌드 성공. 운영 APK는 동일 SHA256 40d1b1d21596d0fedc09bc9ddc16e858d6a280d47f4457713d34145280e977ee입니다.
+- CARITDA_RECORD_PASS checks=36(새 RR01~30과 사본 이전/분류6), 별도 force-stop 뒤 CARITDA_COLD_PASS checks=2(RR31~32). 실제 SQLite 등록/수정/삭제 이벤트 INSERT 실패를 주입해 롤백/입력 유지/같은 ID 재시도를 검사했습니다. 데이터 위험 검사는 모두 validation에서 수행했습니다.
+- 기존 MIGRATION_PASS checks=18, CARITDA_MVP_PASS checks=24, CARITDA_OBSERVATION_PASS checks=6, CARITDA_UI_PASS checks=27, CARITDA_ON_PASS checks=32. 합계145개이며 별도 운영 보존/거부 검사도 확인했습니다. ON 주요 화면200개 폭·글꼴·테마 조합을 새 필터/피드백 소스로 재검사했습니다. 기존 AC/ON의 사람·실차·접근성 미검증을 전부 통과로 바꾸지 않았습니다.
+- 이번 실제 SDK 결과는 validation 앱에서 SOC100%/누적 주행거리0.0km READ/RECEIVED, 연료 ERROR_NOT_SUPPORTED_PROPERTY/UNSUPPORTED입니다. PLEOS_EMULATOR_SDK이며 실차/앱 가상값과 구분합니다. 이전15%/1000000.0km 기록은 과거 사실로 보존합니다. Console 숫자 입력은 하지 않았습니다.
+- 로컬 로그는 app/build/validation/reliability-*.txt에 있습니다. 백업/DB/개인 정리 목록/APK/서명 키/캐시/로그/화면은 게시하지 않습니다.
+
+### 오류·Virtual Console·남은 제한
+
+- 최초 validation 서명 검증은 .tools/gradle-home/.android/debug.keystore.lock AccessDeniedException으로 실패했습니다. 기존 키를 바꾸지 않고 프로젝트 내 새 경로에 같은 키를 복사해 선택적 caritdaDebugKeystore 속성으로 빌드했습니다. 시스템 보안/ACL/정책 변경이나 SDK 재설치는 하지 않았습니다.
+- ADB emulator-5554 device 및 forward 목록 emulator-5554 tcp:8088 tcp:8088, forward 재설정 exit0, http://127.0.0.1:8088/ HTTP200/title Pleos Connect Virtual Console/body150815bytes를 확인했습니다. 현재 브라우저 연결 실패는 재현되지 않았고 포트 소유 PID 조회는 출력 없어 확정하지 않았습니다. 다른 프로세스 종료/AVD 초기화 없이 정상 응답을 확인했습니다. Console 숫자 최댓값 문제는 별도 미재현이며 앱 저장 오류 원인으로 단정하지 않습니다.
+- 실제 디스크 고갈·모든 과거 사용자 실패·실제 주행 제한 전환·실차·Release·TalkBack/rotary·신규/고령 사용자 이해도는 미검증입니다. 기존 offline Lint 캐시 부재는 재시도하지 않았고 Lint 통과로 보고하지 않습니다.
+- Gleo는 미연동입니다. 향후 선택한 미삭제 기록의 ID/revision/본문 snapshot에 대한 사용자 확인·동의와 공식 Action/Callback 접근 검증이 필요하다는 메모만 남겼습니다. 가짜 AI 답변/상담 버튼은 없습니다.
+
+### 변경 파일·공유·다음 작업
+
+사용자 PC에 실제 반영한22개 소스/설정/문서:
+
+- AGENTS.md
+- README.md
+- NextDrive-Pleos/README.md
+- NextDrive-Pleos/app/build.gradle.kts
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/model/IssueModels.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/CaritdaService.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/ConsultationSummary.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/data/IssueRepository.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/data/SqliteIssueRepository.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/data/RecordMigration.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MvpScenarioInstrumentation.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MigrationChecks.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ValidationEnvironment.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/RecordMigrationChecks.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ReliabilityChecks.kt
+- docs/RECORD_RELIABILITY.md
+- docs/UI_MIGRATION_PLAN.md
+- docs/ONBOARDING_ACCEPTANCE.md
+- docs/UI_ACCEPTANCE.md
+- docs/CODEX_PROGRESS.md
+
+새 인수기준/원인/정책/명령은 docs/RECORD_RELIABILITY.md에 있습니다. 기존 AC/ON/이전 문서에는 최신 validation 경로와 과거 운영 명령 실행 금지를 추가하고 과거 결과는 보존했습니다.
+
+작업 중 Aside가 dc6eb046a638e55cd23ae8f21e8cfa050add2858로 docs/research/CARITDA_NAVIGATION_RECORD_GLEO_UX.md만 추가했습니다. 대상 파일 SHA 충돌이 없음을 확인했고 이 최신 트리/부모를 이어 게시합니다. 연구는 수정하지 않으며 전체 탐색/AI 개편은 별도 단계입니다. GitHub 연결 도구를 통한 게시이며 로컬 Git push가 아닙니다. 게시 직전 HEAD/대상 SHA와 원격 커밋 부모/파일 해시/나머지 파일 보존을 확인하고 최종 커밋은 응답에 보고합니다.
+
+사용자는 일반 CARITDA(검증 전용 앱과 구분)에서 본인 이름으로 운전 시작→문제 남기기→저장 안내/상세→전체 기록→내 기록 수정→재실행을 확인할 수 있습니다. 삭제는 본인이 만든 임시 기록으로 대상/취소/논리 삭제를 확인해 주세요. 이미 교체 설치했고 파일 직접 수정·데이터 초기화는 필요 없습니다. 기존 테스트 정리는 개인 목록의 대상 ID를 사용자 확인한 뒤 새 백업과 별도 승인된 처리로 진행하며 이번에는 삭제하지 않았습니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-08 00:17:00 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — Simple UI·한 화면 첫 안내·사용법 실제 구현

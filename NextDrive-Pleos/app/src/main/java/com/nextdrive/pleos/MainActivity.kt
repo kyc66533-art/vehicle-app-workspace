@@ -53,7 +53,8 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private var screen = Screen.HOME
     private var selectedIssue: String? = null
-    private var includeResolved = false
+    private var recordFilter = RecordFilter.ALL
+    private var recordSaving = false
     private var draft = Draft()
     private var journal: JournalDraft? = null
     private var pendingDriver: String? = null
@@ -118,7 +119,7 @@ class MainActivity : Activity() {
             Screen.entries.forEach{target->positions[target]=it.getInt("position_${target.name}")}
             screen = runCatching { Screen.valueOf(it.getString("screen") ?: "HOME") }.getOrDefault(Screen.HOME)
             selectedIssue = it.getString("issue")
-            includeResolved = it.getBoolean("includeResolved")
+            recordFilter = runCatching{RecordFilter.valueOf(it.getString("recordFilter")?:if(it.getBoolean("includeResolved"))"COMPLETED" else "ALL")}.getOrDefault(RecordFilter.ALL)
             draft = Draft(runCatching { SymptomType.valueOf(it.getString("type") ?: "NOISE") }.getOrDefault(SymptomType.NOISE),
                 it.getString("situation") ?: "", it.getLong("foundAt", System.currentTimeMillis()), it.getString("memo") ?: "")
         }
@@ -145,7 +146,7 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putString("screen", screen.name); outState.putString("issue", selectedIssue)
-        outState.putBoolean("includeResolved", includeResolved); outState.putString("type", draft.type.name)
+        outState.putString("recordFilter", recordFilter.name); outState.putString("type", draft.type.name)
         outState.putString("situation", draft.situation); outState.putLong("foundAt", draft.foundAt); outState.putString("memo", draft.memo)
         outState.putString("pendingDriver",pendingDriver);outState.putString("editingDriver",editingDriver)
         outState.putBoolean("guideReplay",guideReplay);outState.putInt("helpTopic",helpTopic);outState.putString("pausedGuide",pausedGuide?.name)
@@ -188,7 +189,10 @@ class MainActivity : Activity() {
                 body.addView(bar)
             }
             if(displayedSafety!=EditingState.ALLOWED)body.addView(label(if(displayedSafety==EditingState.UNKNOWN)"화면 입력이 가능한지 확인 중이에요." else "지금은 조작할 수 없어요. 안전하게 주차한 뒤 이용해 주세요.",20).apply{tag="safety_status"})
-            feedback=label(notice,22,true).apply{tag="feedback";visibility=if(notice.isBlank()||helpScreen||screen==Screen.WELCOME)View.GONE else View.VISIBLE};body.addView(feedback)
+            feedback=label(notice,22,true).apply{
+                tag="feedback";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE
+                visibility=if(notice.isBlank()||helpScreen||screen==Screen.WELCOME)View.GONE else View.VISIBLE
+            };root.addView(feedback,0)
             if(screen!=Screen.WELCOME && !helpScreen){
                 val recent=repository.currentDriver()
                 body.addView(button(if(service.confirmed())"기록 이름: ${service.driver().label} · 변경" else "기록 이름 선택 · ${recent?.label ?: "아직 선택하지 않았어요"}","change_driver",enabled=canEdit()){
@@ -246,7 +250,7 @@ class MainActivity : Activity() {
         body.addView(scope)
         body.addView(label(when{all.isEmpty()->"아직 남긴 기록이 없어요.";unread!=null&&unread>0->"아직 읽지 않은 전달 기록 ${unread}건";managed.isNotEmpty()->"관리 중인 기록 ${managed.size}건";else->"완료한 기록 ${all.size}건"},26,true).apply{tag="home_counts"})
         body.addView(button(if(all.isEmpty())"기록 보기" else "기록 보기 · ${all.size}건","all_issues",primary=all.isNotEmpty(),enabled=canEdit()){
-            openScreen(Screen.ISSUES){includeResolved=managed.isEmpty()&&all.isNotEmpty();positions[Screen.ISSUES]=0}
+            openScreen(Screen.ISSUES){recordFilter=RecordFilter.ALL;positions[Screen.ISSUES]=0}
         })
         body.addView(button("문제 남기기","new_issue",enabled=canEdit()){beginRecord()})
         body.addView(button("차량 정보","vehicle_data",primary=all.isEmpty(),enabled=canEdit()){openScreen(Screen.VEHICLE)})
@@ -258,10 +262,21 @@ class MainActivity : Activity() {
         body.addView(label("저장된 기록",28,true))
         body.addView(button("문제 남기기","new_issue",primary=true,enabled=canWrite()){beginRecord()})
         draftBanner(body)
-        val all=service.issues();val chosen=all.filter{(it.status==IssueStatus.RESOLVED)==includeResolved}
-        body.addView(button(if(includeResolved)"✓ 완료한 기록 ${chosen.size}건 · 관리 중 보기" else "✓ 관리 중인 기록 ${chosen.size}건 · 완료한 기록 보기","toggle_resolved",enabled=canEdit()){includeResolved=!includeResolved;positions[Screen.ISSUES]=0;draw()})
+        val all=service.issues()
+        if(recordFilter==RecordFilter.MINE&&!service.confirmed())recordFilter=RecordFilter.ALL
+        val chosen=service.issues(recordFilter)
+        val filters=LinearLayout(this).apply{orientation=if(root.width/resources.displayMetrics.density>=600 && resources.configuration.fontScale<1.5f)LinearLayout.HORIZONTAL else LinearLayout.VERTICAL}
+        RecordFilter.entries.forEach{filter->
+            val count=if(filter==RecordFilter.MINE&&!service.confirmed())null else service.issues(filter).size
+            val item=button((if(recordFilter==filter)"✓ " else "")+filter.label+(count?.let{" $it"}?:""),"filter_${filter.name}",enabled=canEdit()&&(filter!=RecordFilter.MINE||service.confirmed())){recordFilter=filter;positions[Screen.ISSUES]=0;draw()}
+            if(filters.orientation==LinearLayout.VERTICAL)filters.addView(item) else filters.addView(item,LinearLayout.LayoutParams(0,-2,1f).apply{setMargins(dp(4),dp(4),dp(4),dp(4))})
+        };body.addView(filters)
+        body.addView(label("${recordFilter.label} ${chosen.size}건 · 저장된 전체 기록 ${all.size}건",24,true).apply{tag="record_filter_status"})
         body.addView(label("아직 읽지 않은 전달 기록부터 보여드려요.",20))
-        if(chosen.isEmpty())body.addView(label("아직 남긴 기록이 없어요. 차량이 정상이라는 뜻은 아니에요.",24))
+        if(chosen.isEmpty()){
+            body.addView(label(if(all.isEmpty())"아직 남긴 기록이 없어요. 차량이 정상이라는 뜻은 아니에요." else "이 필터에 해당하는 기록이 없어요. 다른 기록은 전체 기록에서 확인해 주세요.",24))
+            if(all.isNotEmpty())body.addView(button("전체 기록 보기","show_all_records",enabled=canEdit()){recordFilter=RecordFilter.ALL;draw()})
+        }
         chosen.sortedBy{if(service.confirmed()&&service.needsAcknowledgement(it))0 else 1}.forEach{issueCard(body,it)}
         body.addView(button("정비 상담용 요약 · 전체 ${all.size}건","all_summary",enabled=canEdit()&&all.isNotEmpty()){selectedIssue=null;openScreen(Screen.SUMMARY)})
     }
@@ -334,12 +349,19 @@ class MainActivity : Activity() {
         val old=service.draft()
         if(old!=null){notice="기존 초안을 계속 작성하거나 취소해 주세요.";draw();return}
         journal=JournalDraft(java.util.UUID.randomUUID().toString(),service.driver().id,service.driver().label,"RECORD")
-        draft=Draft(foundAt=journal!!.foundAt);openScreen(Screen.RECORD)
+        notice="";draft=Draft(foundAt=journal!!.foundAt);openScreen(Screen.RECORD)
     }
     private fun resumeDraft(saved:JournalDraft){
         journal=saved;lastDraft=saved;selectedIssue=saved.target
         draft=Draft(saved.type,saved.body,saved.foundAt,saved.memo)
-        openScreen(if(saved.kind=="RECORD")Screen.RECORD else Screen.ACTION)
+        openScreen(if(saved.kind in setOf("RECORD","EDIT"))Screen.RECORD else Screen.ACTION)
+    }
+    private fun beginEdit(issue:VehicleIssue){
+        if(!canWrite()||!service.canManage(issue)){toast("원래 작성자로 운전 시작한 뒤 수정해 주세요.");return}
+        if(service.draft()!=null){notice="작성 중인 초안을 먼저 저장하거나 취소해 주세요.";draw();return}
+        journal=JournalDraft(java.util.UUID.randomUUID().toString(),service.driver().id,service.driver().label,"EDIT",issue.id,issue.revision,issue.type,issue.situation,issue.memo,issue.discoveredAt)
+        notice="";draft=Draft(issue.type,issue.situation,issue.discoveredAt,issue.memo);lastDraft=null
+        openScreen(Screen.RECORD)
     }
     private fun actionForm(body:LinearLayout){
         val saved=journal?:return
@@ -435,7 +457,14 @@ class MainActivity : Activity() {
         body.addView(button("사용법 목록","help_contents",enabled=canEdit()){onBackPressed()})
     }
     private fun recordForm(body: LinearLayout) {
-        body.addView(label("어떤 문제를 느끼셨나요?", 28, true))
+        val active=journal
+        if(active==null){
+            body.addView(label("작성 중인 초안이 없어요. 저장된 기록을 확인하거나 새로 남겨 주세요.",24,true))
+            body.addView(button("전체 기록 보기","recover_record_route",enabled=canEdit()){openScreen(Screen.ISSUES){recordFilter=RecordFilter.ALL}})
+            return
+        }
+        val editing=active.kind=="EDIT"
+        body.addView(label(if(editing)"내가 남긴 내용 수정" else "어떤 문제를 느끼셨나요?", 28, true))
         body.addView(label("작성자: ${journal?.ownerName ?: service.driver().label} · 사용자 직접 기록", 24))
         body.addView(label("고장 이름을 몰라도 괜찮아요.", 22))
         val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, SymptomType.entries.map { it.label }) {
@@ -459,22 +488,43 @@ class MainActivity : Activity() {
         body.addView(label("어떤 상황에서 발생했나요?", 22, true))
         situationInput = input("예: 가속할 때 핸들이 진동합니다.", 1000).apply { tag = "situation"; setText(draft.situation) }
         body.addView(situationInput)
-        body.addView(button("발견 시각: ${ConsultationSummary.time(draft.foundAt)}", "discovered_at") { pickTime() })
+        if(editing)body.addView(label("발견 시각: ${ConsultationSummary.time(draft.foundAt)}\n처음 발견한 시각은 유지해요. 수정 전후 내용과 시각은 이력에 남아요.",22))
+        else body.addView(button("발견 시각: ${ConsultationSummary.time(draft.foundAt)}", "discovered_at",enabled=canEdit()) { pickTime() })
         body.addView(label("시각은 기기 설정(${ZoneId.systemDefault().id}) 기준입니다.", 18))
         body.addView(label("추가 메모 (선택)", 22, true))
         memoInput = input("추가로 전달할 내용을 적어 주세요.", 2000).apply { tag = "memo"; setText(draft.memo) }
         body.addView(memoInput)
         situationInput!!.addTextChangedListener(watcher{captureDraft()})
         memoInput!!.addTextChangedListener(watcher{captureDraft()})
-        body.addView(button("이 차량 앱에 저장", "save_issue", primary = true, enabled = canWrite()) {
-            val active=journal ?: return@button
-            captureDraft()
-            edit {
-                val issue = service.record(draft.type, draft.situation, draft.foundAt, draft.memo,active.id)
-                selectedIssue = issue.id; screen = Screen.DETAIL; draft = Draft(); journal=null;lastDraft=null;notice="문제를 이 차량 앱에 저장했습니다.";draw()
-            }
-        })
+        body.addView(button(if(editing)"수정 내용 저장" else "이 차량 앱에 저장", "save_issue", primary = true, enabled = canWrite()&&!recordSaving) { saveRecord() })
         cancelDraftButton(body)
+    }
+    private fun saveRecord(){
+        if(recordSaving)return
+        if(!canWrite()){toast("정차 상태와 기록할 이름을 확인한 뒤 다시 저장해 주세요.");return}
+        val active=journal ?: run{
+            if(screen==Screen.DETAIL&&selectedIssue!=null){notice="저장되었습니다. 기록 목록에서도 확인하실 수 있어요.";feedback?.apply{text=notice;visibility=View.VISIBLE};return}
+            notice="저장된 기록을 확인해 주세요.";recordFilter=RecordFilter.ALL;screen=Screen.ISSUES;history.clear();draw();return
+        }
+        captureDraft();recordSaving=true
+        val save=root.findViewWithTag<Button>("save_issue");save?.isEnabled=false
+        try {
+            val issue=if(active.kind=="EDIT")service.revise(active.target!!,draft.type,draft.situation,draft.memo,active.id,active.revision)
+                else service.record(draft.type,draft.situation,draft.foundAt,draft.memo,active.id)
+            (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken,0)
+            android.util.Log.i("Caritda","record_commit id=${issue.id} revision=${issue.revision}")
+            selectedIssue=issue.id;journal=null;lastDraft=null;draft=Draft();recordFilter=RecordFilter.ALL
+            // Back must never resurrect the form whose draft was consumed by commit.
+            history.clear();history.addLast(Screen.ISSUES);positions[Screen.DETAIL]=0;positions[Screen.ISSUES]=0
+            screen=Screen.DETAIL;notice="저장되었습니다. 기록 목록에서도 확인하실 수 있어요.";draw()
+        }catch(e:Exception){
+            android.util.Log.e("Caritda","record_commit_failed draft=${active.id}",e)
+            val reason=when(e){is IllegalArgumentException->e.message?:"입력 내용을 확인해 주세요.";is EditingBlockedException->"정차 상태와 기록할 이름을 확인해 주세요.";else->"저장 중 문제가 생겼어요. 입력 내용은 이 화면에 남아 있어요."}
+            notice="저장하지 못했어요. $reason 내용을 확인한 뒤 다시 저장해 주세요."
+            feedback?.apply{text=notice;visibility=View.VISIBLE}
+            if(draft.situation.isBlank())situationInput?.apply{error="발생 상황을 입력해 주세요.";requestFocus()}
+            save?.text="다시 저장"
+        }finally{recordSaving=false;save?.isEnabled=canWrite()}
     }
 
     private fun detail(body: LinearLayout) {
@@ -484,7 +534,16 @@ class MainActivity : Activity() {
         body.addView(label(issue.situation, 24))
         body.addView(label("발견 ${ConsultationSummary.time(issue.discoveredAt)}\n등록 ${issue.reporter.label} · ${ConsultationSummary.time(issue.recordedAt)}", 18))
         if (issue.memo.isNotBlank()) body.addView(label("추가 메모: ${issue.memo}", 20))
+        if(service.events(id).any{it.kind==EventKind.EDITED})body.addView(label("작성 내용이 수정된 기록이에요. 아래 이력에서 이전 내용과 수정 시각을 확인해 주세요.",22))
         body.addView(label("직접 남긴 기록이에요. 읽음은 수리 완료와 달라요.",20))
+        if(service.canManage(issue)){
+            body.addView(button("내 기록 수정","edit_issue",enabled=canWrite()){beginEdit(issue)})
+            body.addView(button("내 기록 삭제","delete_issue",enabled=canWrite()){
+                confirm("이 기록을 삭제할까요?","${issue.type.label} · ${issue.situation.take(80)}\n목록과 정비 상담에서 제외해요. 원본과 이력은 기기에 남으며, 이 화면에서는 복구하거나 영구 삭제할 수 없어요.","삭제"){
+                    service.deleteOwned(id);selectedIssue=null;history.clear();recordFilter=RecordFilter.ALL;screen=Screen.ISSUES;positions[screen]=0;notice="삭제되었습니다. 다른 기록은 그대로 유지돼요.";draw()
+                }
+            })
+        }else body.addView(label("작성 내용의 수정·삭제는 원래 작성자만 할 수 있어요.",20))
         if(!service.confirmed())body.addView(label("운전자를 선택하고 운전 시작을 누르면 읽음 확인과 조치를 기록할 수 있습니다.",22))
         else if (service.driver().id == issue.reporter.id) body.addView(label("이 문제를 직접 등록하셨습니다.", 20))
         else if (service.needsAcknowledgement(issue)) body.addView(button("내용을 읽었어요", "acknowledge", primary = true, enabled = canWrite()) {
@@ -498,7 +557,7 @@ class MainActivity : Activity() {
             beginAction("RECURRENCE",issue)
         })
         body.addView(button("이 문제의 정비 상담용 요약", "issue_summary", enabled = canEdit()) { openScreen(Screen.SUMMARY) })
-        body.addView(label("확인·점검 이력", 24, true))
+        body.addView(label("확인·점검·수정 이력", 24, true))
         draftBanner(body)
         service.events(id).forEach { event ->
             val card = panel()
@@ -538,10 +597,10 @@ class MainActivity : Activity() {
         openScreen(Screen.ACTION)
     }
     private fun dialogTheme()=if(dark)android.R.style.Theme_Material_Dialog_Alert else android.R.style.Theme_Material_Light_Dialog_Alert
-    private fun confirm(title:String,message:String,action:()->Unit){
+    private fun confirm(title:String,message:String,positiveLabel:String="확인",action:()->Unit){
         if(!canEdit())return
         val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle(title).setMessage(message)
-            .setPositiveButton("확인",null).setNegativeButton("취소",null).create()
+            .setPositiveButton(positiveLabel,null).setNegativeButton("취소",null).create()
         activeDialog=dialog;dialog.show()
         listOf(AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE).forEach{which->dialog.getButton(which).apply{minHeight=dp(76);minimumWidth=dp(76);textSize=24f}}
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{edit{if(!canEdit())throw EditingBlockedException();action();dialog.dismiss()}}

@@ -12,10 +12,12 @@ interface IssueRepository : AutoCloseable {
     fun saveDraft(draft: JournalDraft)
     fun discardDraft(id: String)
     fun selectDriver(driver: Driver)
-    fun issues(): List<VehicleIssue>
-    fun issue(id: String): VehicleIssue?
+    fun issues(includeDeleted:Boolean=false): List<VehicleIssue>
+    fun issue(id: String, includeDeleted:Boolean=false): VehicleIssue?
     fun events(id: String): List<IssueEvent>
     fun create(issue: VehicleIssue, initialEvent: IssueEvent)
+    fun revise(id:String,type:SymptomType,body:String,memo:String,expectedRevision:Int,event:IssueEvent):Boolean
+    fun markDeleted(id:String,event:IssueEvent):Boolean
     /** Atomically appends history and updates status/revision; acknowledgements are idempotent. */
     fun append(id: String, event: IssueEvent, newStatus: IssueStatus? = null, recurrence: Boolean = false): Boolean
 }

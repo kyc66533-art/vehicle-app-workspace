@@ -53,16 +53,18 @@ object DriverMigration {
 }
 
 class SqliteIssueRepository(context: Context, databaseName: String = "caritda_v01.db") :
-    SQLiteOpenHelper(context.applicationContext,databaseName,null,2), IssueRepository {
+    SQLiteOpenHelper(context.applicationContext,databaseName,null,3), IssueRepository {
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
         DriverMigration.createV1(db)
         db.execSQL("UPDATE settings SET value='' WHERE name='driver'")
         DriverMigration.migrate(db,legacy=false)
+        RecordMigration.migrate(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion==1 && newVersion==2) { "지원되지 않는 버전입니다. 기존 기록을 보존합니다." }
-        DriverMigration.migrate(db)
+        check(oldVersion in 1..2 && newVersion==3) { "지원되지 않는 버전입니다. 기존 기록을 보존합니다." }
+        if(oldVersion==1)DriverMigration.migrate(db)
+        RecordMigration.migrate(db)
     }
     override fun drivers(includeArchived: Boolean): List<Driver> = readableDatabase.rawQuery(
         "SELECT * FROM drivers ${if(includeArchived) "" else "WHERE archived=0"} ORDER BY rowid",null).use { c ->
@@ -118,8 +120,8 @@ class SqliteIssueRepository(context: Context, databaseName: String = "caritda_v0
         },SQLiteDatabase.CONFLICT_REPLACE).also{check(it!=-1L)}
     }
     override fun discardDraft(id: String) { writableDatabase.delete("drafts","id=?",arrayOf(id)) }
-    override fun issues(): List<VehicleIssue> = readableDatabase.rawQuery("SELECT * FROM issues ORDER BY updated_at DESC,id",null).use { c -> buildList{while(c.moveToNext())add(readIssue(c))} }
-    override fun issue(id: String): VehicleIssue? = readableDatabase.rawQuery("SELECT * FROM issues WHERE id=?",arrayOf(id)).use { if(it.moveToFirst())readIssue(it) else null }
+    override fun issues(includeDeleted:Boolean): List<VehicleIssue> = readableDatabase.rawQuery("SELECT * FROM issues ${if(includeDeleted)"" else "WHERE deleted_at IS NULL"} ORDER BY updated_at DESC,id",null).use { c -> buildList{while(c.moveToNext())add(readIssue(c))} }
+    override fun issue(id: String,includeDeleted:Boolean): VehicleIssue? = readableDatabase.rawQuery("SELECT * FROM issues WHERE id=?"+(if(includeDeleted)"" else " AND deleted_at IS NULL"),arrayOf(id)).use { if(it.moveToFirst())readIssue(it) else null }
     override fun events(id: String): List<IssueEvent> = readableDatabase.rawQuery("SELECT * FROM events WHERE issue_id=? ORDER BY _id",arrayOf(id)).use { c -> buildList{while(c.moveToNext())add(IssueEvent(
         EventKind.valueOf(c.string("kind")),Driver(c.string("actor_id"),c.string("actor_name")),c.number("at"),c.string("body"),c.getInt(c.getColumnIndexOrThrow("revision")),
         c.getString(c.getColumnIndexOrThrow("status"))?.let(IssueStatus::valueOf),c.getString(c.getColumnIndexOrThrow("draft_id"))))} }
@@ -147,13 +149,39 @@ class SqliteIssueRepository(context: Context, databaseName: String = "caritda_v0
             event.draftId?.let{db.delete("drafts","id=?",arrayOf(it))};db.setTransactionSuccessful();return true
         } finally {db.endTransaction()}
     }
+    override fun revise(id:String,type:SymptomType,body:String,memo:String,expectedRevision:Int,event:IssueEvent):Boolean {
+        val db=writableDatabase;db.beginTransaction()
+        try {
+            val current=issue(id)?:error("삭제되었거나 찾을 수 없는 기록입니다.")
+            require(event.actor.id==current.reporter.id && event.kind==EventKind.EDITED) { "원래 작성자만 수정할 수 있어요." }
+            if(event.draftId!=null && db.rawQuery("SELECT 1 FROM events WHERE issue_id=? AND draft_id=? AND kind='EDITED' AND actor_id=?",arrayOf(id,event.draftId,event.actor.id)).use{it.moveToFirst()}){db.setTransactionSuccessful();return false}
+            require(current.revision==expectedRevision && event.revision==expectedRevision+1) { "기록이 변경되었어요. 현재 기록과 초안을 다시 확인해 주세요." }
+            check(db.update("issues",ContentValues().apply{
+                put("symptom_type",type.name);put("situation",body);put("memo",memo);put("updated_at",event.at);put("revision",event.revision)
+            },"id=? AND revision=? AND deleted_at IS NULL",arrayOf(id,expectedRevision.toString()))==1)
+            db.insertOrThrow("events",null,eventValues(id,event))
+            event.draftId?.let{db.delete("drafts","id=?",arrayOf(it))}
+            db.setTransactionSuccessful();return true
+        }finally{db.endTransaction()}
+    }
+    override fun markDeleted(id:String,event:IssueEvent):Boolean {
+        val db=writableDatabase;db.beginTransaction()
+        try {
+            val current=issue(id,true)?:error("기록을 찾을 수 없어요.")
+            require(event.actor.id==current.reporter.id && event.kind==EventKind.DELETED) { "원래 작성자만 삭제할 수 있어요." }
+            if(current.deletedAt!=null){db.setTransactionSuccessful();return false}
+            check(db.update("issues",ContentValues().apply{put("deleted_at",event.at);put("deleted_by_id",event.actor.id)},"id=? AND deleted_at IS NULL",arrayOf(id))==1)
+            db.insertOrThrow("events",null,eventValues(id,event));db.setTransactionSuccessful();return true
+        }finally{db.endTransaction()}
+    }
     private fun eventValues(id:String,e:IssueEvent)=ContentValues().apply {
         put("issue_id",id);put("kind",e.kind.name);put("actor",e.actor.id);put("actor_id",e.actor.id);put("actor_name",e.actor.label)
         put("at",e.at);put("body",e.text);put("revision",e.revision);put("status",e.status?.name);put("draft_id",e.draftId)
     }
     private fun readIssue(c:Cursor)=VehicleIssue(c.string("id"),SymptomType.valueOf(c.string("symptom_type")),c.string("situation"),
         c.number("discovered_at"),c.number("recorded_at"),Driver(c.string("reporter_id"),c.string("reporter_name")),c.string("memo"),
-        IssueStatus.valueOf(c.string("status")),c.getInt(c.getColumnIndexOrThrow("revision")),c.number("updated_at"))
+        IssueStatus.valueOf(c.string("status")),c.getInt(c.getColumnIndexOrThrow("revision")),c.number("updated_at"),
+        c.getColumnIndexOrThrow("deleted_at").let{if(c.isNull(it))null else c.getLong(it)},c.getString(c.getColumnIndexOrThrow("deleted_by_id")))
     private fun Cursor.string(name:String)=getString(getColumnIndexOrThrow(name))
     private fun Cursor.number(name:String)=getLong(getColumnIndexOrThrow(name))
 }

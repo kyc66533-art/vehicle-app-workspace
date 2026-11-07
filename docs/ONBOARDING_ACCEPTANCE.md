@@ -1,5 +1,9 @@
 # CARITDA Simple UI·온보딩 구현 및 인수 결과
 
+## 2026-11-08 후속 회귀 — 운영 테스트 중단 및 격리
+
+문제 DB v3/전체·관리 중·완료·내 작성 필터/지속 저장 안내가 포함된 최신 소스로 ON32개와 주요 화면200개 조합을 다시 통과했습니다. 테스트는 별도 applicationId `com.nextdrive.pleos.validation`에서 수행했고 운영 DB에 검증 기록을 추가하지 않았습니다. runner는 운영 앱 대상을 거부합니다. 아래의 초기 운영 대상 계측 명령은 과거 기록이며 **실행하지 마세요**. 현재 명령과 신규 저장/수정/삭제 결과는 [기록 신뢰성 검증](RECORD_RELIABILITY.md)에 있습니다. 아래 ON 판정의 사람/실차/종합 접근성 미검증은 그대로 남습니다.
+
 검증일: 2026-11-08 +09:00 (Asia/Seoul). 기준 main: `e5473532c639cd69d8e0a8017697ad6cbe66783d`.
 
 Aside의 [온보딩 연구](research/CARITDA_ONBOARDING_UX_RESEARCH.md)와 [기존 UI 연구](research/CARITDA_UI_UX_RESEARCH.md)를 읽고 실제 Kotlin/View 화면에 반영했습니다. 기존 [AC01~AC28 결과](UI_ACCEPTANCE.md)는 당시 결과로 보존하며 아래의 신규 ON 검사를 대신하지 않습니다. CARITDA는 상표 검증 전의 가칭입니다.
@@ -74,7 +78,7 @@ Android Studio에서 기존 `NextDrive-Pleos`를 열고 기존 AVD를 선택해 
 5. 사용법 → 처음 안내 다시 보기 → 닫기 → 사용법 닫기로 원래 화면에 돌아와 주세요.
 6. 문제 남기기에서 임시 내용을 입력하고 사용법을 열었다 닫아 내용이 유지되는지 확인해 주세요. 기존 기록을 지우거나 데이터 초기화할 필요는 없습니다.
 
-계측 실행은 테스트 APK 설치 후 아래 두 모드를 사용합니다. 첫 번째는 운영 앱에 검증용 프로필/문제를 추가하므로 기존 기록을 보존하고 추가 기록도 임의 삭제하지 않습니다. ON 모드는 사용자 초안이 이미 있으면 덮어쓰지 않고 해당 scratch 과제를 부분으로 기록합니다.
+아래는 초기 운영 대상 계측 실행 기록입니다. 당시 첫 번째 명령이 운영 앱에 검증용 프로필/문제를 추가했습니다. 현재는 이 경로를 중단했으며 아래 두 명령을 실행하지 마세요. 과거 실행 사실을 보존하기 위해 코드 블록은 남깁니다. 현재 validation 앱 명령은 위 후속 검증 문서를 따릅니다.
 
 ```text
 adb shell am instrument -w -e verifyProduction true com.nextdrive.pleos.test/com.nextdrive.pleos.MvpScenarioInstrumentation

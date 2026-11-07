@@ -28,6 +28,11 @@ object ConsultationSummary {
         val actions = events.filter { it.kind in setOf(EventKind.NOTE, EventKind.STATUS, EventKind.RECURRENCE) }
         if (actions.isEmpty()) appendLine("점검·조치 기록이 아직 없습니다.")
         actions.forEach { appendLine("${time(it.at)} · ${it.actor.label} · ${it.kind.label}\n${it.text}") }
+        val edits=events.filter{it.kind==EventKind.EDITED}
+        if(edits.isNotEmpty()){
+            appendLine();appendLine("작성 내용 수정 이력")
+            edits.forEach{appendLine("${time(it.at)} · ${it.actor.label}\n${it.text}")}
+        }
         appendLine()
         append("운전자가 직접 입력하고 확인한 로컬 기록입니다. 고장 진단이나 안전 판정이 아닙니다. 외부 정비소에는 전송되지 않았습니다.")
     }

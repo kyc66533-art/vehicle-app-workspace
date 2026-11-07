@@ -18,6 +18,22 @@ android {
         testInstrumentationRunner = "com.nextdrive.pleos.MvpScenarioInstrumentation"
     }
 
+    // Instrumentation must never target the app holding a driver's real journal.
+    signingConfigs.getByName("debug") {
+        providers.gradleProperty("caritdaDebugKeystore").orNull?.let { storeFile = file(it) }
+    }
+    buildTypes {
+        create("validation") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".validation"
+            matchingFallbacks += listOf("debug")
+            resValue("string", "app_name", "CARITDA 검증 전용")
+        }
+    }
+    // The debug override is only for replacing a stale production-target runner with the
+    // package guard. Its entry point rejects production before any DB preparation or UI.
+    testBuildType = providers.gradleProperty("caritdaInstrumentationTarget").getOrElse("validation")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

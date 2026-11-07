@@ -18,16 +18,22 @@ import java.util.UUID
 class MvpScenarioInstrumentation : Instrumentation() {
     private var checks = 0
     private val output = StringBuilder()
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); start() }
+    private var migrationOnly=false
+    private var verifyProduction=false
+    override fun onCreate(arguments: Bundle?) { migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
     override fun onStart() {
         val result = Bundle()
         try {
+            if(migrationOnly){val lines=MigrationChecks.run(targetContext);result.putString("stream","MIGRATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
+            if(verifyProduction)output.appendLine(MigrationChecks.productionBaseline(targetContext))
             databaseScenario()
             uiScenario(result)
             result.putString("stream", "CARITDA_MVP_PASS checks=$checks\n$output")
             val baseline = checks
             observationScenario()
-            result.putString("stream", "CARITDA_MVP_PASS checks=$baseline\n$output\nCARITDA_OBSERVATION_PASS checks=${checks - baseline}\n")
+            val observed=checks-baseline
+            managementScenario()
+            result.putString("stream", "CARITDA_MVP_PASS checks=$baseline\n$output\nCARITDA_OBSERVATION_PASS checks=$observed\nCARITDA_UI_PASS checks=${checks-baseline-observed}\n")
             finish(Activity.RESULT_OK, result)
         } catch (failure: Throwable) {
             result.putString("stream", "CARITDA_MVP_FAIL checks=$checks\n$output\n${failure.stackTraceToString()}")
@@ -40,6 +46,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
     }
     private fun databaseScenario() {
         val name = "caritda-test-${UUID.randomUUID()}.db"
+        targetContext.openOrCreateDatabase(name,0,null).also { com.nextdrive.pleos.data.DriverMigration.createV1(it);it.version=1;it.close() }
         var repo = SqliteIssueRepository(targetContext, name)
         var allowed = true
         var now = System.currentTimeMillis()
@@ -50,6 +57,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         repo.close()
         repo = SqliteIssueRepository(targetContext, name)
         service = CaritdaService(repo, { allowed }, { now++ })
+        service.selectDriver(service.driver())
         verify(service.issue(issue.id).situation == "가속할 때 핸들이 진동함", "SQLite persists after close/reopen")
         verify(service.events(issue.id).single().actor == Driver.A, "reporter and registration history persist")
         service.selectDriver(Driver.B)
@@ -70,6 +78,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         repo.close()
         repo = SqliteIssueRepository(targetContext, name)
         service = CaritdaService(repo, { allowed }, { now++ })
+        service.selectDriver(service.driver())
         verify(service.driver() == Driver.B, "selected local profile persists")
         summary = ConsultationSummary.build(service.issue(issue.id), service.events(issue.id))
         verify(summary.contains("다시 발생") && summary.contains("점검 결과 메모"), "recurrence and prior note survive restart")
@@ -100,8 +109,9 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val probe = SqliteIssueRepository(targetContext)
         val originalIds = probe.issues().map { it.id }.toSet()
         var activity = launch()
-        await("platform UX restriction permits parked editing") { main { tagged(activity, "new_issue")?.isEnabled == true } }
+        await("platform UX restriction permits parked editing") { main { tagged(activity, "driver_A")?.isEnabled == true } }
         click(activity, "driver_A")
+        click(activity, "start_driving")
         click(activity, "new_issue")
         main {
             (tagged(activity, "symptom_type") as Spinner).setSelection(SymptomType.VIBRATION.ordinal)
@@ -114,9 +124,10 @@ class MvpScenarioInstrumentation : Instrumentation() {
         verify(issue.type == SymptomType.VIBRATION && issue.reporter == Driver.A, "UI saves A vibration record")
         main { activity.finish() }; waitForIdleSync()
         activity = launch()
-        await("parked UX reconnects after activity restart") { main { tagged(activity, "new_issue")?.isEnabled == true } }
+        await("parked UX reconnects after activity restart") { main { tagged(activity, "driver_B")?.isEnabled == true } }
         verify(probe.issue(issue.id)?.situation == "가속할 때 핸들이 진동함", "UI-created record survives app activity restart")
         click(activity, "driver_B")
+        click(activity, "start_driving")
         click(activity, "issue_${issue.id}")
         click(activity, "acknowledge")
         verify(probe.events(issue.id).any { it.kind == EventKind.ACKNOWLEDGED && it.actor == Driver.B }, "UI stores B handover confirmation")
@@ -126,16 +137,14 @@ class MvpScenarioInstrumentation : Instrumentation() {
         verify(field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "진동 관련 점검 결과를 확인했습니다.")
         }), "UI action memo entered")
-        val save = findNode(uiAutomation.rootInActiveWindow) { it.text?.toString() == "저장" && it.isClickable }
-            ?: error("Dialog save button not found")
-        check(save.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+        click(activity,"save_action")
         await("UI memo saved") { probe.events(issue.id).any { it.kind == EventKind.NOTE } }
         click(activity, "issue_summary")
         val text = main { (tagged(activity, "consultation_summary") as TextView).text.toString() }
         verify(text.contains("가속할 때 핸들이 진동함") && text.contains("운전자 B") && text.contains("진동 관련 점검 결과"),
             "all nine requested steps reach a consultation summary in the real UI")
         verify(probe.issues().map { it.id }.containsAll(originalIds), "existing production records are preserved")
-        click(activity, "home")
+        navigate(activity,"HOME")
         val content = main { (activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0) }
         val originalWidth = main { content.layoutParams.width }
         val narrowWidth = (600 * activity.resources.displayMetrics.density).toInt()
@@ -176,7 +185,8 @@ class MvpScenarioInstrumentation : Instrumentation() {
         verify(rejected && store.latest().size == count, "invalid received observation rejected without insert")
         store.close()
         val activity = launch()
-        await("parked UX before connection screen") { main { tagged(activity, "vehicle_data")?.isEnabled == true } }
+        await("parked UX before connection screen") { main { tagged(activity, "driver_B")?.isEnabled == true } }
+        click(activity,"driver_B");click(activity,"start_driving")
         click(activity, "vehicle_data")
         val production = ObservationStore(targetContext)
         val original = production.latest(100)
@@ -192,11 +202,143 @@ class MvpScenarioInstrumentation : Instrumentation() {
             it.unit in listOf("%", "km") && it.supported == true && it.valid }, "at least one capability-approved SDK value is received and saved")
         main { activity.finish() }; waitForIdleSync()
         val restarted = launch()
-        await("parked UX after restart") { main { tagged(restarted, "vehicle_data")?.isEnabled == true } }
+        await("parked UX after restart") { main { tagged(restarted, "driver_B")?.isEnabled == true } }
+        click(restarted,"driver_B");click(restarted,"start_driving")
         click(restarted, "vehicle_data")
         verify(production.latest(100).size >= original.size && responses.all { it in production.latest(100) },
             "actual SDK observations persist after app activity restart")
         production.close()
+        main{restarted.finish()};waitForIdleSync()
+    }
+
+    private fun navigate(activity:Activity,target:String){
+        if(main{tagged(activity,"nav_$target")==null})click(activity,"menu")
+        click(activity,"nav_$target")
+    }
+    private fun managementScenario(){
+        val repo=SqliteIssueRepository(targetContext)
+        val oldDriver=repo.currentDriver()!!.id
+        val oldIds=repo.issues().map{it.id}.toSet()
+        var activity=launch()
+        await("driver selection ready"){main{tagged(activity,"start_driving")?.isEnabled==true}}
+        verify(main{tagged(activity,"new_issue")==null},"cold start requires explicit driver confirmation")
+        click(activity,"driver_A");click(activity,"cancel_driver")
+        verify(repo.currentDriver()!!.id==oldDriver,"cancelled candidate leaves current driver unchanged")
+        click(activity,"change_driver");click(activity,"add_driver")
+        val name="검증${UUID.randomUUID().toString().take(5)}"
+        val beforeProfiles=repo.drivers().size
+        click(activity,"save_driver")
+        verify(repo.drivers().size==beforeProfiles && main{(tagged(activity,"feedback") as TextView).text.isNotBlank()},"invalid name shows persistent error without creating profile")
+        main{(tagged(activity,"driver_name") as EditText).setText(name)};click(activity,"save_driver")
+        val profile=repo.drivers().single{it.label==name}
+        verify(repo.currentDriver()!!.id==oldDriver,"UI registration creates a profile without switching")
+        click(activity,"start_driving")
+        verify(repo.currentDriver()!!.id==profile.id,"explicit start confirms selected permanent driver ID")
+        click(activity,"new_issue")
+        main{(tagged(activity,"situation") as EditText).setText("검증용 초안을 보존합니다.")}
+        val draftId=repo.draft()!!.id
+        click(activity,"change_driver")
+        verify(repo.draft()?.id==draftId && main{tagged(activity,"save_issue")!=null},"dirty record blocks driver UI transition and preserves text")
+        val monitor=addMonitor(MainActivity::class.java.name,null,false)
+        main{activity.recreate()}
+        activity=monitor.waitForActivityWithTimeout(10_000) as? MainActivity ?: error("configuration recreation not observed")
+        removeMonitor(monitor)
+        await("confirmed draft after recreation"){main{tagged(activity,"save_issue")?.isEnabled==true}}
+        verify(repo.draft()?.id==draftId && main{(tagged(activity,"situation") as EditText).text.toString()}=="검증용 초안을 보존합니다.","configuration recreation retains confirmation and authored draft")
+        main{activity.finish()};waitForIdleSync();activity=launch()
+        await("driver selection after draft restart"){main{tagged(activity,"driver_B")?.isEnabled==true}}
+        click(activity,"driver_B");click(activity,"start_driving")
+        verify(repo.currentDriver()!!.id==profile.id && repo.draft()?.ownerId==profile.id,"draft prevents another driver from claiming author on restart")
+        click(activity,"driver_${profile.id}");click(activity,"start_driving");click(activity,"resume_draft")
+        verify(main{(tagged(activity,"situation") as EditText).text.toString()}=="검증용 초안을 보존합니다.","UI draft restored with original text")
+        val save=main{tagged(activity,"save_issue")!!}
+        main{check(save.performClick());save.performClick()};waitForIdleSync()
+        verify(repo.issue(draftId)?.reporter?.id==profile.id && repo.events(draftId).size==1 && repo.draft()==null,"double save creates one authored issue and clears only its draft")
+        click(activity,"add_note")
+        main{(tagged(activity,"action_note") as EditText).setText("검증용 조치 초안입니다.")}
+        main{activity.finish()};waitForIdleSync();activity=launch()
+        await("driver after action draft restart"){main{tagged(activity,"start_driving")?.isEnabled==true}}
+        click(activity,"start_driving");click(activity,"resume_draft")
+        verify(main{(tagged(activity,"action_note") as EditText).text.toString()}=="검증용 조치 초안입니다.","action draft and author survive UI restart")
+        click(activity,"save_action")
+        click(activity,"recurrence")
+        main{(tagged(activity,"action_note") as EditText).setText("검증용 재발 기록입니다.")};click(activity,"save_action")
+        verify(repo.issue(draftId)!!.revision==2 && repo.events(draftId).count{it.kind==EventKind.NOTE}==1,"UI action and recurrence preserve previous events")
+        click(activity,"add_note")
+        main{(tagged(activity,"action_note") as EditText).setText("취소할 검증 초안")}
+        click(activity,"discard_draft");clickAccessible("확인")
+        await("draft discarded"){repo.draft()==null}
+        verify(repo.events(draftId).size==3,"explicit draft cancellation preserves committed issue events")
+        navigate(activity,"ISSUES");click(activity,"issue_$draftId")
+        click(activity,"change_status");clickAccessible("점검 예정")
+        verify(repo.issue(draftId)!!.status==IssueStatus.PLANNED,"large status selector saves planned state")
+        click(activity,"change_driver");click(activity,"manage_drivers");click(activity,"rename_${profile.id}")
+        main{(tagged(activity,"driver_name") as EditText).setText("변경${name}")};click(activity,"save_driver")
+        verify(repo.issue(draftId)!!.reporter.label==name && repo.events(draftId).all{it.actor.label==name},"UI rename leaves historical problem and event author snapshots intact")
+        click(activity,"driver_B");click(activity,"start_driving")
+        click(activity,"change_driver");click(activity,"manage_drivers");click(activity,"archive_${profile.id}")
+        clickAccessible("확인")
+        await("archive committed"){repo.drivers().none{it.id==profile.id}}
+        verify(repo.drivers(true).single{it.id==profile.id}.archived && repo.issue(draftId)!!.reporter.label==name && repo.issues().map{it.id}.containsAll(oldIds),"UI archive preserves all previous user records and new authored history")
+        click(activity,"home");click(activity,"cancel_driver")
+        val issueCount=repo.issues().size
+        click(activity,"new_issue");main{(tagged(activity,"situation") as EditText).setText("취소할 새 문제 초안")}
+        click(activity,"discard_draft");clickAccessible("확인")
+        await("new issue draft cancelled"){repo.draft()==null}
+        verify(repo.issues().size==issueCount && main{tagged(activity,"new_issue")!=null},"cancelling within the form returns home without an inert save screen or new issue")
+        val content=main{(activity.findViewById<ViewGroup>(android.R.id.content)).getChildAt(0)}
+        val width=main{content.layoutParams.width}
+        val config=android.content.res.Configuration(activity.resources.configuration)
+        val priorTheme=activity.getPreferences(android.content.Context.MODE_PRIVATE).getString("theme","system")
+        try{
+            for(dpWidth in listOf(320,480,600,840,1024)){
+                val px=(dpWidth*activity.resources.displayMetrics.density).toInt()
+                main{content.layoutParams=content.layoutParams.apply{this.width=px};content.requestLayout()}
+                await("width $dpWidth"){main{content.width==px}}
+                waitForIdleSync()
+                verify(main{tagged(activity,"new_issue")!!.width<=px && tagged(activity,"new_issue")!!.height>=76*activity.resources.displayMetrics.density},"home CTA fits ${dpWidth}dp and retains large touch target")
+            }
+            for(scale in listOf(1.0f,1.3f,1.5f,2.0f)){
+                main{
+                    val changed=android.content.res.Configuration(config).apply{fontScale=scale}
+                    @Suppress("DEPRECATION")
+                    activity.resources.updateConfiguration(changed,activity.resources.displayMetrics)
+                }
+                click(activity,"theme");waitForIdleSync()
+                verify(main{val b=tagged(activity,"new_issue") as TextView;b.layout.getEllipsisCount(0)==0 && b.layoutParams.height==ViewGroup.LayoutParams.WRAP_CONTENT},"${(scale*100).toInt()} percent app font scale preserves expandable CTA text")
+            }
+            val colors=mutableSetOf<Int>()
+            var contrastPass=true
+            repeat(3){
+                click(activity,"theme")
+                main{
+                    val button=tagged(activity,"new_issue") as TextView;colors.add(button.currentTextColor)
+                    val background=(button.background.current as android.graphics.drawable.GradientDrawable).color!!.defaultColor
+                    contrastPass=contrastPass && contrast(button.currentTextColor,background)>=4.5
+                }
+            }
+            verify(colors.size>=2 && contrastPass,"light and dark themes keep measured CTA text contrast at least 4.5 to 1")
+        }finally{
+            main{
+                @Suppress("DEPRECATION")
+                activity.resources.updateConfiguration(config,activity.resources.displayMetrics)
+                check(activity.getPreferences(android.content.Context.MODE_PRIVATE).edit().putString("theme",priorTheme).commit())
+                content.layoutParams=content.layoutParams.apply{this.width=width};content.requestLayout()
+            }
+        }
+        repo.close();main{activity.finish()};waitForIdleSync()
+    }
+    private fun clickAccessible(text:String){
+        await("accessible action $text"){findNode(uiAutomation.rootInActiveWindow){it.text?.toString()==text && it.isClickable}!=null}
+        val node=findNode(uiAutomation.rootInActiveWindow){it.text?.toString()==text && it.isClickable}?:error(text)
+        check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));waitForIdleSync()
+    }
+    private fun contrast(first:Int,second:Int):Double{
+        fun luminance(color:Int):Double{
+            fun channel(value:Int):Double{val normalized=value/255.0;return if(normalized<=0.04045)normalized/12.92 else Math.pow((normalized+0.055)/1.055,2.4)}
+            return .2126*channel(android.graphics.Color.red(color))+.7152*channel(android.graphics.Color.green(color))+.0722*channel(android.graphics.Color.blue(color))
+        }
+        val a=luminance(first);val b=luminance(second);return (maxOf(a,b)+.05)/(minOf(a,b)+.05)
     }
 
     private fun launch(): MainActivity = startActivitySync(Intent(Intent.ACTION_MAIN).apply {

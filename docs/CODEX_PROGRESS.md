@@ -1,5 +1,56 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-07 22:15:17 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Aside UI·운전자 M0 구현·운영 DB 이전·실제 실행 성공
+
+### 구현 결과
+
+- 이름/별명 등록, 영구 ID, 후보 카드 선택→명시적 운전 시작, 선택 취소, 이름 수정·보관. 최근 운전자와 이번 이용의 확정을 구분하며 콜드 스타트는 재확인합니다. 차량 시동/OS 계정과 무관합니다.
+- 홈/문제/차량 분리. 홈은 현재 기록 운전자·문제 기록 CTA·미해결/미확인 건수·최근 차량 상태 중심입니다. 긴 목록·조치·재발·상담은 별도 화면입니다. 운전자 수정·보관은 관리 화면에 분리했고 운전 시작은 고정 하단에 둡니다.
+- 사용자 직접 기록 출처, 명시적 읽음 확인, 원 작성자 snapshot, 상담 범위/시간대/외부 미전송 표시를 유지했습니다. 자동 감지·Gleo·모바일/정비소 API는 구현하지 않았습니다.
+- SQLite v1→v2 additive migration: 기존 열/행/ID/시각/상태/revision/순서를 그대로 유지하고 drivers/작성자 ID·당시 이름/drafts/idempotency 인덱스를 추가했습니다. 기존 A/B ID는 유지하며 신규 설치에는 가짜 A/B를 만들지 않습니다. 관측 DB/SDK 구현은 변경하지 않았습니다.
+- 새 문제·조치·재발 초안의 원 작성자/대상/revision/내용을 SQLite에 보존합니다. 작성 중 다른 운전자 전환을 막고 저장·명시적 취소·계속 작성으로 구분합니다. 저장과 해당 초안 제거는 트랜잭션 처리하며 draft ID로 반복 저장을 막습니다. 제한 중에는 비확정 초안 보존만 허용합니다.
+- 시스템/밝은/어두운 테마, 주요 버튼 76dp 이상·24sp·내용에 따라 높이 확장, 선택 체크·focus 테두리·지속 오류 문구, 좁은 창/큰 글꼴의 세로 메뉴, 목록 위치 보존과 IME adjustResize를 적용했습니다. 실제값 freshness는 표시용 10분 기준이며 고장 기준이 아닙니다.
+
+### 단계별 검증과 데이터 보존
+
+1. 기존 앱 force-stop 후 문제/관측 DB+journal와 이전 APK를 .tools/ui-migration-backup에 바이너리 보관하고 앱 전용 비교 사본을 만들었습니다. 개인 데이터이므로 게시하지 않습니다. 복구 절차는 docs/UI_MIGRATION_PLAN.md에 먼저 작성했습니다.
+2. 모델/마이그레이션 단계 빌드 성공 후 운영 Activity를 열기 전에 독립 v1 fixture 18개 검사를 통과했습니다. 중간 예외로 스키마·행·user_version rollback, 모든 원래 필드/관계 비교, 반복 실행, 재연결, snapshot, 보관, 초안 중복 확정 방지를 검사했습니다.
+3. 실제 운영 DB 이전 후 기존 문제 5건·이벤트 16건의 모든 원본 필드와 관계 보존, 원래 관측 행 보존을 비교 사본으로 확인했습니다. 이후 테스트가 추가한 행은 별도이며 기존 행을 지우지 않았습니다.
+4. 최종 앱/계측 APK assembleDebug+assembleDebugAndroidTest: BUILD SUCCESSFUL in 55s, exit 0. 기존 Windows/JBR21.0.8/Gradle8.11.1/API34/Build-Tools35.0.0, 기존 캐시 offline 빌드. 앱·테스트 APK install -r 둘 다 Success. 실제 Pleos Connect v2.1.0/API34 emulator-5554에서 실행했습니다.
+5. 최종 MIGRATION_PASS checks=18, CARITDA_MVP_PASS checks=24, CARITDA_OBSERVATION_PASS checks=6, CARITDA_UI_PASS checks=27. 합계 75개 검사이며 Aside AC28 전부 통과라는 뜻은 아닙니다.
+6. 새 UI 검사는 이름 오류/등록/후보 취소/시작, dirty 전환 차단, Activity 재생성, 원 작성자 초안 복원, 저장 중복 방지, 조치·재발·명시적 취소·상태, 이름 변경과 보관 후 모든 기존 기록 보존을 포함합니다.
+7. SDK 2.3.2 실제 응답 유지: EV SOC=100%, 누적 주행거리=0.0km, 각 Capability READ. 연료는 ERROR_NOT_SUPPORTED_PROPERTY로 값 없이 UNSUPPORTED 저장. PLEOS_EMULATOR_SDK이며 앱내 가상값/실차와 구분합니다. 최종 통합 세션 48861d71-6288-4b38-afc3-9dd1c0411794.
+8. 320/480/600/840/1024dp 콘텐츠 폭에서 홈 CTA 폭·76dp 터치 높이, 테스트 프로세스 fontScale 100/130/150/200%에서 CTA 확장/말줄임 없음 검사 통과. 앱 리소스와 테마 설정은 테스트 후 원복했으며 OS 전역 글꼴/보안 정책은 변경하지 않았습니다. 두 테마 CTA 실제 색상의 대비 4.5:1 이상 확인. 실제 화면 캡처를 검토했습니다.
+9. 추가 실제 키보드로 CARITDA_draft_restart_test 임시 초안 입력→force-stop/cold start→원 작성자 B로 운전 시작→계속 작성에서 내용 복원 확인. 사용자 확인 동작으로 해당 임시 초안만 취소했고 확정 문제/이력은 유지했습니다.
+
+### 실패·부분 검증·남은 제한
+
+- 첫 확장 검사는 별도 상태 dialog를 Activity decor에서 찾는 테스트 오류로 중단됐습니다. 접근성 노드로 선택하도록 수정 후 전체 통과했습니다. 그 과정의 검증용 프로필/카드도 삭제하지 않았습니다. 정상 완료한 검증 프로필은 보관 처리했습니다.
+- offline lintDebug는 exit 1: com.android.tools.lint:lint-gradle:31.10.1 캐시 부재로 실행되지 못했습니다. 동일 네트워크 다운로드를 반복하지 않았으며 Lint 성공으로 기록하지 않습니다.
+- 실차/Release/실제 주행 UXR 전환/서비스 단절·저장소 고갈 주입, TalkBack·물리 키보드·rotary 종합 검사, 모든 화면의 전체 글꼴·창 조합, 고령/신규 사용자 과제는 미검증입니다. deprecated onBackPressed 경고가 남습니다.
+- AC01~AC28별 통과/부분/미검증과 범위를 docs/UI_ACCEPTANCE.md에 명시했습니다. UI 폭/폰트 검사는 콘텐츠를 제한한 계측이며 모든 실차 패널 검사와 다릅니다. 선택/확정·cache/비파괴 이전·native View 설계 조정도 기록했습니다.
+
+### 변경 파일 / 공유
+
+- AGENTS.md: 최신 UI M0 범위와 데이터 보존 지침.
+- app/src/main/java/com/nextdrive/pleos/model/IssueModels.kt: 영구 운전자와 snapshot/초안 모델.
+- data/IssueRepository.kt, data/SqliteIssueRepository.kt: 비파괴 v2·운전자/초안 저장.
+- domain/CaritdaService.kt: 명시적 확정, ID 기반 인계, 원 작성자 draft 규칙·중복 방지.
+- MainActivity.kt, app/src/main/AndroidManifest.xml: 실제 UI/탐색/테마/초안/IME.
+- app/src/androidTest/.../MvpScenarioInstrumentation.kt, 신규 MigrationChecks.kt: 기존 회귀+UI/SDK/이전 검사.
+- 신규 docs/UI_MIGRATION_PLAN.md, docs/UI_ACCEPTANCE.md, docs/CODEX_PROGRESS.md, README.md, NextDrive-Pleos/README.md.
+총 14개 소스·설정·문서를 사용자 PC에 반영하고 GitHub 연결 도구로 게시합니다. 기존 SDK/관측 코드와 Aside 연구는 변경하지 않았습니다. APK SHA256 03529f7cabfb4e2db6a50d708fc345f0aeef999d5636f42c64acb82bbd6db475. 앱/테스트 APK·로그·화면·개인 DB·백업·키·캐시는 게시하지 않습니다.
+
+작업 기준 main 6f6c281ed40c702378643ee2ba93356ad4f79413. 게시 직전 최신 HEAD/대상 SHA를 재확인하고 최신 트리/부모를 잇는 커밋과 기대 HEAD 갱신을 사용합니다. 원격 파일 SHA/부모 및 Aside 포함 나머지 파일 보존을 확인하며 최종 커밋은 응답으로 보고합니다. 로컬 Git push가 아닙니다.
+
+사용자는 설치된 앱에서 이름 등록→카드 선택→운전 시작을 사용할 수 있습니다. 파일 편집/재설치/DB 초기화는 필요 없습니다. 다음 우선 작업은 부분 검증된 실제 창·접근성·입력 제한 전환과 Lint 완료입니다. 사용자 기능 확장은 별도 지시 후 진행합니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 21:18:19 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 실제 Pleos SDK 수신·저장·회귀 검증 성공
@@ -20,6 +71,8 @@
 앞서 로컬에만 있던 실행 검증 성공 소스 4개: MainActivity.kt, 신규 vehicle/PleosReadClient.kt, AndroidManifest.xml, MvpScenarioInstrumentation.kt. 이번에 소스를 다시 변경한 것은 아니며 이전 구현을 실제로 검증한 뒤 게시합니다.
 문서 갱신: docs/VEHICLE_SDK_232_RUNTIME.md, SDK_CAPABILITY_MATRIX.md, docs/CODEX_PROGRESS.md, README.md, NextDrive-Pleos/README.md. 총 게시 대상 9개. 기존 ObservationStore와 수동 DB 스키마는 변경하지 않았습니다.
 
+
+추가 검수에서 입력 폼의 처음 초안에 취소 버튼이 없던 점과 취소 후 빈 폼이 남던 점을 수정했습니다. 새 문제·조치 폼에 항상 취소를 제공하고 확인 후 홈으로 돌아갑니다. 이 경로를 추가 회귀로 검증했습니다. 중단된 검사의 초안만 정차 UI의 명시적 취소로 정리했으며 기존 확정 기록은 유지했습니다.
 ### 한계·다음 작업
 
 실제 권한 거부/타임아웃/서비스 끊김 실패 조건은 이번에 강제로 만들지 않았습니다. 해당 방어 로직의 모든 런타임 경로를 검증했다고 주장하지 않습니다. 연료는 현재 이미지에서 미지원입니다. 실차·Release·Lint·실제 주행 전환은 이번 미검증. 자동 감지/반복 수집/운전자 관리 개편/UI 전면 개편은 구현하지 않았습니다.

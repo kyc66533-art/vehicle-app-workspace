@@ -1,6 +1,19 @@
 package com.nextdrive.pleos.model
 
-enum class Driver(val label: String) { A("운전자 A"), B("운전자 B") }
+/** Stable identity; labels on issues/events are immutable snapshots. Legacy IDs remain A/B. */
+data class Driver(val id: String, val label: String, val archived: Boolean = false) {
+    val name: String get() = id
+    companion object {
+        val A = Driver("A", "운전자 A")
+        val B = Driver("B", "운전자 B")
+        val entries = listOf(A, B)
+    }
+}
+
+data class JournalDraft(val id: String, val ownerId: String, val ownerName: String,
+    val kind: String, val target: String? = null, val revision: Int = 1,
+    val type: SymptomType = SymptomType.NOISE, val body: String = "", val memo: String = "",
+    val foundAt: Long = System.currentTimeMillis(), val updatedAt: Long = System.currentTimeMillis())
 enum class SymptomType(val label: String) { NOISE("소음"), VIBRATION("진동"), WARNING("경고등"), OTHER("기타") }
 enum class IssueStatus(val label: String) {
     UNRESOLVED("미해결"), PLANNED("점검 예정"), INSPECTED("점검 완료"), RESOLVED("해결 확인")
@@ -27,4 +40,5 @@ data class IssueEvent(
     val text: String,
     val revision: Int,
     val status: IssueStatus? = null,
+    val draftId: String? = null,
 )

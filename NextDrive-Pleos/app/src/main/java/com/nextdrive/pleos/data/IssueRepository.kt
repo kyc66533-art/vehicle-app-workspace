@@ -3,7 +3,14 @@ package com.nextdrive.pleos.data
 import com.nextdrive.pleos.model.*
 
 interface IssueRepository : AutoCloseable {
-    fun currentDriver(): Driver
+    fun currentDriver(): Driver?
+    fun drivers(includeArchived: Boolean = false): List<Driver>
+    fun registerDriver(name: String): Driver
+    fun renameDriver(id: String, name: String)
+    fun archiveDriver(id: String)
+    fun draft(): JournalDraft?
+    fun saveDraft(draft: JournalDraft)
+    fun discardDraft(id: String)
     fun selectDriver(driver: Driver)
     fun issues(): List<VehicleIssue>
     fun issue(id: String): VehicleIssue?

@@ -29,3 +29,10 @@ kotlin {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
+
+dependencies {
+    implementation("ai.pleos.playground:Vehicle:2.3.2")
+    // Public ErrorCode is published as runtime-only by Vehicle.
+    // Vehicle already packages this at runtime; expose only its public constants to the compiler.
+    compileOnly("ai.pleos.playground:vehicle-data:1.1.11") { isTransitive = false }
+}

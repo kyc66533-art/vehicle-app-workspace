@@ -1,5 +1,21 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 최신 상태 — Vehicle SDK 2.3.2 확보 및 포함 빌드 성공
+
+사용자는 2.3.1 POM HTTP 404/2.3.2 POM 정상과 Sync/APK 성공을 확인했습니다. Codex도 실제 Vehicle 2.3.2, vehicle-aidl 1.1.1, vehicle-data 1.1.11 AAR 및 sources를 확인하고 수정본 앱/계측 APK 빌드를 성공했습니다(exit 0, 47초). 아래 다운로드 실패는 과거 사실입니다.
+
+| 데이터 | 실제 AAR 공개 API 확인 | 권한·단위 | 런타임 |
+| --- | --- | --- | --- |
+| EV SOC | checkEvBatteryStateOfChargeCapabilities / getEvBatteryStateOfCharge | CAR_ENERGY, Int? % | AVD 미연결, Capability/값 미검증 |
+| 누적 주행거리 | checkCurrentDistanceDrivenCapabilities / getCurrentDistanceDriven | CAR_DRIVE, Float? km | AVD 미연결, Capability/값 미검증 |
+| 연료 잔량 | checkFuelPercentCapabilities / getFuelPercent | CAR_ENERGY, Int? % | AVD 미연결, Capability/값 미검증 |
+
+SDK 초기화·Capability 후 읽기·관측 저장·화면 연결 코드는 로컬에 구현하고 컴파일했습니다. 실제 initialize/서비스 응답/권한 허용/데이터 수신/저장은 실행하지 못했습니다. 기존 AVD 시작 시 사용자 .android 잠금 파일 쓰기 error 5로 중단하여 일반 Android Studio 부팅을 요청했습니다. 실제 수신 0개이며 가상값으로 대체하지 않았습니다. 런타임 미검증 어댑터/UI/계측/Manifest는 로컬만 보존하고 빌드 검증한 Gradle 설정과 문서만 게시합니다.
+
+자세한 현재 상태: [2.3.2 런타임 검증 안내](docs/VEHICLE_SDK_232_RUNTIME.md). 기존 DB 스키마/기록, Aside UI 조사와 이전 기록은 보존했습니다.
+
+# 공식 SDK 및 실제 지원 기능 점검표
+
 ## SDK 다운로드 재검증 — 2026-11-07 20:31 +09:00
 
 실제 앱 app/build.gradle.kts에 Vehicle 2.3.1 의존성을 추가하고 온라인 assembleDebug를 실행했습니다. debugRuntimeClasspath 의존성 해결이 공식 Maven GET의 `Permission denied: getsockopt`로 실패했습니다(exit 1, 41초). DNS 해석은 성공했으며 SDK AAR은 캐시에 없습니다. HTTP 응답을 받지 못해 인증/좌표 오류 여부는 미판정입니다. 현재 실행 정책에서 네트워크 승인 요청도 허용되지 않아 확대 권한 실행이나 우회는 하지 않았습니다.

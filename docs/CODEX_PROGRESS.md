@@ -1,5 +1,44 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-07 21:05:11 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Vehicle 2.3.2 확보 확인, 실제 읽기 구현과 빌드 성공 / 런타임 대기
+
+### 완료한 작업
+
+- 사용자 보고(2.3.1 HTTP404, 2.3.2 Sync/다운로드/Build APK 성공)를 현재 상태로 반영했습니다. 기존 실패 기록은 보존합니다. 실제 로컬 Gradle이 2.3.2이고 Vehicle-2.3.2.aar, vehicle-aidl-1.1.1.aar, vehicle-data-1.1.11.aar와 공식 sources JAR이 존재함을 확인했습니다.
+- 공식 공개 SDK 소스/배포 AAR에서 SOC/주행거리/연료 Capability·읽기 함수, nullable 타입, %/km 단위와 RequiresPermission을 확인했습니다. 제어 API를 호출하거나 특권 권한을 요청하지 않았습니다.
+- 로컬 PleosReadClient에 Vehicle 초기화/해제, 세 Capability 확인, READ/READ_WRITE만 조회, 수치 검증, 출처/원본/단위/시각/세션 저장, 실패·타임아웃 분리, 생명주기 정리·늦은 콜백 무시를 구현했습니다. initialize 반환만으로 연결 성공을 표시하지 않습니다.
+- MainActivity의 기존 최소 차량 화면에 읽기 버튼과 상태를 연결하고 Manifest에는 CAR_ENERGY/CAR_DRIVE만 추가했습니다. SDK가 VEHICLE_BINDING을 병합합니다. 기존 수동 문제 DB와 ObservationStore 스키마는 그대로 유지했습니다.
+- 기존 24개 계측 시나리오를 유지하고, SDK 실제 결과/최소 한 개 값/재시작 저장 복원을 확인하는 계측으로 갱신했습니다. 이는 준비한 테스트이며 이번에 실행하지 못했습니다.
+
+### 실제 빌드 결과와 해결한 오류
+
+- 첫 컴파일은 배포 AAR의 VehicleException 난독화와 runtime-only ErrorCode 의존성으로 실패했습니다. 예외 타입을 반사 호출하지 않고 Exception/공개 ErrorCode 이름으로 처리했습니다. vehicle-data를 implementation으로 추가한 시도는 테스트 전이 의존성의 offline 해석이 실패했습니다. 최종 설정은 runtime 그래프를 유지하며 compileOnly, transitive=false로 공개 ErrorCode만 노출합니다.
+- 최종 :app:assembleDebug :app:assembleDebugAndroidTest → BUILD SUCCESSFUL in 47s, exit 0. JBR21.0.8/Gradle8.11.1/Platform34/Build-Tools35.0.0, 기존 캐시 offline 빌드입니다. 새 APK와 계측 APK가 실제 생성됐습니다.
+- aapt permissions: CAR_ENERGY, CAR_DRIVE, SDK의 VEHICLE_BINDING. 제어 권한 없음.
+- 앱 APK SHA256: 7a6412cc0cfc4b5aec24aa903540b485b345c2f90d8e1282dfdbaccf55056dd1. 로그 app/build/validation/sdk232-build.txt. APK/로그/SDK sources/키/DB는 게시하지 않습니다.
+
+### 런타임 실패·미검증
+
+- 시작 시 ADB 연결 기기가 없었습니다. 기존 Pleos_Connect_v2.1.0을 초기화 없이 시작했으나 .android/emu-last-feature-flags.protobuf.lock 쓰기 error 5가 반복되어 이번에 시작한 emulator/qemu 프로세스만 중단했습니다. 보안 제한 우회나 SDK/AVD 재설치를 하지 않았습니다. AVD 시작 로그는 .tools에 보존합니다.
+- 일반 Android Studio의 Device Manager에서 기존 AVD를 부팅해 달라는 사용자 조작 요청을 전달했습니다. 실제 앱 설치/실행, SDK initialize/서비스 응답, Capability, 실제값 수신/저장, 런타임 오류 분류와 이번 회귀 검사는 미수행입니다. 실제 수신값은 아직 0개입니다.
+- 과거 24+5 검사 성공은 과거 기록이며 이번 수정본의 검사 성공으로 표현하지 않습니다. Lint/Release/실차/실제 주행 전환도 이번 미검증입니다.
+
+### 변경 파일 및 게시 범위
+
+사용자 PC에 직접 반영: AGENTS.md, app/build.gradle.kts(사용자가 적용한 2.3.2 유지 + ErrorCode 컴파일 노출), app/src/main/AndroidManifest.xml, MainActivity.kt, 신규 vehicle/PleosReadClient.kt, app/src/androidTest/.../MvpScenarioInstrumentation.kt, SDK_CAPABILITY_MATRIX.md, docs/VEHICLE_SDK_232_RUNTIME.md, docs/CODEX_PROGRESS.md.
+
+빌드 검증한 app/build.gradle.kts와 AGENTS.md/결과 문서 3개만 우선 GitHub 연결 도구를 통해 게시합니다(총 5개). 런타임 미검증 Manifest/MainActivity/PleosReadClient/계측은 로컬에 보존하고 실제 AVD 검사 전 게시에서 제외합니다. 원격 앱에는 아직 새 읽기 UI가 반영되지 않습니다. 사용자 PC에서는 새 SDK 포함 APK를 실행할 준비가 되었습니다.
+
+작업 시작 main c9d5469cef2913ca1ae497d0da8efa69b651f380과 Aside 조사 파일을 확인했습니다. 최신 HEAD/대상 SHA를 다시 대조하고 기존 main 트리/부모를 잇는 커밋, 기대 HEAD 갱신, 원격 해시·부모·Aside 포함 나머지 파일 보존을 확인합니다. 게시 커밋은 최종 보고하며 로컬 Git push 성공으로 표현하지 않습니다.
+
+다음 최우선은 기존 AVD 부팅 → ADB 교체 설치 → 기존 24개 회귀와 실제 SDK 계측 실행 → 결과에 따른 연결/Capability 문제 해결입니다. 사용자가 편집할 파일은 없습니다. UI 개편·운전자 관리 확장·자동 이상 감지는 진행하지 않았습니다. 자세한 실행 순서는 docs/VEHICLE_SDK_232_RUNTIME.md에 있습니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 20:31:59 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 실제 앱 Vehicle 의존성 추가 후 다운로드 실패 재확인

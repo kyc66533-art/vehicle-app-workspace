@@ -1,3 +1,49 @@
+# Vehicle 2.3.2 — 에뮬레이터 실제 응답 및 저장 검증 성공
+
+## 최신 검증 — 2026-11-07 21:15~21:17 +09:00
+
+사용자가 일반 Android Studio에서 기존 Pleos Connect v2.1.0 AVD를 부팅한 뒤 Codex가 아래 작업을 직접 수행했습니다. 아래의 과거 미연결 기록은 당시 사실로 보존합니다.
+
+- ADB emulator-5554 연결, sys.boot_completed=1 확인.
+- 기존 앱과 계측 APK를 `adb install -r`로 교체 설치: 둘 다 Success. 삭제/데이터 지우기/AVD 초기화 없음.
+- 공식 Vehicle 2.3.2의 initialize → Capability → get 콜백 응답 확인. 초기화 반환만으로 연결 성공을 판단하지 않고 실제 서비스 응답으로 확인했습니다.
+- 실제 설치 권한 CAR_ENERGY/CAR_DRIVE/VEHICLE_BINDING 모두 granted=true 확인. 제어 권한은 추가하지 않았습니다.
+
+| 항목 | Capability | 실제 읽기 | 저장 상태 |
+| --- | --- | --- | --- |
+| EV SOC | access=READ | 원본 100, 단위 % | RECEIVED, supported=true, valid=true |
+| 누적 주행거리 | access=READ | 원본 0.0, 단위 km | RECEIVED, supported=true, valid=true |
+| 연료 잔량 | ERROR_NOT_SUPPORTED_PROPERTY | 읽기 미호출, 값 없음 | UNSUPPORTED, supported=false, valid=false, raw/unit/receivedAt=null |
+
+출처는 **PLEOS_EMULATOR_SDK**입니다. 이는 실제 Pleos 에뮬레이터 Vehicle Service의 시뮬레이션 응답이며 앱 내부에서 생성한 가상값이나 실차 계측값이 아닙니다. 연료 미지원 결과를 연료 0%로 대체하지 않았습니다. ICE/HEV 지원 목표를 철회한 것이 아니라 현재 이미지의 지원 결과입니다.
+
+수집 세션: `06b5899d-baad-473e-9ed0-ce71ed35093f`.
+SOC receivedAt=1794053740683, 주행거리 receivedAt=1794053740751 (Unix ms). 수신은 한국 시각 21:15:40경이며 AVD 화면은 America/Los_Angeles 기준 04:15로 표시합니다. 시스템 시간대를 변경하지 않았습니다.
+
+### 실제 테스트와 영구 저장
+
+계측 실행: `adb -s emulator-5554 shell am instrument -w com.nextdrive.pleos.test/com.nextdrive.pleos.MvpScenarioInstrumentation`.
+
+- **CARITDA_MVP_PASS checks=24**: 기존 수동 증상/재실행/인계/조치/네 상태/재발/중복 확인 방지/상담/입력 잠금/기존 기록 보존/600dp 검사 모두 통과.
+- **CARITDA_OBSERVATION_PASS checks=6**: 독립 시험 DB 실패 상태/메타데이터 복원/잘못된 관측 거부 3개 + 실제 SDK 세 결과/최소 한 개 유효값 저장/Activity 재시작 복원 3개 통과. TEST_ONLY 수치는 독립 시험 DB에서만 사용했습니다.
+- SDK_RESULT에는 세 API의 실제 결과와 수신 시각·출처·단위·세션이 기록됐습니다. 앱의 ObservationStore에서 읽은 값입니다.
+- 추가로 앱 프로세스를 force-stop하고 cold start(Status ok)했습니다. 새 읽기 요청을 하지 않고 기존 세션과 SOC 100%/주행거리 0.0km/연료 UNSUPPORTED가 화면에서 복원되는 것을 확인했습니다. 연료 카드는 스크롤 아래에 있어 두 스크롤 위치의 UI XML을 함께 대조했습니다. 첫 XML에 연료가 없었던 것은 화면 밖 위치였으며 데이터 누락이 아니었습니다.
+- 화면 스크린샷을 직접 확인했습니다. 기존 사용자 문제 ID가 보존됐고 시험용 문제만 한 개 추가했습니다. 사용자 DB 파일은 업로드하지 않습니다.
+
+실행 APK SHA256은 앞서 성공한 최종 빌드와 같은 `7a6412cc0cfc4b5aec24aa903540b485b345c2f90d8e1282dfdbaccf55056dd1`입니다. 소스를 변경하지 않았으므로 불필요하게 재빌드하지 않았습니다. 앞선 SDK 포함 앱/계측 APK 빌드는 exit 0, 47초 성공입니다.
+
+로컬 증거(게시 제외): `app/build/validation/sdk232-runtime.txt`, `sdk232-home.xml`, `sdk232-restored.xml`, `sdk232-fuel.xml`, `sdk232-restored.png` 및 APK. SQLite·키·캐시·SDK 바이너리는 게시하지 않습니다.
+
+### 이번 게시와 한계
+
+이제 실제 실행 검증을 통과한 PleosReadClient/MainActivity/Manifest/계측 변경을 GitHub에 게시합니다. 앞서 원격에 없었던 읽기 버튼과 어댑터가 이번 커밋으로 반영됩니다. ObservationStore 스키마나 기존 수동 DB는 변경하지 않았습니다. Aside 연구와 기존 이력을 보존합니다.
+
+실차·Release·Lint·실제 주행 전환은 이번 미검증입니다. 권한 거부/타임아웃/끊김 방어 코드는 있으나 이번 실제 서비스에서 그 실패 조건을 강제로 발생시키지는 않았습니다. 반복 자동 수집/자동 경고/운전자 관리 개편/UI 전면 개편은 구현하지 않았습니다.
+
+사용자는 현재 앱의 `차량 데이터 연결 확인` → `차량 데이터 읽고 저장하기`로 다시 확인할 수 있습니다. 재설치나 파일 편집은 필요 없습니다. 다음 우선 작업 후보는 수동 문제 기록에 가장 최근 관측의 ID/시각/출처를 명시적으로 연결하는 기능입니다. 오래된 관측이나 미지원 값을 현재 차량 상태로 단정하지 않아야 합니다.
+
+## 아래는 이전 구현·미연결 검증 기록입니다
+
 # Vehicle 2.3.2 연동 구현 및 검증 상태
 
 2026-11-07, Asia/Seoul. **SDK 확보와 SDK 포함 APK 빌드는 성공. 실제 서비스 응답·차량값 수신은 아직 미검증입니다.** 과거 다운로드 실패 기록은 삭제하지 않습니다.

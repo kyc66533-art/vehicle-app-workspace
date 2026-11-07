@@ -23,6 +23,7 @@ import java.util.Calendar
 class MainActivity : Activity() {
     private enum class Screen { HOME, RECORD, DETAIL, SUMMARY, VEHICLE }
     private lateinit var observations: ObservationStore
+    private lateinit var pleos: PleosReadClient
     private data class Draft(var type: SymptomType = SymptomType.NOISE, var situation: String = "",
                              var foundAt: Long = System.currentTimeMillis(), var memo: String = "")
     private lateinit var repository: SqliteIssueRepository
@@ -47,6 +48,7 @@ class MainActivity : Activity() {
         setContentView(root, ViewGroup.LayoutParams(-1, -1))
         repository = SqliteIssueRepository(this)
         observations = ObservationStore(this)
+        pleos = PleosReadClient(this, observations) { if (screen == Screen.VEHICLE) draw() }
         safety = CarSafetyGate(this) { state ->
             if (state != displayedSafety) {
                 captureDraft()
@@ -79,7 +81,7 @@ class MainActivity : Activity() {
         draw()
         safety.start()
     }
-    override fun onStop() { captureDraft(); activeDialog?.dismiss(); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
+    override fun onStop() { captureDraft(); activeDialog?.dismiss(); pleos.stop(); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
     override fun onDestroy() { repository.close(); observations.close(); super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
@@ -164,17 +166,11 @@ class MainActivity : Activity() {
     }
 
     private fun vehicleScreen(body: LinearLayout) {
-        body.addView(label("차량 데이터 · 연결 준비 중", 26, true))
-        body.addView(label("SDK 미설치 · 서비스 미연결 · Capability 미확인 · 마지막 수신 없음", 20))
-        body.addView(label("SOC, 누적 주행거리, 연료 잔량, 도어 모두 지원 미확인입니다. 가상 수치를 표시하지 않습니다.", 20))
-        body.addView(label("현재 빌드에는 Pleos Vehicle SDK가 없습니다. 공식 Maven 다운로드 실패로 실제 읽기는 아직 실행할 수 없습니다.", 18))
-        body.addView(button("현재 미연결 상태 기록하기", "save_connection_status", enabled = canEdit()) {
-            edit {
-                observations.append(VehicleObservation("SDK_CONNECTION", null, null, null,
-                    ObservationSource.NONE, null, false, ObservationStore.sessionId(),
-                    ObservationStatus.SDK_UNAVAILABLE, "공식 SDK 아티팩트 미확보. 연결·권한·Capability·읽기 미수행."))
-                draw()
-            }
+        body.addView(label("차량 데이터 · SDK 2.3.2", 26, true))
+        body.addView(label(pleos.message, 20).apply { tag = "sdk_status" })
+        body.addView(label("SOC・누적 주행거리・연료 잔량을 지원 확인 후 한 번 읽습니다. 에뮬레이터 SDK 응답은 실차 측정과 다릅니다.", 18))
+        body.addView(button("차량 데이터 읽고 저장하기", "read_vehicle", enabled = canEdit() && !pleos.busy) {
+            edit { pleos.readOnce() }
         })
         observations.latest().forEach { item ->
             val card = panel()

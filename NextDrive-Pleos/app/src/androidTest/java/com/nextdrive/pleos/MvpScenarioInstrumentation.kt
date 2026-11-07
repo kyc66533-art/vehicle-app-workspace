@@ -180,15 +180,22 @@ class MvpScenarioInstrumentation : Instrumentation() {
         click(activity, "vehicle_data")
         val production = ObservationStore(targetContext)
         val original = production.latest(100)
-        click(activity, "save_connection_status")
-        verify(production.latest().first().status == ObservationStatus.SDK_UNAVAILABLE && production.latest().first().raw == null,
-            "real UI stores SDK unavailable without fake reading")
+        val before = System.currentTimeMillis()
+        click(activity, "read_vehicle")
+        await("three actual SDK outcomes") { production.latest().count { it.recordedAt >= before } >= 3 }
+        val responses = production.latest().filter { it.recordedAt >= before }.take(3)
+        responses.forEach { output.appendLine("SDK_RESULT=$it") }
+        verify(responses.map { it.kind }.toSet() == setOf("EV_SOC", "ODOMETER", "FUEL_PERCENT") &&
+            responses.all { it.source == ObservationSource.PLEOS_EMULATOR_SDK && it.status != ObservationStatus.SDK_UNAVAILABLE },
+            "actual emulator SDK returns three distinct outcomes")
+        verify(responses.any { it.status == ObservationStatus.RECEIVED && it.raw != null && it.receivedAt != null &&
+            it.unit in listOf("%", "km") && it.supported == true && it.valid }, "at least one capability-approved SDK value is received and saved")
         main { activity.finish() }; waitForIdleSync()
         val restarted = launch()
         await("parked UX after restart") { main { tagged(restarted, "vehicle_data")?.isEnabled == true } }
         click(restarted, "vehicle_data")
-        verify(production.latest(100).size >= original.size && production.latest().first().source == ObservationSource.NONE,
-            "connection status persists after app activity restart")
+        verify(production.latest(100).size >= original.size && responses.all { it in production.latest(100) },
+            "actual SDK observations persist after app activity restart")
         production.close()
     }
 
@@ -208,7 +215,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         return null
     }
     private fun await(label: String, condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + 15_000
+        val deadline = System.currentTimeMillis() + 25_000
         while (System.currentTimeMillis() < deadline) { if (condition()) return; Thread.sleep(100) }
         error("Timed out: $label")
     }

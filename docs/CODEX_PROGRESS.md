@@ -1,5 +1,41 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-07 21:18:19 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 실제 Pleos SDK 수신·저장·회귀 검증 성공
+
+### 직접 수행한 결과
+
+- 사용자가 부팅한 기존 Pleos Connect v2.1.0에 ADB emulator-5554 연결, boot_completed=1 확인.
+- 이전 최종 빌드 앱/계측 APK를 install -r로 교체 설치: 둘 다 Success. 기존 앱/SQLite/AVD를 삭제하거나 초기화하지 않았습니다. 동일 APK SHA256 7a6412cc0cfc4b5aec24aa903540b485b345c2f90d8e1282dfdbaccf55056dd1이며 이전 빌드 성공(exit0,47초) 후 소스를 바꾸지 않아 재빌드는 생략했습니다.
+- SDK initialize 후 실제 Capability/get 콜백으로 서비스 연결 응답을 확인했습니다. CAR_ENERGY/CAR_DRIVE/VEHICLE_BINDING granted=true.
+- EV_SOC: Capability READ, 원본 100 %, receivedAt 1794053740683. ODOMETER: READ, 원본 0.0 km, receivedAt 1794053740751. 둘 다 supported=true, valid=true, RECEIVED로 저장했습니다.
+- FUEL_PERCENT: Capability 콜백 ERROR_NOT_SUPPORTED_PROPERTY. 읽기를 호출하지 않고 UNSUPPORTED/supported=false/valid=false, 원본·단위·수신시각 null로 저장했습니다. 권한 거부나 연료0%로 해석하지 않습니다.
+- 세 항목 모두 source=PLEOS_EMULATOR_SDK, 세션 06b5899d-baad-473e-9ed0-ce71ed35093f. 에뮬레이터 Vehicle Service 시뮬레이션 응답이지 실차/앱내 가상값이 아닙니다.
+- CARITDA_MVP_PASS checks=24, CARITDA_OBSERVATION_PASS checks=6 전체 통과. 실제 UI 흐름과 SQLite, 기존 문제 ID 보존, SDK 응답 저장/Activity 재시작 복원 검사입니다. 시험용 문제 한 개가 추가됐고 기존 문제는 유지했습니다.
+- 추가 force-stop → cold start Status ok. 새 SDK 읽기 없이 기존 세션·SOC·주행거리·연료 미지원이 실제 화면에서 복원됨을 UI XML/스크린샷으로 확인했습니다. 처음 XML에는 스크롤 밖 연료 카드가 없어 검사 실패했으나 스크롤 후 같은 세션/연료 상태를 확인했습니다. 앱/저장 오류가 아니었습니다.
+
+### 수정·게시 파일
+
+앞서 로컬에만 있던 실행 검증 성공 소스 4개: MainActivity.kt, 신규 vehicle/PleosReadClient.kt, AndroidManifest.xml, MvpScenarioInstrumentation.kt. 이번에 소스를 다시 변경한 것은 아니며 이전 구현을 실제로 검증한 뒤 게시합니다.
+문서 갱신: docs/VEHICLE_SDK_232_RUNTIME.md, SDK_CAPABILITY_MATRIX.md, docs/CODEX_PROGRESS.md, README.md, NextDrive-Pleos/README.md. 총 게시 대상 9개. 기존 ObservationStore와 수동 DB 스키마는 변경하지 않았습니다.
+
+### 한계·다음 작업
+
+실제 권한 거부/타임아웃/서비스 끊김 실패 조건은 이번에 강제로 만들지 않았습니다. 해당 방어 로직의 모든 런타임 경로를 검증했다고 주장하지 않습니다. 연료는 현재 이미지에서 미지원입니다. 실차·Release·Lint·실제 주행 전환은 이번 미검증. 자동 감지/반복 수집/운전자 관리 개편/UI 전면 개편은 구현하지 않았습니다.
+
+사용자 추가 파일 편집/재설치/SDK 설치는 필요 없습니다. 현 앱에서 차량 데이터 연결 확인 → 차량 데이터 읽고 저장하기로 다시 확인할 수 있습니다. 다음 기능 후보는 수동 문제와 최근 관측의 ID/시각/출처 연결입니다.
+
+### 공유와 보존
+
+작업 시작 main 50d27034cba44f0dc8a7027d4c38d00605458d68을 읽고 검증했습니다. 최신 HEAD/대상 SHA를 다시 확인한 뒤 최신 트리를 부모로 GitHub 연결 도구를 통해 검증된 파일만 게시합니다. 커밋 부모/파일 SHA/나머지 파일과 Aside 연구 보존을 원격에서 확인합니다. 최종 커밋은 응답으로 보고하며 자기 SHA를 넣기 위한 반복 커밋을 하지 않습니다. 로컬 Git push가 아닙니다.
+
+로컬 증거 app/build/validation/sdk232-runtime.txt, sdk232-home/restored/fuel.xml, sdk232-restored.png와 앱/계측 APK는 게시하지 않습니다. 사용자 DB·키·SDK 바이너리·캐시는 공유하지 않습니다. 이전 실패 기록을 삭제하지 않았습니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 21:05:11 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — Vehicle 2.3.2 확보 확인, 실제 읽기 구현과 빌드 성공 / 런타임 대기

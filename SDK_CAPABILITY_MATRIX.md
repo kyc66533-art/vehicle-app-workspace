@@ -1,5 +1,22 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 최신 실제 런타임 — 2026-11-07 21:15 +09:00
+
+Pleos Connect v2.1.0/API34 emulator-5554에서 Vehicle SDK 2.3.2 실제 응답을 수신했습니다. 아래 과거 실패/미검증 기록은 당시 상태로 보존합니다.
+
+| 데이터 | 실제 Capability/권한 | 실제 결과 | SQLite |
+| --- | --- | --- | --- |
+| EV SOC | READ, CAR_ENERGY granted | 100 % | RECEIVED, supported/valid=true, 수신 시각/출처/세션 저장 |
+| 누적 주행거리 | READ, CAR_DRIVE granted | 0.0 km | RECEIVED, supported/valid=true, 수신 시각/출처/세션 저장 |
+| 연료 잔량 | Capability에서 ERROR_NOT_SUPPORTED_PROPERTY, CAR_ENERGY granted | 미지원, 읽기 미호출 | UNSUPPORTED, raw/unit/receivedAt=null |
+| 서비스 연결 | SDK initialize 후 실제 Capability/get 콜백, VEHICLE_BINDING granted | 연결·응답 성공 | 세션별 결과 저장 |
+
+출처 PLEOS_EMULATOR_SDK, hardware=ranchu. 실제 에뮬레이터 서비스의 시뮬레이션 응답이며 실차값/앱 자체 가상값과 구분합니다. 기존 24개 회귀 + 6개 관측 계측 통과. Activity 재시작과 추가 프로세스 force-stop/cold start 후 세션/값/미지원 복원 확인. 실제 권한 거부/타임아웃/끊김 조건은 이번 미실행이며 실차/Lint/Release도 미검증입니다.
+
+세부 증거: [2.3.2 런타임 결과](docs/VEHICLE_SDK_232_RUNTIME.md). 기존 DB 스키마/사용자 기록/Aside 연구는 보존했습니다.
+
+# 공식 SDK 및 실제 지원 기능 점검표
+
 ## 최신 상태 — Vehicle SDK 2.3.2 확보 및 포함 빌드 성공
 
 사용자는 2.3.1 POM HTTP 404/2.3.2 POM 정상과 Sync/APK 성공을 확인했습니다. Codex도 실제 Vehicle 2.3.2, vehicle-aidl 1.1.1, vehicle-data 1.1.11 AAR 및 sources를 확인하고 수정본 앱/계측 APK 빌드를 성공했습니다(exit 0, 47초). 아래 다운로드 실패는 과거 사실입니다.

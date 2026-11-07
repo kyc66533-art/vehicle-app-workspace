@@ -1,3 +1,7 @@
+## 최신 상태 — Pleos Vehicle SDK 실제 수신 확인
+
+2026-11-07: 기존 v0.1을 보존한 채 SDK 2.3.2로 Pleos 에뮬레이터의 SOC 100%, 누적 주행거리 0.0km를 실제 수신·SQLite 저장했습니다. 연료 잔량은 미지원 응답으로 기록합니다. 실차값과 구분하며 앱 프로세스 재시작 후 복원, 기존 24개 회귀와 관측 6개 검사를 통과했습니다. [상세 결과](../docs/VEHICLE_SDK_232_RUNTIME.md).
+
 # CARITDA v0.1 — 현재 실행 가능한 MVP
 
 2026-11-07 사용자의 신규 MVP 명세가 아래의 서비스 보류 기록보다 우선합니다. 앱 표시명은 CARITDA(가칭), 프로젝트 폴더와 패키지는 기존 NextDrive-Pleos / com.nextdrive.pleos를 유지합니다.

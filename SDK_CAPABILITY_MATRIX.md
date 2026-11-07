@@ -1,5 +1,15 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## SDK 다운로드 재검증 — 2026-11-07 20:31 +09:00
+
+실제 앱 app/build.gradle.kts에 Vehicle 2.3.1 의존성을 추가하고 온라인 assembleDebug를 실행했습니다. debugRuntimeClasspath 의존성 해결이 공식 Maven GET의 `Permission denied: getsockopt`로 실패했습니다(exit 1, 41초). DNS 해석은 성공했으며 SDK AAR은 캐시에 없습니다. HTTP 응답을 받지 못해 인증/좌표 오류 여부는 미판정입니다. 현재 실행 정책에서 네트워크 승인 요청도 허용되지 않아 확대 권한 실행이나 우회는 하지 않았습니다.
+
+SDK 설치/포함 빌드/초기화/앱 서비스 연결/Capability/실제 차량값은 여전히 미검증·미수신입니다. 기존 서비스 2.3.22 설치 확인과 구분합니다. 로컬 Gradle 의존성은 사용자가 파일 편집 없이 일반 Android Studio에서 Sync할 수 있게 보존했으며 미검증이므로 원격 게시에서 제외했습니다. 기존 APK·SQLite는 보존했습니다. 이번 후속 런타임/회귀 검사는 수행하지 않았습니다.
+
+[현재 다운로드 결과와 다음 조작](docs/SDK_DOWNLOAD_RETRY.md). 아래 과거 기록을 삭제하지 않습니다.
+
+# 공식 SDK 및 실제 지원 기능 점검표
+
 ## v0.2 검증 — 2026-11-07 (아래 과거 기록 보존)
 
 실제 SDK 값 수신은 미완료입니다. 공식 샘플 README의 2.3.2와 Gradle 버전 파일의 2.3.1 불일치를 확인했습니다. 2.3.1을 첫 다운로드 후보로 선택했으나 두 버전 POM 요청 모두 연결 실패, Gradle 2.3.1 resolve도 공식 Nexus에서 Permission denied: getsockopt로 실패했습니다. SDK 바이너리 호환 버전 확정은 보류합니다.

@@ -1,5 +1,33 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-07 20:31:59 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 실제 앱 Vehicle 의존성 추가 후 다운로드 실패 재확인
+
+- 공식 시작 가이드·샘플 Gradle의 Vehicle 2.3.1과 settings.gradle.kts의 공식 Maven URL을 확인했습니다. settings 파일은 변경하지 않았습니다.
+- 사용자 PC 로컬 `NextDrive-Pleos/app/build.gradle.kts`에 `implementation("ai.pleos.playground:Vehicle:2.3.1")`을 추가했습니다. 이전과 달리 init probe가 아니라 실제 앱 의존성으로 다운로드/assembleDebug를 실행했습니다.
+- 결과: Gradle exit 1, BUILD FAILED in 41s. :app:checkDebugAarMetadata → debugRuntimeClasspath → Vehicle 2.3.1 POM의 공식 Nexus GET이 `Permission denied: getsockopt`로 실패. Google/Maven Central도 동일 오류였습니다. DNS는 정상 해석되었으며 HTTP 401/403/404 응답은 받지 못했습니다. 인증·버전 문제로 확정할 근거가 없습니다.
+- 사용자/프로젝트 내부 Gradle 캐시에서 SDK AAR 없음. SDK 포함 Sync 동등 의존성 해결·빌드 실패. SDK 초기화/서비스 연결/Capability/실수신/수신값 저장은 미수행입니다. 기존 APK와 앱/SQLite 데이터는 보존했습니다. 이번 회귀 검사는 빌드 선행 실패로 실행하지 않았습니다. 과거 24+5 성공은 과거 기록으로 유지합니다.
+- 현재 실행 정책은 network restricted 및 sandbox_approval 요청 불가입니다. 범위를 좁힌 네트워크 승인 창도 현재 도구로 요청할 수 없습니다. 사용자 승인을 받은 뒤 권한 확대 실행했다고 주장하지 않습니다. 보안 설정 변경·Sandbox 해제·우회·동일 명령 반복은 하지 않았습니다.
+- 로컬 파일 편집은 완료했으므로 사용자는 일반 Android Studio에서 File > Sync Project with Gradle Files만 실행하면 다운로드를 확인할 수 있습니다. 성공 시 External Libraries/Build APK(s)를 확인합니다. 기존 앱 삭제·SDK/AVD 재설치는 불필요합니다.
+- 현재 로컬 빌드는 미다운로드 의존성으로 막혀 있습니다. 미검증 app/build.gradle.kts는 로컬에 보존하고 GitHub 게시 대상에서는 제외합니다. 원격 앱 소스/빌드 설정은 기존 검증본을 유지합니다. 이 차이를 명확히 보고합니다.
+
+### 변경 파일 및 다음 단계
+
+로컬만: `NextDrive-Pleos/app/build.gradle.kts`.
+문서 게시 대상: 신규 `docs/SDK_DOWNLOAD_RETRY.md`, 갱신 `SDK_CAPABILITY_MATRIX.md`, `docs/CODEX_PROGRESS.md`.
+임시 로그: `NextDrive-Pleos/app/build/validation/sdk-retry-build.txt` (게시 제외). 기존 앱 소스/UI, 연구 파일, 사용자 DB/키, 전역 설정은 수정하지 않았습니다.
+
+작업 시작 최신 main은 Aside의 `a5c738aed91b43d98d4234a3d9718c0affe9c7d8`이며 부모가 기존 Codex `1b55aeb685fa252f197d4760553813bf5457389c`임을 확인했습니다. CARITDA_UI_UX_RESEARCH.md를 읽고 이름/별명 등록, 후보 선택→운전 시작 확정, stable ID와 당시 이름·초안·이력 보존, 홈/문제 분리, UXR 우선 원칙을 향후 별도 UI 단계의 기준으로 확인했습니다. 이번에는 구현하지 않았습니다.
+
+다음 최우선 작업은 네트워크가 허용되는 일반 Android Studio에서 아티팩트 확보/빌드 확인 → 실제 AAR API/권한 확인 → typed read adapter → Capability/실수신/저장/회귀입니다. 사용자 조작·오류 분류는 docs/SDK_DOWNLOAD_RETRY.md에 정리했습니다.
+
+GitHub 연결 도구를 통한 문서 게시만 수행합니다. 최신 main 재확인, 대상 SHA 대조, 최신 트리 기반 커밋/기대 HEAD 갱신, 나머지 SHA와 Aside 연구 파일 보존을 확인합니다. 커밋 ID는 최종 응답으로 보고하며 로컬 Git push 성공으로 표현하지 않습니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 17:13:57 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — CARITDA v0.2 SDK 수신 시도 및 기반 구현 (핵심 목표 미완료)

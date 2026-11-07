@@ -1,5 +1,26 @@
 # Pleos / AAOS 공통 기반 검증 현황
 
+## 최신 검증 기록 — 사용자 확인: 기본 Debug APK 실행 성공 (2026-11-07)
+
+검증 주체는 사용자이며, 일반 Windows Android Studio와 ADB를 사용한 직접 확인 결과입니다. 아래 성공은 Codex가 이 세션에서 재실행한 결과가 아닙니다. 정확한 실행 시각은 별도로 전달받지 않았으며 기록 시각은 `docs/CODEX_PROGRESS.md`를 참조합니다.
+
+| 항목 | 사용자 직접 확인 결과 |
+| --- | --- |
+| Android SDK Platform 34 | 설치 완료 |
+| Android SDK Build-Tools 35.0.0 | 설치 완료 |
+| Command-line Tools / Platform-Tools | 설치 상태 확인 완료. 구체 버전은 이번 보고에 포함되지 않음 |
+| ADB | Pleos Connect v2.1.0 에뮬레이터 연결 성공 |
+| NextDrive-Pleos Gradle Sync | 성공 |
+| Gradle / 기본 앱 의존성 | Gradle 8.11.1 및 관련 의존성 다운로드 성공 |
+| Debug APK 빌드 | 성공 |
+| APK 설치 / 화면 실행 | Pleos Connect 에뮬레이터에 설치하고 NextDrive 기본 테스트 화면 실행 성공 |
+
+**현재 상태:** 일반 Windows 사용자 환경의 기본 앱 빌드·설치·실행은 확인되었습니다. **실제 Vehicle SDK 차량 데이터 수신은 아직 미구현/미검증입니다.** 기본 앱의 Gradle 의존성 다운로드를 Vehicle SDK 확보·권한 허용·Capability·조회 응답 성공으로 확대 해석하지 않습니다. Release APK, 실차 검증, Lint/단위 테스트 및 화면 크기 변경 검증은 이번 사용자 보고 범위에 포함되지 않았습니다.
+
+기존 Codex 실행 환경의 다운로드 실패·ADB 시작 오류는 아래에 그대로 보존합니다. 이는 당시 실행 주체와 환경의 기록이며 현재 사용자 환경의 성공을 부정하지 않습니다. 이번 기록 반영을 위해 SDK/AVD를 재설치하거나 빌드·실행을 반복하지 않았습니다.
+
+다음 작업은 `docs/VEHICLE_SDK_READ_PLAN.md`의 **최소 1개 차량 정보 읽기 기술 검증 계획**으로 한정합니다. 이번에는 계획만 작성했으며 SDK 의존성·차량 권한·어댑터·서비스 기능을 구현하지 않았습니다.
+
 ## 2026-11-07 공통 환경 구축·실행 시도
 
 **현재 완료하지 못한 목표:** 정식 Gradle 빌드, APK 설치·실행, Vehicle SDK 연동 및 최소 1개 차량 정보 수신. 실패/미수행을 성공으로 표현하지 않습니다.

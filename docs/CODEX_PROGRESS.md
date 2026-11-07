@@ -1,5 +1,62 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-07 16:14:00 +09:00 (Asia/Seoul).
+
+## 최신 작업 — CARITDA v0.1 구현 및 Pleos 실제 실행
+
+사용자의 신규 MVP 지시로 서비스 개발 보류를 해제했습니다. CARITDA는 상표 검증 전 가칭입니다. 폴더와 패키지를 유지하고 기존 NextDrive-Pleos에 실제 서비스 화면을 구현했습니다. 변경은 사용자 PC의 프로젝트 폴더에 직접 반영되었습니다. 기존 Google AI Studio 앱, Aside 연구 파일, 과거 개발 기록과 기존 앱 데이터를 삭제하거나 초기화하지 않았습니다.
+
+### 완료한 기능
+
+- 운전자 A/B와 선택 상태 저장, 미해결 문제 목록 및 해결 기록 표시.
+- 증상 네 종류, 발생 상황, 발견 시각, 등록자, 추가 메모 수기 기록.
+- SQLite 영구 저장 및 트랜잭션, 재실행 복원, 다음 운전자 확인과 중복 방지.
+- 미해결/점검 예정/점검 완료/해결 확인, 점검·조치 메모와 변경 이력.
+- 같은 카드의 재발 차수와 재확인, 과거 확인 이력 보존.
+- 증상·시각·설명·확인자·조치·해결 상태를 포함하는 정비 상담 요약.
+- 공개 AAOS CarUxRestrictions 기반 상세 입력 제한. 플랫폼 응답 미확인/연결 끊김/제한 시 입력을 차단합니다. 실제 차량 속도·기어를 추정하거나 Vehicle SDK 값을 꾸미지 않습니다.
+
+### 생성·수정한 파일
+
+- `AGENTS.md`: 신규 MVP 범위와 현재 표시명을 우선 지침으로 추가.
+- `NextDrive-Pleos/app/build.gradle.kts`: 공개 android.car 컴파일 라이브러리와 프레임워크 계측 runner.
+- `NextDrive-Pleos/app/src/main/AndroidManifest.xml`: 플랫폼 car 라이브러리 사용 선언. 차량 제어나 인터넷 권한을 추가하지 않음.
+- `NextDrive-Pleos/app/src/main/res/values/strings.xml`: 표시명 CARITDA(가칭).
+- `NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt`: 실제 서비스 UI.
+- 같은 경로의 `model/IssueModels.kt`, `data/IssueRepository.kt`, `data/SqliteIssueRepository.kt`, `domain/CaritdaService.kt`, `domain/ConsultationSummary.kt`, `safety/CarSafetyGate.kt`: 모델·저장·업무 규칙·요약·입력 제한 신규 구현.
+- `NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MvpScenarioInstrumentation.kt`: 실제 DB/Activity/UI 계측 시나리오.
+- `README.md`, `NextDrive-Pleos/README.md`: 현재 실행 상태와 안내. 프로젝트 README의 이전 환경 구축 기록은 보존.
+- `docs/CARITDA_V01_MVP.md`: 사용자 실행 순서, 9단계 인수 시나리오, 실제 검증과 한계.
+- `docs/CODEX_PROGRESS.md`: 이 기록. 이전 실패·사용자 확인 기록은 아래에 보존.
+
+### 실제 테스트 결과
+
+검증 환경: Windows, JBR 21.0.8, Gradle 8.11.1, AGP 8.10.1/Kotlin 2.2.21, Platform 34/Build-Tools 35.0.0, 기존 Pleos Connect v2.1.0/API 34 AVD emulator-5554.
+
+1. 최종 소스로 `:app:assembleDebug :app:assembleDebugAndroidTest` BUILD SUCCESSFUL(56초). 기존 Gradle/의존성 캐시와 프로젝트 내부 작업 캐시를 사용한 offline 빌드입니다. 기존 디버그 인증서로 서명하여 앱 교체 설치 시 데이터를 보존했습니다. 키·캐시·로컬 설정은 공유하지 않습니다.
+2. ADB `install -r`로 앱/테스트 APK 설치 성공, 실제 Activity 실행 성공. 실제 플랫폼 Car UX 서비스에서 입력 허용 응답 확인.
+3. `CARITDA_MVP_PASS checks=24`: 요청한 9단계 전체를 실제 UI에서 수행. SQLite 재연결과 Activity 재시작 복원, A→B 확인, 중복 확인 방지, 점검 메모, 네 상태, 재발/재확인/기존 이력 보존, 잘못된 입력 거부, 제한 시 여섯 변경 동작 차단, 기존 기록 보존, 600dp 콘텐츠 폭 홈/입력 화면 검사 통과.
+4. 최종 앱 프로세스 force-stop 후 실행하여 B와 기존 진동 기록 복원 확인. 실제 터치로 점검 예정 변경, 상담 요약에 진동 설명·B·점검 메모 표시 확인. 실제 요약 화면 스크린샷을 로컬 build/validation에 보관했습니다.
+5. 앱 APK: `NextDrive-Pleos/app/build/outputs/apk/debug/app-debug.apk`. SHA-256 `9e0c7197f9d76d1b1abe665c2e9cd804537d20b28560a5514f7ea5a68705f043`.
+
+### 실패·미검증·주의할 한계
+
+- Lint 미완료: offline 캐시에 lint-gradle 31.10.1이 없고 일반 온라인 재시도는 Google Maven/Maven Central의 `Permission denied: getsockopt`로 실패했습니다. 네트워크 제한을 우회하지 않았습니다. 컴파일·APK·실제 계측 성공과 구분합니다.
+- 초기 프로젝트 내부 빌드에서 캐시 경로·debug.keystore 잠금 파일·Kotlin daemon 쓰기 문제가 발생했습니다. 기존 읽기 캐시 경로를 바로잡고 프로젝트 내부 디버그 키 경로와 in-process 컴파일로 해결했습니다. 시스템 정책·전역 설정 변경이나 새 소프트웨어 설치는 하지 않았습니다.
+- deprecated onBackPressed 컴파일 경고가 남아 있습니다. Release 서명/배포 빌드·모든 화면 크기·실제 주행 제한 전환·실차는 미검증입니다.
+- Vehicle SDK 차량 데이터 수신, AI 진단/Gleo, 휴대폰 알림, 외부 정비 접수, 차량 제어는 미구현이며 완료로 표시하지 않습니다. 공개 AAOS 화면 제한 응답은 Pleos Vehicle SDK 센서 수신과 별개입니다.
+- 검증용 수기 카드는 예시임을 메모에 표시하고 보존했습니다. 에뮬레이터 시간대 America/Los_Angeles 기준 시각을 화면에 사용하며 PC 시간대와 다릅니다.
+
+### 게시 경로·후속 작업
+
+GitHub 연결 도구를 통한 게시 대상은 위의 명시적 소스·문서 16개입니다. APK·DB·로그·스크린샷·개인 키·.tools·로컬 설정은 포함하지 않습니다. 작업 기준 main `ab7a05645fe44aa6e7d6d31471809a1a28b15ba1`과 대상 SHA를 대조하고, 게시 직전 다시 확인합니다. 같은 main을 부모로 한 커밋과 기대 HEAD 갱신을 사용하며 나머지 파일과 Aside SHA 보존을 검증합니다. 본 문서의 자기 커밋 ID를 넣기 위한 재커밋은 하지 않으며 최종 보고에 실제 게시 커밋을 제공합니다. 로컬 Git push/인증 작업은 수행하지 않았습니다.
+
+다음: 사용자가 Android Studio에서 기존 app을 Run 하여 인수 시나리오를 재확인합니다. 네트워크가 허용된 일반 환경에서 Lint를 완료하고 주행 제한 전환을 별도 검증합니다. 다음 기능 후보는 사용자 확인을 거치는 상담 요약 파일 내보내기입니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 14:24:17 +09:00 (Asia/Seoul).
 
 ## 최신 검증 기록 — 사용자 환경에서 기본 Debug APK 실행 성공

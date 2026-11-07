@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">NextDrive</string>
+    <string name="app_name">CARITDA(가칭)</string>
     <string name="welcome_message">다음 운전자에게 필요한 차량 정보를 이어드리겠습니다.</string>
     <string name="vehicle_data_unavailable">차량 데이터 연결을 준비하고 있습니다.\n현재 차량 상태는 확인할 수 없습니다.</string>
     <string name="test_screen_title">차량 상태를 확인하는 테스트 화면입니다.</string>

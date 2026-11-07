@@ -1,5 +1,58 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 00:17:00 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Simple UI·한 화면 첫 안내·사용법 실제 구현
+
+### 구현한 화면과 데이터 보존
+
+- Aside 온보딩 보고서 e5473532c639cd69d8e0a8017697ad6cbe66783d와 기존 UI 보고서/AC/최신 소스·모델을 읽고 실제 Kotlin 화면에 반영했습니다. 연구 파일은 수정하지 않았습니다.
+- 홈을 기록 이름/변경·확인 가능한 정보 범위·읽지 않은 전달 기록/관리 중/완료 건수·기록 보기·문제 남기기·차량 정보로 단순화했습니다. 긴 문제 목록·상담·점검·SDK 정보는 각각의 화면에 유지했습니다. 홈에서 기록 보기는 이전 필터를 초기화해 관리 중 기록을 우선, 모두 완료이면 완료 목록을 엽니다.
+- 차량 기본 화면은 충전량·주행거리·단위·실제 수신 시각·오래됨·에뮬레이터 출처·차량값 불러오기에 집중했습니다. 값32sp/항목24sp/시간22sp/최소76dp 버튼, 자릿수 구분을 적용했습니다. 원본 값은 그대로 저장합니다. 연료 미지원은 제공되지 않는 항목에서 설명하며 0%로 바꾸지 않습니다.
+- SDK/Capability/원본 상태/세션/오류/내부 출처/밀리초 시각은 불러오기 상세로 이동했습니다. 마지막 성공값과 최신 실패를 분리하고, 100회 이상 실패 뒤에도 이전 성공값을 찾는 읽기 전용 조회를 추가했습니다. 미수신·유효0·미지원·권한 없음·실패를 구분합니다.
+- 신규 안내는 사용자가 지정한 한 화면과 운전자 선택/안내 건너뛰기입니다. 기존 설치/기록이 있으면 자동 제안을 생략합니다. 안내 완료/skip은 preference만 변경하고 운전자 확정/SDK 조회/읽음/안전 변경을 하지 않습니다. 사용법의 여섯 과제와 처음 안내 재보기·원래 화면/초안 복귀를 구현했습니다. 테마 선택은 사용법에 옮겼습니다.
+- DB v2/운전자 영구 ID/A·B/작성 당시 이름/인계/조치/재발/초안을 유지했습니다. 관측 DB 버전과 원본 저장 구조, PleosReadClient·SDK2.3.2·CarSafetyGate는 변경하지 않았습니다. 자동 감지/상시 수집/AI/외부 연동은 추가하지 않았습니다.
+- 화면이 보이는 동안 오래됨을 재평가하지만 SDK를 반복 호출하지 않습니다. 10분은 표시용 기준이며 고장 판정이 아닙니다. UNKNOWN/RESTRICTED 입력 차단과 안내 중단 상태를 유지하며, 실패한 초안 저장을 성공했다고 안내하지 않습니다.
+
+### 최종 빌드와 실제 검사
+
+1. 기존 앱을 force-stop하고 문제/관측 DB를 .tools/simple-ui-backup 및 앱 전용 비교 사본에 보존했습니다. 앱/DB/AVD 초기화나 삭제는 하지 않았습니다. 개인 백업은 게시하지 않습니다.
+2. 기존 Windows/JBR21.0.8/Gradle8.11.1/API34/Build-Tools35.0.0 캐시의 offline assembleDebug+assembleDebugAndroidTest 성공: BUILD SUCCESSFUL in 1m 1s, exit0. 앱/계측 APK 모두 기존 Pleos Connect v2.1.0 emulator-5554에 install -r Success.
+3. 최종 CARITDA_MVP_PASS checks=24, CARITDA_OBSERVATION_PASS checks=6, CARITDA_UI_PASS checks=27. PRODUCTION_MIGRATION_PASS로 원래 문제5건/이벤트16건과 원래 관측 보존도 확인했습니다. 회귀가 추가한 검증용 프로필/기록은 삭제하지 않았습니다.
+4. 신규 CARITDA_ON_PASS checks=32: 안내 정책/UNKNOWN 차단/skip 무부작용/재실행/재보기/초안 복귀/홈 필터/기술 정보 분리/실제 SDK/기존 전체 행과 원래 관측 보존. 별도 fixture에서 유효0/미수신/성공 뒤105회 실패/15% 무진단/10분 경계/미래 시각/TEST_ONLY 배제를 검사했습니다. 가상값을 운영 관측 DB에 넣지 않았습니다.
+5. 다섯 주요 화면 × 다섯 콘텐츠 폭320~1024dp × 글꼴100/130/150/200% × 두 테마 = 200개 렌더링 조합의 넘침/말줄임/최소76dp 버튼 검사 통과. 앱 리소스와 테마는 원복했고 OS 전역 설정은 바꾸지 않았습니다. 실제 Pleos의 홈/차량/사용법/재보기 화면 캡처도 검토했습니다.
+6. 현재 실제 에뮬레이터 SDK 응답: SOC15%, 주행거리 원본1000000.0km(화면1,000,000km), 각 READ·RECEIVED. 연료 ERROR_NOT_SUPPORTED_PROPERTY·UNSUPPORTED·숫자 없음. PLEOS_EMULATOR_SDK 출처이며 실차/앱내 가상값과 구분합니다. 이전100%/0km 기록은 과거 수신 사실로 보존합니다. 기기 수신 시각과 PC의 보고 시각은 구분합니다.
+7. 최종 앱 APK SHA256: 9cafeb74e304a06067c0830792c0943fa48b2196c93ba34926902adf949efef3. 로그/화면은 app/build/validation에 보존하며 APK/DB/키/캐시와 함께 게시하지 않습니다.
+
+### 실패·부분·미검증
+
+- 초기에 로컬 소스 구문 오류로 컴파일이 한 번 실패했고 수정 후 최종 빌드/전체 검사가 통과했습니다. 깨진 중간 코드는 게시하지 않습니다.
+- ON01~ON24: 통과13/부분8/미검증3. 상세 범위는 docs/ONBOARDING_ACCEPTANCE.md에 별도 기록했습니다. 32개 assertion 통과가 24개 기준 전체 통과라는 뜻은 아닙니다. 기존 AC 판정도 새 ON 결과로 덮어쓰지 않았습니다.
+- 신규 설치 UI는 데이터 삭제 없이 pending preference를 임시 설정하고 원복해 검사했습니다. 실제 빈 신규 설치, 실제 주행 RESTRICTED/OS 차단 전환, 저장소 장애 주입, 전체 안내/오류/상세의 모든 창 조합, 물리 키보드/TalkBack/rotary·초보/고령 사용자 독립 과제·실차·Release는 미검증입니다.
+- 이전 offline Lint는 lint-gradle31.10.1 캐시 부재로 실패했습니다. 이번에는 같은 다운로드를 반복하지 않았고 Lint 통과로 보고하지 않습니다. deprecated API 경고가 남아 있습니다.
+
+### 변경 파일·공유·다음 작업
+
+사용자 PC에 실제 반영한 12개 파일:
+
+- AGENTS.md, README.md, NextDrive-Pleos/README.md
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/ConsultationSummary.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/vehicle/ObservationStore.kt
+- 신규 NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/GuideState.kt
+- 신규 NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/VehiclePresentation.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MvpScenarioInstrumentation.kt
+- 신규 NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+- 신규 docs/ONBOARDING_ACCEPTANCE.md, docs/CODEX_PROGRESS.md
+
+기준 main e5473532c639cd69d8e0a8017697ad6cbe66783d. GitHub 연결 도구를 통한 게시를 사용합니다. 게시 직전 HEAD/대상 SHA를 재확인하고 최신 트리/부모와 기대 HEAD를 사용해 명시적 검증 파일만 반영합니다. Aside 및 나머지 파일 SHA와 게시 커밋 부모를 대조하며 최종 SHA는 응답으로 보고합니다. 로컬 Git push가 아닙니다.
+
+이미 교체 설치한 앱에서 이름 선택→운전 시작→차량 정보→차량값 불러오기→사용법/처음 안내 재보기를 확인할 수 있습니다. Android Studio 파일 수동 편집·재설치·데이터 삭제는 필요 없습니다. 다음은 ON 부분/미검증의 실제 창·접근성·사용자 이해 과제를 우선 검증하고 캐시 확보 가능 시 Lint를 완료하는 단계입니다. 자동 감지·AI·외부 연동은 별도 지시 후 진행합니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-07 22:15:17 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — Aside UI·운전자 M0 구현·운영 DB 이전·실제 실행 성공

@@ -20,10 +20,12 @@ class MvpScenarioInstrumentation : Instrumentation() {
     private val output = StringBuilder()
     private var migrationOnly=false
     private var verifyProduction=false
-    override fun onCreate(arguments: Bundle?) { migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
+    private var onboardingOnly=false
+    override fun onCreate(arguments: Bundle?) { onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
     override fun onStart() {
         val result = Bundle()
         try {
+            if(onboardingOnly){val lines=OnboardingChecks(this).run();result.putString("stream","CARITDA_ON_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(migrationOnly){val lines=MigrationChecks.run(targetContext);result.putString("stream","MIGRATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(verifyProduction)output.appendLine(MigrationChecks.productionBaseline(targetContext))
             databaseScenario()
@@ -128,6 +130,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         verify(probe.issue(issue.id)?.situation == "가속할 때 핸들이 진동함", "UI-created record survives app activity restart")
         click(activity, "driver_B")
         click(activity, "start_driving")
+        navigate(activity,"ISSUES")
         click(activity, "issue_${issue.id}")
         click(activity, "acknowledge")
         verify(probe.events(issue.id).any { it.kind == EventKind.ACKNOWLEDGED && it.actor == Driver.B }, "UI stores B handover confirmation")
@@ -304,13 +307,13 @@ class MvpScenarioInstrumentation : Instrumentation() {
                     @Suppress("DEPRECATION")
                     activity.resources.updateConfiguration(changed,activity.resources.displayMetrics)
                 }
-                click(activity,"theme");waitForIdleSync()
+                cycleTheme(activity);waitForIdleSync()
                 verify(main{val b=tagged(activity,"new_issue") as TextView;b.layout.getEllipsisCount(0)==0 && b.layoutParams.height==ViewGroup.LayoutParams.WRAP_CONTENT},"${(scale*100).toInt()} percent app font scale preserves expandable CTA text")
             }
             val colors=mutableSetOf<Int>()
             var contrastPass=true
             repeat(3){
-                click(activity,"theme")
+                cycleTheme(activity)
                 main{
                     val button=tagged(activity,"new_issue") as TextView;colors.add(button.currentTextColor)
                     val background=(button.background.current as android.graphics.drawable.GradientDrawable).color!!.defaultColor
@@ -333,6 +336,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val node=findNode(uiAutomation.rootInActiveWindow){it.text?.toString()==text && it.isClickable}?:error(text)
         check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK));waitForIdleSync()
     }
+    private fun cycleTheme(activity:Activity){click(activity,"help");click(activity,"theme");click(activity,"close_help")}
     private fun contrast(first:Int,second:Int):Double{
         fun luminance(color:Int):Double{
             fun channel(value:Int):Double{val normalized=value/255.0;return if(normalized<=0.04045)normalized/12.92 else Math.pow((normalized+0.055)/1.055,2.4)}

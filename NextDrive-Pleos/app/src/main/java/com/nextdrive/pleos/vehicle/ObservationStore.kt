@@ -60,5 +60,17 @@ class ObservationStore(context: Context, name: String = "caritda-observations.db
             )) }
         }
     }
+    /** Read-only projection: find historical success even after more than 100 failed attempts. */
+    fun mostRecent(kind:String,receivedOnly:Boolean=false):VehicleObservation? {
+        return readableDatabase.rawQuery("SELECT * FROM observations WHERE kind=? AND source!='TEST_ONLY'"+
+            (if(receivedOnly)" AND status='RECEIVED' AND valid=1 AND supported=1" else "")+" ORDER BY id DESC LIMIT 1",arrayOf(kind)).use { c ->
+            if(!c.moveToFirst())null else {
+                fun s(name:String)=c.getString(c.getColumnIndexOrThrow(name))
+                fun n(name:String):Long? {val i=c.getColumnIndexOrThrow(name);return if(c.isNull(i))null else c.getLong(i)}
+                VehicleObservation(s("kind"),s("raw"),s("unit"),n("received_at"),ObservationSource.valueOf(s("source")),n("supported")?.let{it!=0L},n("valid")==1L,
+                    s("session"),ObservationStatus.valueOf(s("status")),s("detail"),n("recorded_at")!!,s("driver_id"))
+            }
+        }
+    }
     companion object { fun sessionId(): String = UUID.randomUUID().toString() }
 }

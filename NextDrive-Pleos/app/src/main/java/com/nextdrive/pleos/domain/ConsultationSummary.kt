@@ -9,14 +9,14 @@ object ConsultationSummary {
     fun time(at: Long): String = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         .withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(at))
 
-    fun build(issue: VehicleIssue, events: List<IssueEvent>): String = buildString {
+    fun build(issue: VehicleIssue, events: List<IssueEvent>, statusText:(IssueStatus)->String={it.label}): String = buildString {
         appendLine("정비 상담용 기록")
         appendLine("증상 유형: ${issue.type.label}")
         appendLine("발견 시각: ${time(issue.discoveredAt)}")
         appendLine("등록: ${issue.reporter.label} · ${time(issue.recordedAt)}")
         appendLine("발생 상황: ${issue.situation}")
         if (issue.memo.isNotBlank()) appendLine("추가 메모: ${issue.memo}")
-        appendLine("현재 상태: ${issue.status.label}")
+        appendLine("현재 상태: ${statusText(issue.status)}")
         appendLine("기록 차수: ${issue.revision}")
         appendLine()
         appendLine("운전자 확인 이력")

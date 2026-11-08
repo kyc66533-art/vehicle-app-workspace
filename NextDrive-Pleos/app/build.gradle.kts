@@ -27,7 +27,7 @@ android {
             initWith(getByName("debug"))
             applicationIdSuffix = ".validation"
             matchingFallbacks += listOf("debug")
-            resValue("string", "app_name", "CARITDA 검증 전용")
+            resValue("string", "app_name", "[TEST] CARITDA 검증 전용")
         }
     }
     // The debug override is only for replacing a stale production-target runner with the

@@ -1,5 +1,83 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 16:53 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 실제 SDK 자동 스냅샷 P0 구현·검증
+
+- 기준 main/Aside 자동 기록 연구: 51254c185ef686895cfa3f1e332f65d3b35e8d99. 작업 시작 시 로컬 앱 소스/리소스/빌드 설정 SHA가 모두 기준 원격과 같았습니다. NAV·ON·RR·자동화 후속 설계와 두 Aside 연구를 읽고 진행했습니다. 로컬에 없는 연구도 원격에서 읽었으며 연구8개와 기존 이력을 보존합니다. Git/clone/push/인증을 재시도하지 않았습니다.
+- P0만 구현했습니다. 일반 CARITDA 차량 아이콘과 [TEST] 플라스크 아이콘/고정 배너, 차량 상태·자동 정보·내 증상 중심 홈, 허용 진입당 실제 SDK 단발 조회, 자동 스냅샷 한 카드 갱신/변화 이력, 증상과 불변 스냅샷 선택 연결·숨김/재표시가 동작합니다. 다중 운전자/영구ID/권한·원문·이력·초안·수동 네 상태는 유지했습니다.
+- EntryReadState는 구성 변경에 유지하며 렌더링·탭·freshness 표시로 재조회하지 않습니다. 동시에 한 요청만 진행하고 수동 새로 조회는 별도입니다. 첫 안내 중에는 시작하지 않습니다. onStop/제한 시 release·늦은 callback 거부, 미완료 항목은 값 없는 중단 상태를 남깁니다. listener/상시 polling/FGS/자동 고장·수리 판정은 없습니다.
+- 관측 DB v2는 저장소 UUID 표만 추가합니다. 기존 observations 전체 scalar/행/ID는 보존합니다. 별도 SnapshotStore의 cards/snapshots/links/selections/pending_links가 파생 데이터/선택/재시도를 담당합니다. scope는 앱/로컬 차량 범위/저장소UUID/출처/종류이며 실제 차량 식별·ECU 측정시각은 미확인입니다. 원관측 먼저 commit, 별도 파생 transaction/replay이며 두 DB 원자성·가짜 SYSTEM 운전자를 만들지 않습니다.
+- 같은 값100배치에서도 원본300행/스냅샷 카드1개/값 변화0건을 확인했습니다. 일부 신호 실패는 원래 시각의 이전 성공과 구별합니다. 사용자 증상과 연결한 snapshot은 이후 새 조회·숨김·재시작으로 바뀌지 않습니다. 저장 실패 후 선택을 바꾸는 경우의 pending 링크도 수정했고 이미 commit한 연결은 변경할 수 없음을 검사했습니다.
+- 실제 validation 화면에서 링크 INSERT 실패를 주입해 증상 commit/지속 부분 실패 안내/같은 issue ID의 확인창 재시도를 검증했습니다. 증상 저장과 차량 연결 실패를 혼동하지 않습니다. 원문/발견 시각·상태/점검·인계/재발은 바뀌지 않으며 차량값을 소음 원인이나 과거 발견 시각의 값으로 단정하지 않습니다.
+
+### 실제 빌드·검사·SDK 결과
+
+- 기존 JBR/Gradle8.11.1/API34/Build-Tools35.0.0/Vehicle2.3.2 캐시 offline assembleDebug+assembleValidation+assembleValidationAndroidTest 최종 BUILD SUCCESSFUL in1m21s, exit0,93작업 중13실행/80 up-to-date. 일반 APK SHA256 BF85AB3E7B11D571B877AB55CB9B6000EE3B462C8D8FC0E8625C1E944B19E0A5. 최종 pending 링크 수정 뒤 전체 회귀를 다시 실행했습니다.
+- CARITDA_AM_PASS35 + 실제 force-stop 뒤 AM_COLD4 + 일반 관측 사본 PRESERVATION2 = 신규41 assertion 통과. 기존 NAV17+12, RR36+2, migration18, MVP24, observation6, UI27, ON32 = 기존174개도 최종 소스로 재통과했습니다. 총215개이며 AM36/AC/ON/NAV 인수기준 전부나 일반 사용자 이해도·실차가 통과했다는 뜻은 아닙니다.
+- 최신 실제 validation SDK: session7b46d17e-9f09-4efa-81aa-76984fb7d162, EV_SOC100%/receivedAt1794123861706, ODOMETER0.0km/receivedAt1794123861716, READ/RECEIVED·PLEOS_EMULATOR_SDK. 연료 ERROR_NOT_SUPPORTED_PROPERTY/UNSUPPORTED·값 없음. 숫자를 앱에 고정하지 않았으며 SYNTHETIC_VALIDATION_ONLY와 TEST_ONLY 시험은 별도 이름의 validation fixture DB에만 있습니다.
+- 일반 앱 install -r·COLD 실행, 버튼 없는 자동 조회·홈100%/0km·22건·TEST 없음과 SDK 출처/시각/측정시각 미제공을 실제 확인했습니다. 설치된 base.apk의 SHA256이 위 빌드 APK와 일치합니다. 검증된 코드가 사용자 PC와 일반 앱에 실제 반영됐으며 GitHub만 변경한 작업이 아닙니다. 운전자 확정/검증 문제·프로필·메모를 일반 앱에 추가하지 않았습니다.
+- 기존 ON200개 화면/폭/글꼴/테마 및 NAV 낮은 높이6개 조합 재통과. 새 스냅샷 화면의 전 행렬·실제 OS 분할/IME·TalkBack/rotary·장시간 화면 신선도·일반/고령 사용자 과제·실차·실제 주행 RESTRICTED·실제 서비스 권한 거부/timeout/저 SOC는 미검증입니다. Lint는 기존 lint-gradle 캐시 부재 상태에서 재시도하지 않았고 통과로 보고하지 않습니다.
+
+### 백업·원본 보존과 환경 오류
+
+- emulator-5554/user10을 확인하고 일반 앱 force-stop 후 전체 databases/journal·shared_prefs/files를 .tools/automatic-backup/20261108-161755/before.tar 및 개별 DB로 바이너리 백업했습니다. tar SHA2564BB1454AAC8CB17976E75A821216B8ADD97E9EB98B271426CBFBB082A84224EF. 기존 백업을 삭제하지 않았습니다.
+- 관측 v1 최신 원본의 독립 사본에서 이전 실패 rollback/version/원본 전체, 성공 보존, 반복 이전/재열기/identity 안정성을 확인한 뒤 운영 적용했습니다. 처음 validation 전후 일반 문제 DB F284705F5845FD82749D31346776BB52255A03B053E184768F88ACDE827A8A35, 관측 DD89E12F70919ED6B997CFFCD89DFC520F4EB3824B6EB70372375D64DF6D4263는 바이트 동일했습니다. 최종 재검사 때도 직전 백업의 두 DB와 같았습니다.
+- 일반 앱 적용/실제 조회/재부팅 후 문제 DB는 위 F284705F… 그대로입니다. 관측 DB에는 metadata 및 실제 SDK 수신이 추가됐으므로 파일 해시가 같다고 주장하지 않습니다. validation의 독립 after 사본에서 모든 기존 observation scalar/행/ID 보존과 integrity_check=ok를 최종 재확인했습니다. 사용자 운전자·문제·이벤트·초안과 과거 검증 기록을 삭제/숨김 정리하지 않았습니다.
+- 처음 아이콘 빌드에서 색 literal의 drawable 참조 오류가 있었고 @color로 수정했습니다. 초기 AM 집계에서 증거1줄을 assertion으로 센 것도 수정했습니다. 마지막35는 PASS 줄만 센 수입니다.
+- 최종 APK 설치 Success 뒤 에뮬레이터가 headless user0 BOOTING/user10 중지 상태로 변해 Activity does not exist, /sdcard I/O/Transport endpoint 오류와 UiAutomation timeout이 났습니다. 같은 시점 SystemUI DeadSystemException이 있었지만 근본 원인을 확정하지 않습니다. before-final-patch.tar와 실패 로그를 보존하고 기존 AVD의 정상 adb reboot를 한 번 수행했습니다. 초기 activity service 미준비 후 boot_completed1/user10 복귀, 최종 앱 COLD 실행/실제 자동 조회·원본 보존을 확인했습니다. AVD wipe/새 AVD/앱 데이터 삭제·사용자 강제 전환·SDK/Studio 재설치·전역 설정 변경은 하지 않았습니다.
+- GNB 일반task1000210/검증task1000211, user10/display0·각 launcher1개·top-resumed/focused package가 일치했습니다. 안정 화면에서 최신 앱이 왼쪽으로 재정렬되고 노란 표시는 해당 차량/플라스크 아이콘 아래에 표시됐습니다. 위치 고정처럼 보이는 현상은 있었지만 패키지 실행 불일치 지속 오류는 재현하지 못했습니다. 이전 원인은 미확정이며 OS UI를 수정하지 않았습니다. 기기 America/Los_Angeles 시간대도 유지했습니다.
+
+### 인수기준·미구현·제출
+
+AM01~36은 통과14/부분10/미검증1/이번 범위 밖11입니다. 자세한 근거·제약·실패와 복구·사용 방법은 docs/AUTOMATIC_RECORDING_ACCEPTANCE.md에 있습니다. 실제 자동 assertion41과 AM36을 구분합니다. 사용자 최신 P0/P1 지시에 따라 low SOC 설정/알림·listener·경고등 안내는 보류했고, 자동 진단/회복/상태 변경/Gleo/폰·FCM/정비소/상시 마이크·백그라운드 감시는 구현하지 않았습니다.
+
+시연 가능: 일반 앱 진입→실제 차량값 단발 자동 기록→카드 확인→소음/진동 직접 기록+선택 연결→점검 메모/수동 상태→재실행 후 원본·연결 유지. Release 서명 설정/서명 APK·실행 검증/제출 파일 위치는 미완료입니다. 현재 Debug APK를 Release라고 표시하지 않습니다. 저장소는 Private이며 심사 계정 접근·기획서/동의서 서명은 사용자 확인 과제입니다. 키 생성/게시·공개 전환·외부 초대/제출은 하지 않았습니다.
+
+### 이번 변경 파일33개와 공유
+
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AutomaticChecks.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MvpScenarioInstrumentation.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ValidationEnvironment.kt
+- NextDrive-Pleos/app/src/main/AndroidManifest.xml
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/vehicle/EntryReadState.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/vehicle/ObservationStore.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/vehicle/PleosReadClient.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/vehicle/SnapshotStore.kt
+- NextDrive-Pleos/app/src/main/res/drawable/ic_mark.xml
+- NextDrive-Pleos/app/src/main/res/mipmap-anydpi/ic_launcher.xml
+- NextDrive-Pleos/app/src/main/res/mipmap-anydpi/ic_launcher_round.xml
+- NextDrive-Pleos/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+- NextDrive-Pleos/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+- NextDrive-Pleos/app/src/main/res/mipmap-anydpi-v33/ic_launcher.xml
+- NextDrive-Pleos/app/src/main/res/mipmap-anydpi-v33/ic_launcher_round.xml
+- NextDrive-Pleos/app/src/main/res/values/icon_colors.xml
+- NextDrive-Pleos/app/src/validation/res/drawable/ic_mark.xml
+- NextDrive-Pleos/app/src/validation/res/mipmap-anydpi/ic_launcher.xml
+- NextDrive-Pleos/app/src/validation/res/mipmap-anydpi/ic_launcher_round.xml
+- NextDrive-Pleos/app/src/validation/res/mipmap-anydpi-v26/ic_launcher.xml
+- NextDrive-Pleos/app/src/validation/res/mipmap-anydpi-v26/ic_launcher_round.xml
+- NextDrive-Pleos/app/src/validation/res/mipmap-anydpi-v33/ic_launcher.xml
+- NextDrive-Pleos/app/src/validation/res/mipmap-anydpi-v33/ic_launcher_round.xml
+- NextDrive-Pleos/app/src/validation/res/values/icon_colors.xml
+- NextDrive-Pleos/app/build.gradle.kts
+- AGENTS.md
+- docs/AUTOMATIC_RECORDING_ACCEPTANCE.md
+- docs/AUTOMATION_FOUNDATION.md
+- docs/CODEX_PROGRESS.md
+- README.md
+- NextDrive-Pleos/README.md
+
+검증된 위 파일만 GitHub 연결 도구를 통한 게시로 main의 최신 트리·부모를 이어 공유합니다. 게시 직전 대상 SHA/HEAD 및 게시 후 blob/부모·나머지 파일/Aside8개를 확인합니다. 로컬 Git push 성공으로 표현하지 않습니다. DB·개인 백업·키·APK·캐시·로그/화면은 제외합니다. 자기 자신의 SHA를 보고서에 넣으려는 반복 커밋 없이 최종 SHA는 응답에서 보고합니다.
+
+다음 사용자 확인: 차량 모양 일반 앱→이름 선택/운전 시작→자동 차량 정보→문제 남기기/소음·진동/차량 정보 연결 선택→저장→점검 메모/상태·정비 요약→재실행. 자동값은 증상 당시 값/고장 진단이 아닙니다. 파일 수동 편집·데이터 초기화는 필요 없습니다. 다음 단계는 새 화면 접근성/신선도·실제 사용자 과제와 안전한 Release 준비이며 P1/P2는 별도 작업입니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-08 15:11:09 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 고정 홈·검색 실행 검증 및 일반 앱 교체 설치 완료

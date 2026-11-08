@@ -17,6 +17,7 @@ class PleosReadClient(private val context: Context, private val store: Observati
     private var vehicle: Vehicle? = null
     private var generation = 0
     private var outstanding = mutableSetOf<String>()
+    private var activeSession:String?=null
     var message = "SDK 2.3.2 준비됨 · 아직 연결을 요청하지 않았습니다."
         private set
     var busy = false
@@ -30,6 +31,7 @@ class PleosReadClient(private val context: Context, private val store: Observati
         stop()
         val run = generation
         val session = ObservationStore.sessionId()
+        activeSession=session
         outstanding = mutableSetOf("EV_SOC", "ODOMETER", "FUEL_PERCENT")
         busy = true
         message = "서비스 연결 요청 중 · Capability 응답을 기다리고 있습니다."
@@ -112,6 +114,11 @@ class PleosReadClient(private val context: Context, private val store: Observati
     fun stop() {
         generation++
         main.removeCallbacksAndMessages(null)
+        activeSession?.let{session->outstanding.toList().forEach{kind->
+            runCatching{store.append(VehicleObservation(kind,null,null,null,source,null,false,session,
+                ObservationStatus.CONNECTION_FAILED,"앱 가시/안전 상태 종료로 완료 전 읽기를 중단했습니다."))}
+        }}
+        activeSession=null
         try { vehicle?.release() } catch (_: Exception) { }
         vehicle = null
         outstanding.clear()

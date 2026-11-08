@@ -74,6 +74,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             click(a,"vehicle_data")
             val basic=text(a)
             verify(listOf("SDK","Capability","RECEIVED","UNSUPPORTED","세션 ID","ERROR_").none{basic.contains(it)} && basic.contains("배터리 충전량") && basic.contains("누적 주행거리"),"ON basic vehicle page separates technical codes and enlarges named values")
+            await("entry automatic read completes before manual request"){main{tagged(a,"read_vehicle")?.isEnabled==true}}
             click(a,"read_vehicle")
             verify(main{tagged(a,"read_vehicle")?.isEnabled==false},"ON busy read disables repeated request")
             await("vehicle read completed"){main{tagged(a,"read_vehicle")?.isEnabled==true}}

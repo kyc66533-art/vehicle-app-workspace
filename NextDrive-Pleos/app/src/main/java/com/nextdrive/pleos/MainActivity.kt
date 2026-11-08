@@ -25,10 +25,15 @@ import java.util.Calendar
 
 /** Manual journal and explicit one-shot vehicle reads. No diagnosis or remote transmission. */
 class MainActivity : Activity() {
-    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC }
+    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS }
     private lateinit var guide: GuideState
     private var guideReplay=false
-    private data class RetainedSession(val driverId:String?)
+    private data class RetainedSession(val driverId:String?,val entry:EntryReadState)
+    private var entry=EntryReadState()
+    private var visible=false
+    private lateinit var snapshots:SnapshotStore
+    private var hiddenSnapshots=false
+    private var snapshotError=""
     private var helpTopic=0
     private var pausedGuide: Screen?=null
     private var showUnavailable=false
@@ -92,7 +97,12 @@ class MainActivity : Activity() {
         root.addOnLayoutChangeListener { _,l,_,r,_,oldL,_,oldR,_ -> if(oldR>oldL && r-l!=oldR-oldL)root.post{draw()} }
         repository = SqliteIssueRepository(this)
         observations = ObservationStore(this)
-        pleos = PleosReadClient(this, observations) { if (screen == Screen.VEHICLE || screen==Screen.LOAD_DETAIL) {positions[screen]=scrollView?.scrollY?:0;draw()} }
+        snapshots=SnapshotStore(this)
+        entry=(lastNonConfigurationInstance as? RetainedSession)?.entry ?: EntryReadState()
+        pleos = PleosReadClient(this, observations) {
+            if(!pleos.busy)reconcileSnapshots()
+            if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.LOAD_DETAIL,Screen.SNAPSHOTS)){positions[screen]=scrollView?.scrollY?:0;draw()}
+        }
         safety = CarSafetyGate(this) { state ->
             if (state != displayedSafety) {
                 captureDraft()
@@ -105,6 +115,7 @@ class MainActivity : Activity() {
                 }
                 draw()
             }
+            if(state!=EditingState.ALLOWED)pleos.stop() else maybeAutomaticRead()
         }
         service = CaritdaService(repository, { safety.state == EditingState.ALLOWED })
         service.restoreConfiguration((lastNonConfigurationInstance as? RetainedSession)?.driverId)
@@ -141,14 +152,16 @@ class MainActivity : Activity() {
     }
     override fun onStart() {
         super.onStart()
+        visible=true
         captureDraft()
         displayedSafety = EditingState.UNKNOWN
         draw()
         safety.start()
+        reconcileSnapshots()
         freshnessHandler.removeCallbacks(freshnessTick);freshnessHandler.post(freshnessTick)
     }
-    override fun onStop() { captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop(); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
-    override fun onDestroy() { repository.close(); observations.close(); super.onDestroy() }
+    override fun onStop() { visible=false;if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop(); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
+    override fun onDestroy() { repository.close(); observations.close();snapshots.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putString("screen", screen.name); outState.putString("issue", selectedIssue)
@@ -163,7 +176,17 @@ class MainActivity : Activity() {
         positions[screen]=scrollView?.scrollY?:0;positions.forEach{(target,position)->outState.putInt("position_${target.name}",position)}
         super.onSaveInstanceState(outState)
     }
-    override fun onRetainNonConfigurationInstance(): Any = RetainedSession(if(service.confirmed())service.driver().id else null)
+    override fun onRetainNonConfigurationInstance(): Any = RetainedSession(if(service.confirmed())service.driver().id else null,entry)
+
+    private fun reconcileSnapshots(){
+        runCatching{snapshots.reconcile(observations)}.onSuccess{snapshotError=""}.onFailure{snapshotError="차량 원본은 저장됐지만 자동 기록을 정리하지 못했어요. 다시 열면 재시도해요."}
+    }
+    private fun maybeAutomaticRead(){
+        if(entry.claim(visible,canEdit(),screen!=Screen.WELCOME,pleos.busy)){
+            android.util.Log.i("Caritda","entry_read_once")
+            pleos.readOnce()
+        }
+    }
     @Deprecated("Framework back navigation")
     override fun onBackPressed() {
         if(!canEdit()){toast("화면 입력이 가능한 뒤에 이동해 주세요.");return}
@@ -225,6 +248,7 @@ class MainActivity : Activity() {
         cardColor=Color.parseColor(if(dark)"#1C2936" else "#FFFFFF")
         actionColor=Color.parseColor(if(dark)"#062B49" else "#FFFFFF")
         root.setBackgroundColor(backdrop);root.setPadding(dp(24),dp(8),dp(24),dp(8));root.removeAllViews()
+        if(packageName.endsWith(".validation"))root.addView(label("검증 전용 · TEST",20,true).apply{tag="test_banner";contentDescription="검증 전용 TEST 앱"})
         val scroll=ScrollView(this).apply{isFillViewport=true;clipToPadding=false;tag="screen_scroll"};scrollView=scroll
         val body=column();scroll.addView(body);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         try {
@@ -272,6 +296,7 @@ class MainActivity : Activity() {
                 Screen.HELP->help(body)
                 Screen.HELP_TOPIC->helpTopic(body)
                 Screen.ACTION->actionForm(body)
+                Screen.SNAPSHOTS->snapshotScreen(body)
             }
             scroll.post{if(screen!=Screen.RECORD && screen!=Screen.ACTION)scroll.scrollTo(0,positions[screen]?:0)}
         } catch(e:Exception) {
@@ -296,7 +321,14 @@ class MainActivity : Activity() {
         scope.addView(label("지금 확인할 수 있는 정보",24,true))
         scope.addView(label("지원되는 충전량·주행거리와 직접 남긴 기록을 볼 수 있어요.",24))
         scope.addView(label("지금은 차량의 이상을 자동으로 찾아주지는 않아요.",22))
+        scope.addView(label(if(pleos.busy)"차량 상태를 한 번 불러오고 있어요." else "앱을 열 때 허용 상태에서 차량값을 한 번 기록해요. 계속 감시하지는 않아요.",22).apply{tag="auto_read_status"})
+        snapshots.latest()?.let{snapshot->snapshot.evidence.filter{it.value.kind in setOf("EV_SOC","ODOMETER")}.distinctBy{it.value.kind}.forEach{r->
+            val kind=r.value.kind;val valid=snapshot.evidence.lastOrNull{it.value.kind==kind&&SnapshotStore.accepted(it.value)}?.value
+            val view=VehiclePresentation.card(kind,r.value,valid,System.currentTimeMillis())
+            scope.addView(label("${if(kind=="EV_SOC")"충전량" else "누적 거리"} · ${view.value}",24,true))
+        }}
         body.addView(scope)
+        body.addView(button("자동으로 기록된 차량 정보","auto_snapshots",enabled=canEdit()){openScreen(Screen.SNAPSHOTS)})
         body.addView(label(when{all.isEmpty()->"아직 남긴 기록이 없어요.";unread!=null&&unread>0->"아직 읽지 않은 전달 기록 ${unread}건";managed.isNotEmpty()->"관리 중인 기록 ${managed.size}건";else->"완료한 기록 ${all.size}건"},26,true).apply{tag="home_counts"})
         body.addView(button("전체 문제 기록 · ${all.size}건","all_issues",primary=all.isNotEmpty(),enabled=canEdit()){openRecords(RecordFilter.ALL)})
         body.addView(button("내가 작성한 문제","my_issues",enabled=canEdit()){openRecords(RecordFilter.MINE)})
@@ -448,8 +480,8 @@ class MainActivity : Activity() {
     }
     private fun vehicleScreen(body:LinearLayout){
         body.addView(label("차량 정보",28,true))
-        body.addView(label(if(pleos.busy)"차량값을 불러오는 중이에요." else "버튼을 누르면 지금 받을 수 있는 값을 불러와요.",22).apply{tag="load_status"})
-        body.addView(button("차량값 불러오기","read_vehicle",primary=true,enabled=canEdit()&&!pleos.busy){edit{pleos.readOnce()}})
+        body.addView(label(if(pleos.busy)"차량값을 불러오는 중이에요." else "마지막 조회가 끝났어요. 다시 불러올 수도 있어요.",22).apply{tag="load_status"})
+        body.addView(button("차량값 불러오기","read_vehicle",primary=true,enabled=canEdit()&&!pleos.busy){edit{entry.markRequested();pleos.readOnce()}})
         listOf("EV_SOC" to "배터리 충전량","ODOMETER" to "누적 주행거리").forEach{(kind,name)->
             val view=VehiclePresentation.card(kind,observations.mostRecent(kind),observations.mostRecent(kind,true),System.currentTimeMillis())
             val card=panel();card.addView(label(name,24,true))
@@ -466,6 +498,34 @@ class MainActivity : Activity() {
         }
         body.addView(button("불러오기 상세","load_details",enabled=canEdit()){openScreen(Screen.LOAD_DETAIL)})
         body.addView(label("이 값만으로 고장 여부를 판단하지 않아요. 자동으로 계속 확인하는 기능은 아니에요.",20))
+        body.addView(button("자동 기록과 변화 이력","auto_snapshots",enabled=canEdit()){openScreen(Screen.SNAPSHOTS)})
+    }
+    private fun snapshotText(s:Snapshot):String=buildString{
+        appendLine("차량 상태 스냅샷 · 고장 진단이 아니에요.")
+        listOf("EV_SOC" to "배터리 충전량","ODOMETER" to "누적 주행거리").forEach{(kind,name)->
+            val attempt=s.evidence.firstOrNull{it.value.kind==kind}?.value
+            val valid=s.evidence.lastOrNull{it.value.kind==kind&&SnapshotStore.accepted(it.value)}?.value
+            val view=VehiclePresentation.card(kind,attempt,valid,System.currentTimeMillis())
+            appendLine("$name: ${view.value}\n${view.time}\n${view.source}")
+            if(view.attempt.isNotBlank())appendLine(view.attempt)
+        }
+        append("차량 측 측정시각: 확인할 수 없음\n앱 수신시각은 실제 변화 발생시각이 아니에요.")
+    }
+    private fun snapshotScreen(body:LinearLayout){
+        body.addView(label("자동으로 기록된 차량 정보",28,true))
+        body.addView(label("이 앱의 차량 범위에 저장돼요. 실제 차량 식별은 확인하지 않았어요. 증상 발생 당시 값이나 고장 판정은 아니에요.",20))
+        if(snapshotError.isNotBlank())body.addView(label(snapshotError,22,true))
+        body.addView(button(if(hiddenSnapshots)"표시된 정보 보기" else "숨긴 정보 다시 보기","toggle_hidden",enabled=canEdit()){hiddenSnapshots=!hiddenSnapshots;draw()})
+        val cards=snapshots.cards(hiddenSnapshots)
+        if(cards.isEmpty())body.addView(label(if(hiddenSnapshots)"숨긴 정보가 없어요." else "아직 자동 기록이 없어요. 차량 정보에서 값을 불러와 주세요.",24))
+        cards.forEach{s->val card=panel();card.addView(label(snapshotText(s),24).apply{tag="snapshot_card"})
+            card.addView(button(if(hiddenSnapshots)"다시 표시" else "이 정보 숨기기","hide_snapshot",enabled=canEdit()){edit{snapshots.hide(s.cardId,!hiddenSnapshots);draw()}})
+            val changes=snapshots.history(s.cardId)
+            card.addView(label("앱 수신 결과 변화 ${changes.size}건 · 숨김은 문제 해결이 아니에요.",20))
+            if(changes.isNotEmpty())snapshots.first(s.cardId)?.let{first->card.addView(label("처음 앱에서 받은 기록\n${snapshotText(first)}",20))}
+            changes.take(10).forEach{change->card.addView(label("앱 기록 ${ConsultationSummary.time(change.at)}\n${snapshotText(change)}",20))}
+            body.addView(card)
+        }
     }
     private fun loadDetails(body:LinearLayout){
         body.addView(label("불러오기 상세",28,true))
@@ -512,7 +572,7 @@ class MainActivity : Activity() {
             listOf("차에서 느낀 소리나 떨림을 남겨 보세요. 고장 이름을 몰라도 괜찮아요.","문제 남기기 → 증상과 상황 입력 → 이 차량 앱에 저장을 눌러 주세요.","작성 중인 내용은 원래 이름으로 이어 쓸 수 있어요. 이름을 바꾸기 전에는 저장하거나 작성을 취소해 주세요."),
             listOf("같은 앱을 쓰는 다른 사람이 남긴 내용을 살펴봐요.","기록 보기 → 내용을 열고 읽었다면 내용을 읽었어요를 눌러 주세요.","읽음은 수리가 끝났다는 뜻이 아니에요. 이름을 바꾸거나 상세를 열기만 해서는 읽음으로 저장하지 않아요."),
             listOf("어떤 상황과 점검 기록이 있었는지 정비 상담 때 보여줄 수 있어요.","기록 → 내용을 열고 이 문제의 정비 상담용 요약을 눌러 주세요. 전체 요약은 기록 목록에 있어요.","이 화면은 고장 진단이 아니며 외부 정비소로 자동 전송되지 않아요."),
-            listOf("지금은 차량의 이상을 자동으로 찾아주지는 않아요.","차량값은 버튼을 누를 때만 불러오고 문제는 직접 남겨요.","저장된 기록이 없다고 차량이 정상이라는 뜻은 아니에요.")
+            listOf("지금은 차량의 이상을 자동으로 찾아주지는 않아요.","앱이 보이고 입력 허용 상태가 확인되면 차량값을 한 번 기록해요. 문제는 직접 남기며 차량 정보를 선택해 연결할 수 있어요.","앱 종료·절전·연결 단절 중에는 기록 공백이 있어요. 저장된 기록이 없다고 차량이 정상이라는 뜻은 아니에요.")
         )
         body.addView(label(helpTitles[helpTopic],28,true))
         lines[helpTopic].forEach{body.addView(label(it,24))}
@@ -556,6 +616,16 @@ class MainActivity : Activity() {
         body.addView(label("추가 메모 (선택)", 22, true))
         memoInput = input("추가로 전달할 내용을 적어 주세요.", 2000).apply { tag = "memo"; setText(draft.memo) }
         body.addView(memoInput)
+        if(!editing){
+            val available=snapshots.latest()
+            if(available!=null){
+                val selected=snapshots.selected(active.id)==available.id
+                body.addView(button(if(selected)"✓ 차량 정보 연결 선택 · 해제" else "최근 차량 정보 연결 (선택)","select_snapshot",enabled=canWrite()){
+                    edit{snapshots.select(active.id,if(selected)null else available.id);draw()}
+                })
+                body.addView(label("연결할 정보: 앱 조회 ${ConsultationSummary.time(available.at)}\n발견 시각의 값이 아니며 증상의 원인을 뜻하지 않아요.",20))
+            }
+        }
         situationInput!!.addTextChangedListener(watcher{captureDraft()})
         memoInput!!.addTextChangedListener(watcher{captureDraft()})
         body.addView(button(if(editing)"수정 내용 저장" else "이 차량 앱에 저장", "save_issue", primary = true, enabled = canWrite()&&!recordSaving) { saveRecord() })
@@ -571,8 +641,13 @@ class MainActivity : Activity() {
         captureDraft();recordSaving=true
         val save=root.findViewWithTag<Button>("save_issue");save?.isEnabled=false
         try {
+            val selection=runCatching{if(active.kind=="RECORD")snapshots.selected(active.id)else null}
+            val snapshot=selection.getOrNull()
+            var linkFailed=selection.isFailure
+            if(snapshot!=null)runCatching{snapshots.prepareLink(active.id,snapshot)}.onFailure{linkFailed=true}
             val issue=if(active.kind=="EDIT")service.revise(active.target!!,draft.type,draft.situation,draft.memo,active.id,active.revision)
                 else service.record(draft.type,draft.situation,draft.foundAt,draft.memo,active.id)
+            if(snapshot!=null&&!linkFailed)runCatching{snapshots.completeLink(issue.id)}.onFailure{linkFailed=true}
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken,0)
             android.util.Log.i("Caritda","record_commit id=${issue.id} revision=${issue.revision}")
             selectedIssue=issue.id;journal=null;lastDraft=null;draft=Draft()
@@ -583,6 +658,7 @@ class MainActivity : Activity() {
             notice=if(active.kind=="EDIT"){
                 if(issue.revision==active.revision)"변경된 내용이 없어 원래 기록을 유지했어요." else "수정되었습니다."
             }else "저장되었습니다. 기록 목록에서도 확인하실 수 있어요."
+            if(linkFailed)notice+=" 증상은 저장됐지만 차량 정보 연결에 실패했어요. 이 기록에서 다시 연결해 주세요."
             if(active.kind=="EDIT"&&service.issues(recordFilter,recordQuery).none{it.id==issue.id})notice+=" 현재 검색·필터 조건과 달라 목록에서 보이지 않을 수 있어요. 전체 기록에서 확인해 주세요."
             draw()
         }catch(e:Exception){
@@ -602,6 +678,16 @@ class MainActivity : Activity() {
         body.addView(label(issue.situation, 24))
         body.addView(label("발견 ${ConsultationSummary.time(issue.discoveredAt)}\n등록 ${issue.reporter.label} · ${ConsultationSummary.time(issue.recordedAt)}", 18))
         if (issue.memo.isNotBlank()) body.addView(label("추가 메모: ${issue.memo}", 20))
+        snapshots.linked(id)?.let{body.addView(label("직접 연결한 차량 정보\n${snapshotText(it)}\n증상 발견 시각의 값이나 원인이라는 뜻은 아니에요.",22).apply{tag="linked_snapshot"})}
+        if(service.canManage(issue)&&snapshots.linked(id)==null){
+            body.addView(button(if(snapshots.pending(id))"차량 정보 연결 다시 시도" else "최근 차량 정보 연결 (선택)","link_snapshot",enabled=canWrite()){
+                confirm("차량 정보를 연결할까요?","최근 앱 조회값이며 증상 발생 당시 값은 아니에요. 원문과 상태는 바뀌지 않아요."){
+                    if(!service.canManage(service.issue(id)))throw EditingBlockedException()
+                    if(!snapshots.pending(id))snapshots.prepareLink(id,snapshots.latest()?.id?:error("먼저 차량값을 불러와 주세요."))
+                    snapshots.completeLink(id);notice="차량 정보를 연결했습니다. 증상 원문은 그대로예요.";draw()
+                }
+            })
+        }
         if(service.events(id).any{it.kind==EventKind.EDITED})body.addView(label("작성 내용이 수정된 기록이에요. 아래 이력에서 이전 내용과 수정 시각을 확인해 주세요.",22))
         body.addView(label("내용 버전 ${issue.revision} · 재발 ${service.events(id).count{it.kind==EventKind.RECURRENCE}}회",20))
         if(service.issues(recordFilter,recordQuery).none{it.id==id})body.addView(button("전체 기록에서 보기","show_in_all",enabled=canEdit()){openRecords(RecordFilter.ALL)})
@@ -646,6 +732,7 @@ class MainActivity : Activity() {
         issues.forEach { issue ->
             val card = panel()
             card.addView(label(ConsultationSummary.build(issue, service.events(issue.id),::statusText), 24).apply { tag = "consultation_summary" })
+            snapshots.linked(issue.id)?.let{card.addView(label("직접 연결한 차량 조회 기록\n${snapshotText(it)}\n증상 발견 시각과 다르며 인과관계를 뜻하지 않아요.",22))}
             body.addView(card)
         }
     }

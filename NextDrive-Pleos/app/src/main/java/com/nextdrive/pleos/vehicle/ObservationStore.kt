@@ -16,9 +16,20 @@ data class VehicleObservation(
     val recordedAt: Long = System.currentTimeMillis(), val driverId: String? = null,
 )
 
+data class ObservationRef(val storeId:String,val rowId:Long,val value:VehicleObservation)
+
+/** Only adds an identity table; every old observation column and row remains unchanged. */
+object ObservationMigration {
+    fun migrate(db:SQLiteDatabase,afterCreate:()->Unit={}) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS observation_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), store_id TEXT NOT NULL)")
+        db.execSQL("INSERT OR IGNORE INTO observation_identity VALUES(1,?)",arrayOf(UUID.randomUUID().toString()))
+        afterCreate()
+    }
+}
+
 /** Separate append-only database: the v0.1 incident schema and records remain untouched. */
 class ObservationStore(context: Context, name: String = "caritda-observations.db") :
-    SQLiteOpenHelper(context.applicationContext, name, null, 1) {
+    SQLiteOpenHelper(context.applicationContext, name, null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE observations (
             id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, raw TEXT, unit TEXT,
@@ -26,9 +37,11 @@ class ObservationStore(context: Context, name: String = "caritda-observations.db
             session TEXT NOT NULL, status TEXT NOT NULL, detail TEXT NOT NULL, recorded_at INTEGER NOT NULL,
             driver_id TEXT)""")
         db.execSQL("CREATE INDEX observations_recent ON observations(id DESC)")
+        ObservationMigration.migrate(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        error("관측 기록 버전이 지원되지 않습니다. 기존 데이터는 보존됩니다.")
+        check(oldVersion==1 && newVersion==2)
+        ObservationMigration.migrate(db)
     }
     fun append(value: VehicleObservation) {
         require(value.kind.isNotBlank() && value.session.isNotBlank())
@@ -71,6 +84,13 @@ class ObservationStore(context: Context, name: String = "caritda-observations.db
                     s("session"),ObservationStatus.valueOf(s("status")),s("detail"),n("recorded_at")!!,s("driver_id"))
             }
         }
+    }
+    fun identity():String=readableDatabase.rawQuery("SELECT store_id FROM observation_identity WHERE singleton=1",null).use{it.moveToFirst();it.getString(0)}
+    fun refs():List<ObservationRef> = readableDatabase.rawQuery("SELECT * FROM observations ORDER BY id",null).use{c->
+        val store=identity()
+        fun s(n:String)=c.getString(c.getColumnIndexOrThrow(n))
+        fun n(n:String):Long?{val i=c.getColumnIndexOrThrow(n);return if(c.isNull(i))null else c.getLong(i)}
+        buildList{while(c.moveToNext())add(ObservationRef(store,n("id")!!,VehicleObservation(s("kind"),s("raw"),s("unit"),n("received_at"),ObservationSource.valueOf(s("source")),n("supported")?.let{it!=0L},n("valid")==1L,s("session"),ObservationStatus.valueOf(s("status")),s("detail"),n("recorded_at")!!,s("driver_id"))))}
     }
     companion object { fun sessionId(): String = UUID.randomUUID().toString() }
 }

@@ -16,6 +16,7 @@ import java.util.UUID
 
 /** Framework-only instrumentation: real SQLite, restart, local handover and real production UI. */
 class MvpScenarioInstrumentation : Instrumentation() {
+    private var argumentsBundle:Bundle?=null
     private var checks = 0
     private val output = StringBuilder()
     private var migrationOnly=false
@@ -26,15 +27,22 @@ class MvpScenarioInstrumentation : Instrumentation() {
     private var preservationOnly=false
     private var navigationOnly=false
     private var navigationColdOnly=false
-    override fun onCreate(arguments: Bundle?) { navigationOnly=arguments?.getString("navigationOnly")=="true";navigationColdOnly=arguments?.getString("navigationColdOnly")=="true";coldOnly=arguments?.getString("coldOnly")=="true";preservationOnly=arguments?.getString("preservationOnly")=="true";reliabilityOnly=arguments?.getString("reliabilityOnly")=="true";onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
+    private var automaticOnly=false
+    private var automaticColdOnly=false
+    override fun onCreate(arguments: Bundle?) { argumentsBundle=arguments; navigationOnly=arguments?.getString("navigationOnly")=="true";navigationColdOnly=arguments?.getString("navigationColdOnly")=="true";coldOnly=arguments?.getString("coldOnly")=="true";preservationOnly=arguments?.getString("preservationOnly")=="true";reliabilityOnly=arguments?.getString("reliabilityOnly")=="true";onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
     override fun onStart() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("automaticPreservationOnly")=="true"){val lines=AutomaticChecks(this).preservation();result.putString("stream","CARITDA_AM_PRESERVATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            automaticOnly=argumentsBundle?.getString("automaticOnly")=="true"
+            automaticColdOnly=argumentsBundle?.getString("automaticColdOnly")=="true"
+            if(automaticColdOnly){val lines=AutomaticChecks(this).cold();result.putString("stream","CARITDA_AM_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(navigationColdOnly){val lines=NavigationChecks(this).coldRun();result.putString("stream","CARITDA_NAV_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(preservationOnly){result.putString("stream",RecordMigrationChecks.verifyAfter(targetContext));finish(Activity.RESULT_OK,result);return}
             if(coldOnly){val lines=ReliabilityChecks(this).coldCheck();result.putString("stream","CARITDA_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             ValidationEnvironment.prepare(targetContext)
+            if(automaticOnly){val lines=AutomaticChecks(this).run();result.putString("stream","CARITDA_AM_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(navigationOnly){val lines=NavigationChecks(this).run();result.putString("stream","CARITDA_NAV_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(reliabilityOnly){val lines=RecordMigrationChecks.run(targetContext)+ReliabilityChecks(this).run();result.putString("stream","CARITDA_RECORD_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(onboardingOnly){val lines=OnboardingChecks(this).run();result.putString("stream","CARITDA_ON_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
@@ -206,6 +214,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val production = ObservationStore(targetContext)
         val original = production.latest(100)
         val before = System.currentTimeMillis()
+        await("entry automatic read finishes before explicit refresh") { main { tagged(activity,"read_vehicle")?.isEnabled==true } }
         click(activity, "read_vehicle")
         await("three actual SDK outcomes") { production.latest().count { it.recordedAt >= before } >= 3 }
         val responses = production.latest().filter { it.recordedAt >= before }.take(3)

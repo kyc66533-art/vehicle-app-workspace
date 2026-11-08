@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "caritda-ai-relay-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-09",
+  "workers_dev": true,
+  "vars": {"POC_ENABLED": "false", "TEST_TOKEN_EXPIRES_AT": "EXPIRED_UNTIL_CONFIGURED"},
+  "durable_objects": {"bindings": [{"name": "BUDGET", "class_name": "BudgetGate"}]},
+  "migrations": [{"tag": "caritda-budget-v1", "new_sqlite_classes": ["BudgetGate"]}],
+  "observability": {"enabled": false}
+}

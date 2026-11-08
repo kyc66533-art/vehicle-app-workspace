@@ -1,5 +1,24 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-09 01:32 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Gemini 최소 중계·TEST 전용 요청 (배포/실응답 대기)
+
+- **최종 사용자 선택: ‘보류 — 검증된 로컬 코드만 게시’.** Worker 교체/DO 생성/인증 설정/실모델 호출을 진행하지 않습니다. 아래 배포 안내는 향후 별도 승인용입니다. 실제 응답/TEST 실표시는 미검증으로 유지하고 소스/문서만 게시합니다.
+
+- 기준 main1ef6bbdd4fb07d8c2e2407ca79496cc54fc3d743와 로컬99개 공유 파일 SHA가 일치했습니다. 사용자는 Worker/GEMINI_API_KEY/모델gemini-3.5-flash-lite 및 일반PowerShell 성공을 보고했고 앱 인증은 아직 없다고 확인했습니다. 키 값은 조회·요청하지 않았습니다. Windows Worker HEAD는 연결 실패였고 CF관리도구/Node/npm/tsc/Wrangler가 없어 설치·배포하지 않았습니다.
+- Worker TypeScript/설정/보안 harness/배포 안내를 작성했습니다. env.GEMINI_API_KEY 전용, 짧은 앱 인증, 고정 합성 SOC·4KiB·경로/헤더/필드/시각 검증, 전역SQLite DO transaction 분당2/누적5·중복UUID·실패도예약·자동재시도없음입니다. 기본은POC꺼짐/만료미설정입니다. 모델 없는 health/인증된 preflight→명시적실요청, 모델12초/256출력토큰/16KiB·안전/facts 검증을 구현했습니다.
+- 기존AiRelayClient/AnalysisExplanation/VehicleAnalysis·VehicleAnalytics.id를 재사용했습니다. validation source set에만 GeminiPocActivity/메모리 TEST_ONLY fixture/비공개Activity manifest를 추가하고 TEST 차량정보에 버튼1개를 붙였습니다. 일반 홈/그래프/DB/SDK·권한은 재설계하지 않았습니다. 토큰마스킹/저장금지/FLAG_SECURE/전송동의·취소/수명주기/CarSafetyGate를 적용하고 실제MODEL·preflight·로컬규칙을 분리합니다.
+- Debug/validation/test APK 빌드 성공, 앱변경 최종gemini-build-4.txt 1m39s/93작업10실행·83up-to-date, 테스트도구수정 gemini-build-5.txt57s/4실행. validation APK SHA256E223734197C6CC360CB83DE3C397C2A397AB811BE8702FE7F3D696999A5D7389, validation/test만 데이터유지교체했습니다. 일반 APK는 교체하지 않았습니다. aapt manifest에서 GeminiPocActivity가 일반에는 없고 validation에만 있음을 확인했습니다.
+- **CARITDA_GEMINI_LOCAL_PASS checks=46**(native/fixture/facts8 + Worker Web API38). 실제Worker소스를 기존WebView131엔진에서 실행하고provider/DO저장소만Mock했습니다. 무인증/오인증/만료/미설정/입력/동시·전체예산/재전송/429/공급자인증/형식·허위숫자·수리/안전/네트워크/12초deadline/비반환을검사했습니다. 실제모델을호출한것이아니며 CF실제DO·분산/tsc/Wrangler검증을대신하지않습니다. 기존369전체회귀는 이번최소작업에서재실행하지않았습니다.
+- 테스트Long/Int비교컴파일오류, 브라우저 Origin제거어댑터/비가시WebViewcallback대기 문제를 수정했습니다. Worker인증정책을완화하지않고 local3통과·앞선실패로그를보존했습니다. CF코드배포/앱인증·최대5회실모델요청승인을질문했으며 승인·설정전실호출하지않습니다.
+- .tools/gemini-poc-backup/20261109-010917에 두앱전체tar/일반5DB를새백업했습니다. 일반5DB는전후모두바이트동일, 문제DBA906AA7FDEFF00A9AC444A8DB306EF06791D0DD1A0B461073932277DBAC1C92C입니다. 새검사는fixture초기화전validation전용분기라기존default DB를삭제/합성프로필추가하지않습니다. AVD/개인백업/초안/관측/이력은보존했습니다.
+- [실제/미검증·설정·승인·다음단계](GEMINI_MINIMUM_POC.md), [Cloudflare클릭경로/명령/토큰설정](../infra/gemini-relay/README.md). 원격무인증401/인증preflight·실제Gemini응답/TEST표시는미검증입니다. 키·데이터·백업·로그·APK는게시하지않고검증된소스/문서만최신main이력을잇는 **GitHub 연결 도구를 통한 게시**로공유합니다. 최종SHA는완료응답에보고합니다.
+
+아래는 과거 기록으로 보존합니다.
+
+---
+
 마지막 업데이트: 2026-11-08 23:40 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — SOC 현재/이전 구분·실제 SDK 시계열·자동 인사이트

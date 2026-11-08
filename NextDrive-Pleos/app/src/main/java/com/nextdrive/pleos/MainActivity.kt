@@ -633,6 +633,7 @@ class MainActivity : Activity() {
         body.addView(ui.grid(listOf(refresh,history),columns()))
         body.addView(ui.action("충전량 자동 안내 · 설정과 기록","soc_notices",ActionStyle.QUIET,canEdit(),HmiIcon.BATTERY){edit{openScreen(Screen.SOC_NOTICES)}})
         body.addView(ui.action("차량 데이터 분석","vehicle_analytics",ActionStyle.SECONDARY,canEdit(),HmiIcon.DISTANCE){edit{requestAnalytics();openScreen(Screen.ANALYTICS)}})
+        if(packageName=="com.nextdrive.pleos.validation")body.addView(ui.action("Gemini 연결 시험 · 합성 SOC","gemini_poc",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{startActivity(android.content.Intent().setClassName(this,"com.nextdrive.pleos.GeminiPocActivity"))}})
         body.addView(label("차량 전체의 고장 여부를 판단한 결과는 아니에요.",20))
         body.addView(ui.expandable("제공되지 않는 항목","unavailable",showUnavailable,canEdit()){edit{showUnavailable=!showUnavailable;draw()}})
         if(showUnavailable){

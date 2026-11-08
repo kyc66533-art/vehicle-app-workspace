@@ -34,6 +34,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("geminiPocOnly")=="true"){val lines=GeminiPocChecks(this).run();result.putString("stream","CARITDA_GEMINI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("analyticsInventory")=="true"){val lines=AnalyticsChecks(this).inventory();result.putString("stream",lines.joinToString("\n"));finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("analyticsPreservation")=="true"){val lines=AnalyticsChecks(this).preservation();result.putString("stream","CARITDA_ANALYTICS_PRESERVATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("analyticsCold")=="true"){val lines=AnalyticsChecks(this).cold();result.putString("stream","CARITDA_ANALYTICS_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

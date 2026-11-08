@@ -1,5 +1,10 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
+## 현재 작업 — Gemini 최소 검증
+- 사용자는 이번 배포/인증/실모델 호출을 보류하고 검증된 로컬 코드만 게시하도록 선택했다. 이 선택을 승인으로 해석하지 않으며 외부 작업은 별도 후속 승인 전 진행하지 않는다.
+- 사용자의 최신 지시로 고정 합성 SOC만 TEST 앱에서 명시적으로 전송하는 시험을 준비한다. infra/gemini-relay/README.md와 docs/GEMINI_MINIMUM_POC.md를 따른다. GEMINI_API_KEY는 Worker env Secret 전용이며 값을 요청·조회·게시하거나 APK에 넣지 않는다. 앱 토큰은 별도 임시 인증이며 저장/로그하지 않는다.
+- Worker는 기본 꺼짐, 만료·인증·입력·전역 DO 예산(분당2/누적5) 검증 뒤만 호출한다. 배포/DO 생성/인증 설정·실제 모델 시험은 사용자 승인 뒤 진행한다. GitHub 소스 게시는 외부 배포 승인이 아니다. 로컬 Web API/Mock 검사와 원격401·실제Gemini·TEST 표시를 분리한다. 기존 일반/validation DB·원관측은 합성값으로 변경하지 않는다.
+
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.
 - VehicleAnalytics/VehicleChart는 실제 SDK 출처의 SOC/거리만 분석한다. worker의 기간·최대2000행/환경 범위와 평균 모집단을 명시하고 세션/오류/시간 역순/관측 공백을 이어 물리 변화로 해석하지 않는다. 원본 반복은 남기되 변화 인사이트를 중복 생성하지 않는다. 낮은SOC는 기존 changes 근거를 재사용한다. 새 AnalysisStore는 파생 sidecar이며 두 DB 원자성을 가정하지 않는다.

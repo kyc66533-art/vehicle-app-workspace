@@ -91,6 +91,17 @@ class ObservationStore(context: Context, name: String = "caritda-observations.db
         }
     }
     fun identity():String=readableDatabase.rawQuery("SELECT store_id FROM observation_identity WHERE singleton=1",null).use{it.moveToFirst();it.getString(0)}
+    fun lastRow():Long=readableDatabase.rawQuery("SELECT COALESCE(MAX(id),0) FROM observations",null).use{it.moveToFirst();it.getLong(0)}
+    /** Bounded, read-only analysis query. Call from a worker, never from graph redraw. */
+    fun analysisRefs(kind:String,since:Long,limit:Int=2001):List<ObservationRef> {
+        require(kind in setOf("EV_SOC","ODOMETER")&&limit in 1..2001)
+        val store=identity()
+        return readableDatabase.rawQuery("SELECT * FROM observations WHERE kind=? AND recorded_at>=? ORDER BY id DESC LIMIT ?",arrayOf(kind,since.toString(),limit.toString())).use{c->
+            fun s(n:String)=c.getString(c.getColumnIndexOrThrow(n))
+            fun n(n:String):Long?{val i=c.getColumnIndexOrThrow(n);return if(c.isNull(i))null else c.getLong(i)}
+            buildList{while(c.moveToNext())add(ObservationRef(store,n("id")!!,VehicleObservation(s("kind"),s("raw"),s("unit"),n("received_at"),ObservationSource.valueOf(s("source")),n("supported")?.let{it!=0L},n("valid")==1L,s("session"),ObservationStatus.valueOf(s("status")),s("detail"),n("recorded_at")!!,s("driver_id"))))}.reversed()
+        }
+    }
     fun refs():List<ObservationRef> = readableDatabase.rawQuery("SELECT * FROM observations ORDER BY id",null).use{c->
         val store=identity()
         fun s(n:String)=c.getString(c.getColumnIndexOrThrow(n))

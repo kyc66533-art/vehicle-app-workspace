@@ -8,6 +8,7 @@ import java.util.UUID
 
 data class SocPolicy(val enabled:Boolean,val threshold:Int,val version:Int,val since:Long,val store:String)
 data class SocNotice(val id:String,val phase:String,val threshold:Int,val version:Int,val entered:Long,val last:Long,val value:String,val unit:String,val source:String,val store:String,val row:Long)
+data class SocChange(val episode:String,val kind:String,val store:String,val row:Long,val at:Long,val raw:String,val threshold:Int,val version:Int)
 enum class SocAssessment { NORMAL_INFORMATION, USER_LOW_SOC, CONDITION_EXIT, INVALID_DATA, STALE_OR_INSUFFICIENT }
 
 object SocRule {
@@ -72,10 +73,13 @@ class LowSocStore(context:Context,name:String="caritda-soc-notices.db"):SQLiteOp
         }
     }
     fun gap(reason:String){writableDatabase.insertOrThrow("gaps",null,ContentValues().apply{put("at",System.currentTimeMillis());put("reason",reason)})}
-    fun notices():List<SocNotice> = readableDatabase.rawQuery("SELECT * FROM episodes ORDER BY entered DESC,rowid DESC",null).use{c->buildList{while(c.moveToNext()){
+    fun notices():List<SocNotice> = readableDatabase.rawQuery("SELECT * FROM episodes ORDER BY last_at DESC,entered DESC,rowid DESC",null).use{c->buildList{while(c.moveToNext()){
         fun s(k:String)=c.getString(c.getColumnIndexOrThrow(k))
         fun l(k:String)=c.getLong(c.getColumnIndexOrThrow(k))
         add(SocNotice(s("id"),s("phase"),c.getInt(c.getColumnIndexOrThrow("threshold")),c.getInt(c.getColumnIndexOrThrow("policy_version")),l("entered"),l("last_at"),s("raw"),s("unit"),s("source"),s("store_id"),l("row_id")))
     }}}
     fun changeCount():Int=readableDatabase.rawQuery("SELECT count(*) FROM changes",null).use{it.moveToFirst();it.getInt(0)}
+    /** Read-only projection of immutable entry/exit evidence; not another threshold detector. */
+    fun changes():List<SocChange> = readableDatabase.rawQuery("SELECT episode_id,kind,store_id,row_id,received_at,raw,threshold,policy_version FROM changes ORDER BY id",null).use{c->buildList{while(c.moveToNext())add(SocChange(c.getString(0),c.getString(1),c.getString(2),c.getLong(3),c.getLong(4),c.getString(5),c.getInt(6),c.getInt(7)))}}
+    fun gaps():List<Long> = readableDatabase.rawQuery("SELECT at FROM gaps ORDER BY id",null).use{c->buildList{while(c.moveToNext())add(c.getLong(0))}}
 }

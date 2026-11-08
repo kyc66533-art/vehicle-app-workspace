@@ -27,7 +27,7 @@ object CaritdaTokens {
     const val MEDIUM=12
     const val GAP=16
     const val CARD_INSET=20
-    const val ICON=24
+    const val ICON=28
     const val METRIC_ICON=28
     const val BORDER=2
     const val CARD_RADIUS=18
@@ -126,7 +126,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
             addState(intArrayOf(android.R.attr.state_focused),shape(fill,CaritdaTokens.BUTTON_RADIUS,if(style==ActionStyle.PRIMARY)colors.onAccent else colors.accent))
             addState(intArrayOf(android.R.attr.state_selected),shape(fill,CaritdaTokens.BUTTON_RADIUS,colors.accent))
             addState(intArrayOf(android.R.attr.state_pressed),shape(fill,CaritdaTokens.BUTTON_RADIUS,foreground))
-            addState(intArrayOf(),shape(fill,CaritdaTokens.BUTTON_RADIUS))
+            addState(intArrayOf(),shape(fill,CaritdaTokens.BUTTON_RADIUS,if(style==ActionStyle.PRIMARY)colors.accent else colors.border))
         }
         icon?.let{setCompoundDrawablesRelative(CaritdaIcon(it,if(enabled)foreground else colors.secondary).apply{setBounds(0,0,dp(CaritdaTokens.ICON),dp(CaritdaTokens.ICON))},null,null,null);compoundDrawablePadding=dp(CaritdaTokens.MEDIUM)}
         isEnabled=enabled;isFocusable=true
@@ -147,7 +147,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
         if(state.isNotBlank())addView(text(state,20,secondary=true).apply{tag="attempt_$key"})
     }
     fun history(title:String,subtitle:String,key:String,enabled:Boolean,click:()->Unit)=action("$title\n$subtitle",key,ActionStyle.QUIET,enabled,HmiIcon.CLOCK,click)
-    fun expandable(title:String,key:String,expanded:Boolean,enabled:Boolean,onToggle:()->Unit)=action((if(expanded)"− " else "+ ")+title,key,ActionStyle.QUIET,enabled,null,onToggle)
+    fun expandable(title:String,key:String,expanded:Boolean,enabled:Boolean,onToggle:()->Unit)=action((if(expanded)"− " else "+ ")+title,key,ActionStyle.QUIET,enabled,HmiIcon.CHEVRON,onToggle)
     /** Buttons retain their labels and target height; no shrinking to fit a grid. */
     fun grid(children:List<View>,columns:Int):LinearLayout=column().apply{
         children.chunked(columns.coerceAtLeast(1)).forEach{group->

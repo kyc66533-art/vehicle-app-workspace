@@ -1,5 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
+## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
+- 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.
+- VehicleAnalytics/VehicleChart는 실제 SDK 출처의 SOC/거리만 분석한다. worker의 기간·최대2000행/환경 범위와 평균 모집단을 명시하고 세션/오류/시간 역순/관측 공백을 이어 물리 변화로 해석하지 않는다. 원본 반복은 남기되 변화 인사이트를 중복 생성하지 않는다. 낮은SOC는 기존 changes 근거를 재사용한다. 새 AnalysisStore는 파생 sidecar이며 두 DB 원자성을 가정하지 않는다.
+- 사용자가 이번 대화에서 AI 설정 없음/로컬 분석 우선을 선택했다. 외부 전송·유료 호출·서버 배포를 하지 않는다. payload 미리보기/고정 내용 동의·취소와 구조 facts 검증은 실제 모델 성공과 별도다. 수치는 검증된 facts에서 로컬 표시하고 모델 자유문장의 숫자/수리·안전 확정은 거부한다. 일반 화면의 로컬 규칙 설명을 AI 응답이라고 부르지 않는다.
+- docs/CARITDA_ANALYTICS_AI_INTEGRATED_REPORT.md의 실제SDK/합성/인터페이스/미검증 구분을 유지한다. 일반/validation 전체 백업·현재 행 수를 다시 확인하며 과거 Console 이력을 일반 데이터로 복사하지 않는다. Aside와 아래 GitHub 연결 도구 게시 규칙을 지킨다.
+
 ## 현재 작업 — 실제 Console SOC callback·자동 안내·AI 검증
 - 최신 사용자 지시가 아래 단발 조회 보류 범위보다 우선한다. 기존 GET/스냅샷을 유지하며, 명시적으로 켠 SOC 안내만 앱 가시·CarSafetyGate ALLOWED에서 PleosSocObserver로 구독한다. 실제18/45 callback을 검증했으며 등록 반환을 수신 성공으로 바꾸지 않는다. onStop/안전 제한/실패 시 해제·generation 차단·공백을 유지한다. 무한 polling/FGS/종료 중 상시 감시는 구현하지 않는다.
 - LowSocStore는 새 sidecar다. 실제 원관측 commit 후 안정 UUID/행 참조로 평가하며 기존 문제/작성자/네 상태/이력/초안/관측/스냅샷은 보존한다. SOC 미만은 사용자 편의 기준이며 해제 여유2%p도 고장 규격이 아니다. 동일 scope의 사건은 세션/운전자/날짜/재시작/정책 버전 변경만으로 새로 만들지 않는다. 실패·오래됨은 해제나 수리 완료가 아니다. 켤 때 과거 낮은 값만 재생하지 않는다.

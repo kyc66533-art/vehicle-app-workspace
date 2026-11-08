@@ -34,6 +34,9 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("analyticsInventory")=="true"){val lines=AnalyticsChecks(this).inventory();result.putString("stream",lines.joinToString("\n"));finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("analyticsPreservation")=="true"){val lines=AnalyticsChecks(this).preservation();result.putString("stream","CARITDA_ANALYTICS_PRESERVATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("analyticsCold")=="true"){val lines=AnalyticsChecks(this).cold();result.putString("stream","CARITDA_ANALYTICS_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("socColdOnly")=="true"){val lines=SocPocChecks(this).cold();result.putString("stream","CARITDA_SOC_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("compatColdOnly")=="true"){val lines=CompatibilityChecks(this).cold();result.putString("stream","CARITDA_COMPAT_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("automaticPreservationOnly")=="true"){val lines=AutomaticChecks(this).preservation();result.putString("stream","CARITDA_AM_PRESERVATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
@@ -45,6 +48,8 @@ class MvpScenarioInstrumentation : Instrumentation() {
             if(preservationOnly){result.putString("stream",RecordMigrationChecks.verifyAfter(targetContext));finish(Activity.RESULT_OK,result);return}
             if(coldOnly){val lines=ReliabilityChecks(this).coldCheck();result.putString("stream","CARITDA_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             ValidationEnvironment.prepare(targetContext)
+            if(argumentsBundle?.getString("analyticsOnly")=="true"){val lines=AnalyticsChecks(this).run();result.putString("stream","CARITDA_ANALYTICS_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("analyticsLive")=="true"){val lines=AnalyticsChecks(this).live();result.putString("stream","CARITDA_ANALYTICS_LIVE_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("socPocOnly")=="true"){val lines=SocPocChecks(this).rules();result.putString("stream","CARITDA_SOC_RULE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("socLiveOnly")=="true"){val lines=SocPocChecks(this).live();result.putString("stream","CARITDA_SOC_LIVE_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("compatOnly")=="true"){val lines=CompatibilityChecks(this).run();result.putString("stream","CARITDA_COMPAT_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

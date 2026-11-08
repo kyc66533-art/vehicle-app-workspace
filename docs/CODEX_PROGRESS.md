@@ -1,5 +1,37 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 23:40 +09:00 (Asia/Seoul).
+
+## 최신 작업 — SOC 현재/이전 구분·실제 SDK 시계열·자동 인사이트
+
+- **Stage1·2 완료/Stage3 부분 구현:** SOC 현재값과 이전 사건 분리, 공통 버튼 경계/28dp 아이콘, SOC·누적거리 그래프/품질/통계/자동 인사이트/로컬 행동 설명을 구현했습니다. 사용자가 ‘AI 설정 없음 — 로컬 분석부터’를 선택해 실제 모델/유료 호출·서버 배포·실사용 외부 전송은 하지 않았습니다. 로컬 설명/JSON 검증을 실제 AI 응답이라고 표시하지 않습니다. [실험·분류·한계·사용법·미검증](CARITDA_ANALYTICS_AI_INTEGRATED_REPORT.md).
+- main69d64efbd3ab756d883620fe9a7b15b20ce81ffa와 로컬93개 공유 파일 SHA가 일치했습니다. Aside3개 필수 연구는 로컬에 없어 기존 연결 도구로 읽은 고정 원격본/SHA를 대조해 재검토했고8개 연구를 보존합니다. Git/.git/clone/push·Codex 재실행·SDK/AVD 재설치/초기화·전역 보안 변경은 하지 않았습니다.
+- 실제 원인: 일반 앱은 현재23건/안내0개, validation은3사건/6변경이었습니다. validation의18→45/6→29/17→39는 서로 다른 ID·SDK CALLBACK 원관측 근거입니다. 39/29/45는 과거 해제값이지 현재100이 아니며 앱 저장소도 다릅니다. 이 사례의 entered/last 순서는 우연히 같았고 정렬만을 원인으로 단정하지 않았습니다. 읽기 정렬을last_at으로 바꾸고 현재값/현재 조건/접힌 한 사건 한 카드·진입/해제·근거를 분리했습니다. 원본/스키마/규칙/수동 상태는 유지합니다.
+- VehicleAnalytics/VehicleChart/AnalysisStore는 실제 원관측 참조로 동작합니다. worker의 기간·최대2000행과 환경 범위, 오류/단위/범위/미래·역순/오래됨/반복/세션·공백을 구분합니다. 실제epoch x축·단절 선·텍스트 대안·20행 근거 페이지를 제공하고 통계 평균의 모집단을 표시합니다. 새 GET/Callback 뒤 요청을 합쳐 분석하며 redraw/스크롤로 SDK 조회하지 않습니다. 원본 평균을 시간 평균/운행 효율/고장으로 해석하지 않습니다.
+- 기존 LowSocStore의 changes를 그대로 이용해 기준 진입/해제를 설명합니다. 별도 임계값 감지기를 만들지 않습니다. 비교 가능 변화/3점 이상 같은 방향/20%p 탐색 후보/공백/수신 오류를 안정 키로 저장하고 반복값을 새 변화로 세지 않습니다. 새 파생caritda-analytics.db v1만 추가했으며 기존4DB 버전/열과 원관측은 그대로입니다. 다른 DB의 원자 트랜잭션을 가정하지 않습니다.
+- AI 최소 분석 미리보기·고정 payload 동의/취소·정확한 facts/hash/허용action·창작 숫자/기존 숫자 뒤바꿈/수리·안전 확정·Mock 거부를 구현했습니다. 숫자는 검증된 facts에서 로컬 표시하고 모델 자유문장의 숫자는 거부합니다. 일반 앱은 미연결/전송 없음 안내이며 실제 응답 저장·전송중 취소·모델 의미 안전성은 미검증입니다. 기존 상담에 실제 증상 인용 질문/명시적 복사 버튼을 추가했지만 실제 클립보드 수동 검수는 미실시입니다.
+
+### 최종 빌드·실행·검사
+
+- 최종3APK offline BUILD SUCCESSFUL in2m3s,93작업13실행/80up-to-date. Gradle8.11.1/JBR/SDK34/Build-Tools35.0.0/Vehicle2.3.2 유지. Debug SHA2569738F47EB27A400EEDDB3B639BBB206F3C856B070F5678E85F388A3914BC3E40이며 일반 install-r/COLD Status:ok와 설치base.apk 일치를 확인했습니다. 일반 앱의 실제100%/분석 차트/TEST배너없음을 XML·화면에서 확인했습니다. Release가 아닙니다.
+- 기존320개를 새 앱에서 다시 통과했습니다. 신규49=분석/AI/UX30(AN13/AI9/UI8)+실제SDK그래프9+cold2+4DB보존8, **최종369 assertion 통과**. 4DB8 중6개는 기존3DB 보호와 겹치며369는 고유 기능 수가 아닙니다. 실제SDK/합성/로컬계약/렌더를 구분합니다. 최종 로그analytics-final-*.txt, 시스템 중단 뒤 재개는retry-*.txt이며 동일mode 중복 합산하지 않았습니다.
+- 신규54 native render(3화면×3폭×3글꼴×2테마), 기존PX198/ON200/NAV낮은높이6조합을 실행했습니다. 일반 텍스트4.5/버튼경계3 대비·76dp/가로 넘침·말줄임을 확인했습니다. Canvas 모든 픽셀/실제 OS 분할·IME/고령자/TalkBack/rotary/실차는 별도 미검증입니다.
+- 최종 실제Console80→60(callback, -20%p/low0)→18(callback, -42%p/low인사이트)→18반복PUT/GET(같은사건)→45(callback/동일사건해제/차트반영), 원관측·인사이트cold복원을 확인했습니다. 출처PLEOS_EMULATOR_SDK, 앱수신시각/%이며 ECU시각·실차고장이 아닙니다. GET세션이 바뀐 구간을 억지로 +27%p/실제운행변화로 잇지 않습니다.
+- 최종 validation의 실제Drive/20km/h에서 버튼6개 disabled/제한 안내, P/0 복원 후6개 enabled를 확인했습니다. 최종SOC100/P/0으로 복원했습니다. 새 차트/메뉴는 추가SDK 조회를 만들지 않으며 종료/비가시/제한 중 상시 감시는 없습니다.
+- 중간palette 인수 누락 빌드2회는 수정했습니다. 최종 재검사 중Android가 System has crashed/Activity서비스 일시부재를 반환해 중단된mode는 성공으로 세지 않고 자연복구 확인 후 재실행했습니다. 같은시각 Bluetooth SIGABRT가 있었지만 전체 중단 원인은 미확정입니다. AVD재부팅/wipe/BT강제종료·설정변경은 하지 않았습니다. 중단로그·크래시로그는 보존했고 장시간 환경 안정성은 남아 있습니다.
+
+### 원본·현재 데이터·게시
+
+- .tools/analytics-backup/20261108-224310에 일반4DB/전체before.tar, 최종5DB/after-final-install.tar와 validation전후 전체tar/실제SDK시험DB/개인캡처/진단로그를 새로 보존했습니다. 일반 문제DB는 전후A906AA7FDEFF00A9AC444A8DB306EF06791D0DD1A0B461073932277DBAC1C92C로 바이트 동일/현재23건, 자동안내DB도 바이트동일/안내0/기본꺼짐입니다. 전후 모든 원문/이벤트/운전자/초안·관측/스냅샷/연결 scalar·ID·version포함과 integrity/FK를 독립 사본에서 확인했습니다. 새실험/Mock를 일반 앱에 넣지 않았습니다.
+- 일반 원본의 과거15%도 공식GET detail/SDKsource/세션 근거를 읽기 전용 사본에서 재확인해 보존했습니다. validation의 원래3사건/원관측/설정/파일은 최초tar에서 복원하고 직후 안내/관측 해시 일치를 확인했습니다. 신규 실제시험은 별도tar/DB로 남깁니다. 과거출처불명·기존테스트·개인백업을 임의삭제하지 않았습니다.
+- 변경17파일: 앱8(MainActivity/CaritdaDesign/ObservationStore/LowSocStore, 신규VehicleAnalytics/AnalysisStore/VehicleChart/AnalysisExplanation), 검사3(MvpScenarioInstrumentation/ValidationEnvironment/신규AnalyticsChecks), 문서6(AGENTS/디자인시스템/진행기록/신규통합보고서/루트·앱README). Repository/Service/IssueModels/RecordMigration/SnapshotStore/PleosReadClient/PleosSocObserver/CarSafetyGate/SDK·권한 설정은 기준SHA를 유지합니다.
+- 남음: 실제AI중계/인증/모델·비용 승인·전송/응답 저장·실모델품질, 추가P1센서/Gleo/종료중감시/푸시/실차·사람 검수, Lint/Release서명·제출APK/영상/기획서. 저장소private를API로확인했으며 공개/심사자초대/외부제출은하지않았습니다. 기존사용자직접검수와 이번자동검사를 구분합니다.
+- 검증17파일만 최신main부모·대상SHA·기대HEAD를 확인해 **GitHub 연결 도구를 통한 게시**하고 원격파일·부모·나머지SHA/Aside를 검증합니다. DB/원관측/개인화면/백업/키/로그/APK는게시하지않습니다. 최종커밋은완료응답으로보고하며 자기SHA삽입 반복커밋은하지않습니다.
+
+아래는 과거 작업 기록으로 보존합니다.
+
+---
+
 마지막 업데이트: 2026-11-08 21:48 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 실제 Virtual Console SOC callback·자동 기록 PoC (AI는 미연결)

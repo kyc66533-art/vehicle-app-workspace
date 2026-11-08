@@ -1,3 +1,13 @@
+# CARITDA(가칭) — 차량 시계열·자동 인사이트
+
+2026-11-08: Kotlin Android View/Vehicle2.3.2를 유지하며 실제 관측 기반 SOC·누적거리 그래프, 기간별 통계·품질·자동 인사이트를 추가했습니다. 현재 SOC와 과거 해제 기록을 분리하고 공통 버튼 경계·아이콘을 개선했습니다. 최종 기존320+신규49=369 assertion과 실제 Console80→60→18→45 callback/차트·사건해제/cold복원을 확인했습니다.
+
+**AI는 미연결**입니다. 현재는 최소 전송 내용 미리보기/로컬 동의·취소/구조 facts 검증까지만 구현했습니다. 모델·중계·비용 설정이 없어 실제 호출/외부 전송은 하지 않았고 로컬 문구를 AI 응답이라고 표시하지 않습니다. [상세 검증·한계·사용법·승인 조건](../docs/CARITDA_ANALYTICS_AI_INTEGRATED_REPORT.md)을 확인하세요.
+
+빌드: 기존 Android Studio 프로젝트를 열고 `app`/기존 Pleos AVD로 실행합니다. 일반 Debug는 `app/build/outputs/apk/debug/app-debug.apk`, 시험용은 validation 빌드입니다. 계측은 `assembleValidationAndroidTest`/`com.nextdrive.pleos.validation`만 사용합니다. Release 서명·제출 APK는 아직 별도 준비 대상입니다. 기존 DB/AVD/백업을 삭제하거나 초기화하지 마세요. 아래 과거 기록은 보존합니다.
+
+---
+
 # CARITDA(가칭) — 실제 SOC 자동 안내 PoC
 
 2026-11-08: Pleos Virtual Console80→18→45%를 실제 SDK GET/변화 callback으로 수신해 원본·사용자 낮은 충전량 사건·중복 방지·조건 해제·재실행 복원을 검증했습니다. 가시/입력 허용 상태에서 명시적으로 켠 경우만 구독하며 종료 중 상시 감시·실차 고장/수리 판정은 아닙니다.

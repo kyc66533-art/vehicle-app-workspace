@@ -20,12 +20,14 @@ import com.nextdrive.pleos.model.*
 import com.nextdrive.pleos.safety.*
 import com.nextdrive.pleos.vehicle.*
 import com.nextdrive.pleos.ui.*
+import com.nextdrive.pleos.analytics.*
+import com.nextdrive.pleos.ai.*
 import java.time.ZoneId
 import java.util.Calendar
 
 /** Manual journal and explicit one-shot vehicle reads. No diagnosis or remote transmission. */
 class MainActivity : Activity() {
-    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS, SOC_NOTICES }
+    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS, SOC_NOTICES, ANALYTICS, AI_PREVIEW }
     private lateinit var guide: GuideState
     private var guideReplay=false
     private data class RetainedSession(val driverId:String?,val entry:EntryReadState)
@@ -38,6 +40,19 @@ class MainActivity : Activity() {
     private var socThresholdInput:EditText?=null
     private var socThresholdDraft:String?=null
     private var socTechnical=false
+    private var socHistory=false
+    private var socHistoryLimit=20
+    private var analysisKind="EV_SOC"
+    private var analysisDays=1
+    private var analysisDetail=false
+    private var analysisPage=0
+    private var analysisBusy=false
+    private var analysisDirty=false
+    private var analysisError=""
+    private val analysisWorker=java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var analysisResults=emptyMap<String,VehicleAnalysis>()
+    private var aiConsent:AnalysisConsent?=null
+    private var aiPreview=""
     private var palette=CaritdaPalette.of(false)
     private val ui get()=CaritdaComponents(this,palette)
     private var selectedSnapshot:String?=null
@@ -54,7 +69,7 @@ class MainActivity : Activity() {
     private var freshnessKey=""
     private val freshnessTick=object:Runnable{
         override fun run(){
-            if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY,Screen.DETAIL,Screen.SUMMARY,Screen.SOC_NOTICES) && !isFinishing && !isDestroyed){
+            if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY,Screen.DETAIL,Screen.SUMMARY,Screen.SOC_NOTICES,Screen.ANALYTICS) && !isFinishing && !isDestroyed){
                 val key=freshnessMarker()
                 if(key!=freshnessKey){freshnessKey=key;positions[screen]=scrollView?.scrollY?:0;draw()}
             }
@@ -115,7 +130,8 @@ class MainActivity : Activity() {
         lowSoc=LowSocStore(this)
         socObserver=PleosSocObserver(this,observations,{visible&&canEdit()&&lowSoc.policy().enabled},{
             runCatching{lowSoc.reconcile(observations)}.onFailure{notice="차량 정보는 저장됐지만 안내 갱신에 실패했어요. 자동 안내에서 다시 시도해 주세요."}
-        },{if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SOC_NOTICES))draw()})
+            requestAnalytics()
+        },{if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SOC_NOTICES)){positions[screen]=scrollView?.scrollY?:0;draw()}})
         entry=(lastNonConfigurationInstance as? RetainedSession)?.entry ?: EntryReadState()
         pleos = PleosReadClient(this, observations) {
             if(!pleos.busy){reconcileSnapshots();maybeSocWatch()}
@@ -141,6 +157,7 @@ class MainActivity : Activity() {
         lastDraft = journal
         pendingDriver = journal?.ownerId ?: repository.currentDriver()?.id
         savedInstanceState?.let {
+            analysisKind=it.getString("analysisKind","EV_SOC");analysisDays=it.getInt("analysisDays",1);socHistory=it.getBoolean("socHistory");analysisDetail=it.getBoolean("analysisDetail");analysisPage=it.getInt("analysisPage")
             socThresholdDraft=it.getString("socThresholdDraft")
             pendingDriver=journal?.ownerId?:it.getString("pendingDriver",pendingDriver)
             editingDriver=it.getString("editingDriver")
@@ -182,9 +199,10 @@ class MainActivity : Activity() {
         freshnessHandler.removeCallbacks(freshnessTick);freshnessHandler.post(freshnessTick)
     }
     override fun onStop() { visible=false;if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop();stopSocWatch("앱이 보이지 않아 자동 확인을 멈췄어요. 관측 공백이 있어요."); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
-    override fun onDestroy() { repository.close(); observations.close();snapshots.close();lowSoc.close();super.onDestroy() }
+    override fun onDestroy() { aiConsent?.revoke();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
+        outState.putString("analysisKind",analysisKind);outState.putInt("analysisDays",analysisDays);outState.putBoolean("socHistory",socHistory);outState.putBoolean("analysisDetail",analysisDetail);outState.putInt("analysisPage",analysisPage)
         outState.putString("snapshot",selectedSnapshot);outState.putString("card",selectedCard)
         outState.putInt("historyPage",historyPage);outState.putBoolean("technicalExpanded",technicalExpanded);outState.putBoolean("recordExtras",recordExtras)
         outState.putString("screen", screen.name); outState.putString("issue", selectedIssue)
@@ -206,6 +224,32 @@ class MainActivity : Activity() {
     private fun reconcileSnapshots(){
         runCatching{snapshots.reconcile(observations)}.onSuccess{snapshotError=""}.onFailure{snapshotError="차량 원본은 저장됐지만 자동 기록을 정리하지 못했어요. 다시 열면 재시도해요."}
         runCatching{lowSoc.reconcile(observations)}.onFailure{snapshotError="차량 원본은 남아 있지만 자동 안내 갱신을 다시 시도해야 해요."}
+        requestAnalytics()
+    }
+    /** One coalesced worker for bounded SQL/analysis. UI redraw never reads the full observation DB. */
+    private fun requestAnalytics(){
+        if(isDestroyed||analysisWorker.isShutdown)return
+        if(analysisBusy){analysisDirty=true;return}
+        analysisBusy=true;analysisDirty=false
+        val days=analysisDays
+        analysisWorker.execute{
+            val result=runCatching{
+                val now=System.currentTimeMillis();val since=if(days==0)0L else now-days*86400000L
+                ObservationStore(applicationContext).use{raw->LowSocStore(applicationContext).use{soc->AnalysisStore(applicationContext).use{derived->
+                    val changes=soc.changes();val gaps=soc.gaps()
+                    listOf("EV_SOC","ODOMETER").associateWith{kind->
+                        val refs=raw.analysisRefs(kind,since);VehicleAnalytics.analyze(kind,refs.takeLast(2000),since,now,changes,gaps,refs.size>2000).also{derived.remember(it)}
+                    }
+                }}}
+            }
+            runOnUiThread{
+                if(!isDestroyed){analysisBusy=false
+                    if(days==analysisDays)result.onSuccess{analysisResults=it;analysisError=""}.onFailure{analysisError="분석을 갱신하지 못했어요. 원본은 보존돼요. 다시 열어 주세요."}
+                    if(visible&&screen==Screen.ANALYTICS){positions[screen]=scrollView?.scrollY?:0;draw()}
+                    if(analysisDirty||days!=analysisDays)requestAnalytics()
+                }
+            }
+        }
     }
     private fun maybeSocWatch(){if(::socObserver.isInitialized&&visible&&canEdit()&&screen!=Screen.WELCOME&&!pleos.busy&&lowSoc.policy().enabled)socObserver.start()}
     private fun stopSocWatch(reason:String){if(::socObserver.isInitialized){if(socObserver.running)runCatching{lowSoc.gap(reason)};socObserver.stop(reason)}}
@@ -217,6 +261,7 @@ class MainActivity : Activity() {
     }
     @Deprecated("Framework back navigation")
     override fun onBackPressed() {
+        if(screen==Screen.AI_PREVIEW){aiConsent?.revoke();aiConsent=null;aiPreview=""}
         if(!canEdit()){toast("화면 입력이 가능한 뒤에 이동해 주세요.");return}
         if(!captureDraft())return
         rememberLocation()
@@ -273,6 +318,8 @@ class MainActivity : Activity() {
         Screen.ACTION->if(journal?.kind=="NOTE")"점검·조치 메모"else"다시 발생한 증상";Screen.WELCOME->""
         Screen.MENU->"메뉴";Screen.VEHICLE_SETTINGS->"차량 정보 표시 설정"
         Screen.SOC_NOTICES->"충전량 자동 안내"
+        Screen.ANALYTICS->"차량 데이터 분석"
+        Screen.AI_PREVIEW->"AI 전송 내용 확인"
     }
     private fun chooseDriver(){
         if(service.draft()!=null&&service.confirmed()){
@@ -335,6 +382,8 @@ class MainActivity : Activity() {
                 Screen.MENU->moreMenu(body)
                 Screen.VEHICLE_SETTINGS->vehicleSettings(body)
                 Screen.SOC_NOTICES->socNotices(body)
+                Screen.ANALYTICS->analyticsScreen(body)
+                Screen.AI_PREVIEW->aiPreviewScreen(body)
                 Screen.HOME->home(body)
                 Screen.ISSUES->issues(body)
                 Screen.DRIVERS->driverScreen(body)
@@ -583,6 +632,7 @@ class MainActivity : Activity() {
         val history=ui.action("조회 기록 보기","auto_snapshots",ActionStyle.SECONDARY,canEdit(),HmiIcon.CLOCK){edit{openScreen(Screen.SNAPSHOTS)}}
         body.addView(ui.grid(listOf(refresh,history),columns()))
         body.addView(ui.action("충전량 자동 안내 · 설정과 기록","soc_notices",ActionStyle.QUIET,canEdit(),HmiIcon.BATTERY){edit{openScreen(Screen.SOC_NOTICES)}})
+        body.addView(ui.action("차량 데이터 분석","vehicle_analytics",ActionStyle.SECONDARY,canEdit(),HmiIcon.DISTANCE){edit{requestAnalytics();openScreen(Screen.ANALYTICS)}})
         body.addView(label("차량 전체의 고장 여부를 판단한 결과는 아니에요.",20))
         body.addView(ui.expandable("제공되지 않는 항목","unavailable",showUnavailable,canEdit()){edit{showUnavailable=!showUnavailable;draw()}})
         if(showUnavailable){
@@ -595,8 +645,27 @@ class MainActivity : Activity() {
     private fun openSnapshot(s:Snapshot){openScreen(Screen.SNAPSHOT_DETAIL){selectedSnapshot=s.id;technicalExpanded=false}}
     private fun socNotices(body:LinearLayout){
         val p=lowSoc.policy()
+        val current=panel().apply{tag="soc_current"}
+        current.addView(label("최근 충전량",26,true))
+        val view=VehiclePresentation.card("EV_SOC",observations.mostRecent("EV_SOC"),observations.mostRecent("EV_SOC",true),System.currentTimeMillis(),vehicleDisplay::time)
+        current.addView(label(view.value,36,true).apply{tag="soc_current_value"})
+        current.addView(label(view.time,22));if(view.attempt.isNotBlank())current.addView(label(view.attempt,22))
+        current.addView(label(view.source,20));body.addView(current)
         body.addView(label("${if(p.enabled)"사용자 안내 켜짐"else"사용자 안내 꺼짐"} · ${p.threshold}% 미만",26,true).apply{tag="soc_policy"})
         body.addView(label(socObserver.message,22).apply{tag="soc_watch_status"})
+        val notices=lowSoc.notices()
+        val latest=observations.mostRecent("EV_SOC")
+        val trusted=latest?.let{SnapshotStore.accepted(it)&&it.receivedAt!=null&&System.currentTimeMillis()-it.receivedAt in 0..599999}==true
+        val core=when{
+            !p.enabled->"자동 안내가 꺼져 있어요."
+            !trusted->"새로 받은 유효한 값이 없어 현재 조건을 판단하지 않아요."
+            notices.firstOrNull()?.phase=="LOW"&&latest!!.raw!!.toDouble()<p.threshold->"배터리 충전량이 설정한 기준보다 낮아요."
+            notices.firstOrNull()?.phase=="LOW"->"낮은 충전량 안내가 유지 중이에요. 해제 기준은 ${p.threshold+2}% 이상이에요."
+            notices.firstOrNull()?.phase=="EXITED"->"배터리 충전량이 올라가 설정한 낮은 충전량 안내가 해제됐어요. 아래는 이전 사건의 기록이에요."
+            else->"현재 설정한 낮은 충전량 안내는 없어요."
+        }
+        body.addView(ui.state("현재 안내",if(!p.enabled)"자동 안내가 꺼져 있어요. 이전 사건은 아래에서 볼 수 있어요."else core).apply{tag="soc_core"})
+        body.addView(label("사용자 편의 안내예요. 고장 원인·수리 완료·운행 안전을 판단한 결과는 아니에요.",20))
         body.addView(label("앱이 보이고 입력이 허용된 동안만 SOC 변화를 확인해요. 종료·제한·연결 끊김 동안에는 관측 공백이 있어요.",20))
         body.addView(label("사용자 편의 기준이에요. 제조사 고장 기준이 아니며, 안내 해제는 기준보다2%p 높은 값부터 기록해요.",20))
         socThresholdInput=input("안내 기준(1~95%)",2).apply{tag="soc_threshold";inputType=InputType.TYPE_CLASS_NUMBER;setText(socThresholdDraft?:p.threshold.toString());minLines=1}
@@ -609,19 +678,62 @@ class MainActivity : Activity() {
         body.addView(button("자동 기록 다시 정리","reconcile_soc",enabled=canEdit()){lowSoc.reconcile(observations);notice="저장된 관측으로 안내를 다시 확인했어요.";draw()})
         body.addView(label("AI 설명: 아직 연결되지 않았어요. 실제 AI 모델 응답은 표시하지 않아요.",22).apply{tag="ai_connection_status"})
         body.addView(ui.expandable("수신 근거 자세히","soc_evidence",socTechnical,canEdit()){edit{socTechnical=!socTechnical;draw()}})
-        val notices=lowSoc.notices()
+        body.addView(ui.expandable("이전 안내 기록 · ${notices.size}건","soc_history",socHistory,canEdit()){edit{socHistory=!socHistory;draw()}})
         if(notices.isEmpty())body.addView(ui.state("아직 낮은 충전량 안내가 없어요.","실제로 새 값을 받은 뒤에만 사용자 기준과 비교해요."))
-        notices.take(20).forEach{n->
+        if(socHistory)notices.take(socHistoryLimit).forEach{n->
             val card=panel().apply{tag="soc_notice_${n.id}"}
-            card.addView(label(if(n.phase=="LOW")"낮은 충전량 안내"else"낮은 충전량 조건 해제",26,true))
-            card.addView(label("${n.value}${n.unit} · 사용자 기준 ${n.threshold}% 미만\n${vehicleDisplay.time(n.last)}",22))
-            card.addView(label("${if(n.source==ObservationSource.PLEOS_EMULATOR_SDK.name)"Pleos 에뮬레이터"else"차량 SDK"} · ${if(n.version!=p.version)"이전 설정의 기록"else if(!p.enabled||!socObserver.running)"현재 관측 중이 아님"else"화면 표시 중 자동 확인"}",20))
+            card.addView(label(if(n.phase=="LOW")"안내 유지 기록"else"조건 해제 기록",26,true))
+            card.addView(label("사건 마지막 수신 ${n.value}${n.unit}\n${vehicleDisplay.time(n.last)}",22))
+            lowSoc.changes().filter{it.episode==n.id}.forEach{e->card.addView(label("${if(e.kind=="USER_LOW_SOC")"안내 진입"else"조건 해제"} · ${e.raw}% · 당시 기준 ${e.threshold}% 미만\n${vehicleDisplay.time(e.at)}",22))}
+            card.addView(label("이전 사건이며 위의 최근 충전량과 구분해 주세요.",20))
             if(socTechnical)card.addView(label("규칙 ${SocRule.VERSION}:${n.version} · 실제 수신 근거 ${n.store}:${n.row}",20))
             if(System.currentTimeMillis()-n.last>=600000||n.last>System.currentTimeMillis()+60000)card.addView(label("오래된 이전 관측이에요. 현재 충전량은 다시 확인해 주세요.",22))
-            card.addView(label("고장 원인이나 차량 수리 완료를 의미하지 않아요.",20))
             body.addView(card)
         }
+        if(socHistory&&notices.size>socHistoryLimit)body.addView(button("이전 안내 더 보기","soc_history_more",enabled=canEdit()){socHistoryLimit+=20;draw()})
     }
+    private fun analyticsScreen(body:LinearLayout){
+        body.addView(label("새로 받은 값을 자동으로 분석해요. 이 화면을 열어도 차량을 다시 조회하지 않아요.",20))
+        body.addView(ui.grid(listOf("EV_SOC" to "충전량","ODOMETER" to "누적거리").map{(kind,name)->ui.action(name,"analysis_$kind",if(kind==analysisKind)ActionStyle.PRIMARY else ActionStyle.SECONDARY,canEdit(),if(kind=="EV_SOC")HmiIcon.BATTERY else HmiIcon.DISTANCE){edit{analysisKind=kind;analysisPage=0;draw()}}},columns()))
+        body.addView(ui.grid(listOf(1 to "최근 하루",7 to "최근 일주일",0 to "최근 최대 2000건").map{(days,name)->ui.action(name,"analysis_days_$days",if(days==analysisDays)ActionStyle.PRIMARY else ActionStyle.QUIET,canEdit(),HmiIcon.CLOCK){edit{analysisDays=days;analysisPage=0;analysisResults=emptyMap();requestAnalytics();draw()}}},columns()))
+        if(analysisBusy)body.addView(ui.loading("저장된 수신값을 분석하고 있어요."))
+        if(analysisError.isNotBlank())body.addView(ui.state("분석을 갱신하지 못했어요.",analysisError,true))
+        val a=analysisResults[analysisKind]?:run{body.addView(ui.state("분석을 준비하고 있어요.","수신 기록이 없으면 그래프를 만들지 않아요."));return}
+        body.addView(label("분석 범위 · ${if(a.since==0L)"저장된 최근 최대 2000행"else vehicleDisplay.time(a.since)}\n${vehicleDisplay.time(a.until)}까지",20).apply{tag="analysis_period"})
+        if(a.points.isEmpty()){body.addView(ui.state("유효한 차량값이 없어요.","미지원·오류를 0으로 바꾸지 않아요. 차량 정보에서 연결 상태를 확인해 주세요."))}else{
+            val latest=a.latest!!
+            if(a.lastAttempt?.value?.let{!SnapshotStore.accepted(it)}==true)body.addView(ui.state("최근 수신을 확인해 주세요.","아래 값은 이전 성공값이에요. 최신 조회 실패·미지원·유효성 오류를 정상 상태로 판단하지 않아요.",true).apply{tag="analysis_latest_failure"})
+            body.addView(ui.metric(if(a.kind=="EV_SOC")"최근 수신 충전량"else"최근 수신 누적거리","${VehicleAnalysis.fmt(latest.number)} ${a.unit}",vehicleDisplay.time(latest.at),"${if(System.currentTimeMillis()-latest.at>=600000)"이전 값 · 오래된 수신이에요."else"앱이 받은 값이에요."}\n${if(latest.ref.value.source==ObservationSource.PLEOS_EMULATOR_SDK)"Pleos 에뮬레이터"else"차량 SDK"}","analysis_latest",if(a.kind=="EV_SOC")HmiIcon.BATTERY else HmiIcon.DISTANCE))
+            val p=lowSoc.policy()
+            body.addView(VehicleChart(this,a,palette,p.threshold.takeIf{p.enabled},vehicleDisplay::time))
+            body.addView(label(a.textSummary,22).apply{tag="analysis_statistics"})
+            body.addView(label(a.delta?.let{"직전 수신 대비 ${VehicleAnalysis.fmt(it)}${if(a.kind=="EV_SOC")"%p"else"km"}"}?:"직전값과 안전하게 비교할 수 없어요. 세션·공백·표본을 확인해 주세요.",24,true).apply{tag="analysis_delta"})
+            if(p.enabled&&a.kind=="EV_SOC")body.addView(label("점선: 사용자 기준 ${p.threshold}% 미만 · 원: 저장된 진입/해제 지점\n기준이 바뀐 이전 사건은 당시 기준을 상세에서 확인해 주세요.",20))
+        }
+        body.addView(label("자동으로 찾은 내용",26,true))
+        if(a.insights.isEmpty())body.addView(ui.state("추가 해석을 보류해요.","같은 값의 반복·표본 부족만으로 고장이나 효율을 판단하지 않아요. 최근 차량 표시를 확인해 주세요."))
+        a.insights.take(8).forEach{i->val card=panel().apply{tag="insight_${i.kind}"};card.addView(label(i.title,24,true));card.addView(label(i.meaning,22));card.addView(label(i.action,22,true));card.addView(label(vehicleDisplay.time(i.last),20));body.addView(card)}
+        body.addView(label("분석 설명은 규칙으로 작성했어요. AI 모델 응답이 아니에요. 관측값 평균은 시간 평균·배터리 효율이 아니며, 변화 시각은 실제 변화 발생 시각이 아닌 앱 수신 시각이에요.",20))
+        body.addView(ui.action("AI 전송 내용 확인 · 아직 미연결","analysis_ai",ActionStyle.SECONDARY,canEdit()&&a.points.isNotEmpty(),HmiIcon.RECORD){edit{aiPreview=AnalysisExplanation.payload(a);aiConsent=AnalysisConsent(aiPreview);openScreen(Screen.AI_PREVIEW)}})
+        body.addView(ui.expandable("상세 데이터 품질과 분석 근거","analysis_detail",analysisDetail,canEdit()){edit{analysisDetail=!analysisDetail;draw()}})
+        if(analysisDetail){
+            body.addView(label("단순 평균의 모집단: 선택 기간·동일 출처의 유효 수신 ${a.points.size}건(반복 수신 포함). 선은 같은 세션에서만 이어요. 10분 이상 공백은 분석상 구분 기준이며 차량 규격이 아니에요. 세션은 운행·차량 식별자가 아니에요.",22))
+            a.quality.forEach{(k,n)->body.addView(label("$k · ${n}건",22))}
+            a.insights.take(8).forEach{i->body.addView(label("${i.kind} · ${i.rule}\n${vehicleDisplay.time(i.first)} → ${vehicleDisplay.time(i.last)}\n근거 ${i.evidence.joinToString{it.storeId+":"+it.rowId}}",20))}
+            body.addView(label("그래프의 수신값 목록 · 최근 순서",24,true))
+            a.points.asReversed().drop(analysisPage*20).take(20).forEach{p->body.addView(label("${vehicleDisplay.time(p.at)} · ${VehicleAnalysis.fmt(p.number)}${a.unit}\n원본 ${p.ref.storeId}:${p.ref.rowId} · ${if(p.ref.value.detail.contains("CALLBACK"))"CALLBACK"else"GET/기존 읽기"} · 세션 ${p.ref.value.session}",20))}
+            if(a.points.size>(analysisPage+1)*20)body.addView(button("다음 수신값 20개","analysis_more",enabled=canEdit()){analysisPage++;draw()})
+            if(analysisPage>0)body.addView(button("가장 최근 수신값","analysis_reset_page",enabled=canEdit()){analysisPage=0;draw()})
+        }
+    }
+    private fun aiPreviewScreen(body:LinearLayout){
+        body.addView(ui.state("실제 AI는 아직 연결되지 않았어요.","승인된 중계 서버·앱 인증·모델·시험 비용 설정이 없어요. 이 화면에서 동의해도 외부로 전송하지 않아요."))
+        body.addView(label("전송 후보: 선택한 신호의 수치·시각·변화량·통계·품질·분석 한계예요. 이름·차량 식별자·위치·전체 DB·증상 원문은 포함하지 않아요.",22))
+        body.addView(label(JSONObjectPretty(aiPreview),20).apply{tag="ai_payload_preview"})
+        body.addView(button("이 내용만 전송에 동의","ai_consent",enabled=canEdit()){aiConsent?.accept();notice="동의 범위만 확인했어요. AI 미연결로 전송하지 않았어요.";draw()})
+        body.addView(button("동의 취소 · 이전으로","ai_cancel",enabled=canEdit()){aiConsent?.revoke();aiConsent=null;aiPreview="";onBackPressed()})
+    }
+    private fun JSONObjectPretty(value:String)=runCatching{org.json.JSONObject(value).toString(2)}.getOrDefault(value)
     private fun historyRows(body:LinearLayout,card:String,limit:Int,offset:Int=0){
         val first=snapshots.first(card)?.id
         snapshots.timeline(card,limit,offset).forEach{s->
@@ -861,6 +973,11 @@ class MainActivity : Activity() {
             val card = panel()
             card.addView(label(ConsultationSummary.build(issue, service.events(issue.id),::statusText), 24).apply { tag = "consultation_summary" })
             snapshots.linked(issue.id)?.let{linkedVehicle(card,it)}
+            val question="‘${issue.situation.take(300)}’ 증상에 어떤 점검이 필요할까요?"
+            card.addView(label("정비사에게 물어볼 질문\n$question",22).apply{tag="consultation_question"})
+            card.addView(ui.action("질문 복사","copy_question_${issue.id}",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{
+                (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("정비 상담 질문",question));notice="질문을 복사했어요. 외부로 전송하지 않았어요.";draw()
+            }})
             body.addView(card)
         }
     }

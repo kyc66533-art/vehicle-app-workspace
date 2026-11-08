@@ -1,5 +1,11 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 최신 SOC 구독·Console PoC — 2026-11-08
+
+Vehicle2.3.2 AAR의 registerEvBatteryStateOfCharge/unregisterEvBatteryStateOfCharge와 EvBatteryStateOfChargeListener.onEvBatteryStateOfChargeUpdated(Integer)/onFailed를 확인했습니다. 기존 CAR_ENERGY로 Capability 확인 후 실제 Console80% GET,18%/45% 변화 callback·원본/사용자 low 사건·해제·재실행 복원을 validation에서 검증했습니다. 같은18%는 SDK GET으로도 반복 수신하고 사건1개를 유지했습니다. 등록 반환만의 성공이 아닙니다.
+
+관측 범위는 사용자 켜기+앱 가시+UXR ALLOWED이며 제한/종료 시 해제·공백입니다. 백그라운드 상시 감시/실차/고장 진단은 미검증·미구현입니다. 다른 Console 신호가 SDK에서 읽힌다고 일반화하지 않습니다. 인증된 AI 모델은 아직 호출하지 않았습니다. [공식 Console/SDK 근거·신호별 결과·실패와 승인 조건](docs/CARITDA_VIRTUAL_DRIVING_AI_POC.md)을 확인하세요. 아래 과거 런타임/실패 기록은 보존합니다.
+
 ## 최신 실제 런타임 — 2026-11-07 21:15 +09:00
 
 Pleos Connect v2.1.0/API34 emulator-5554에서 Vehicle SDK 2.3.2 실제 응답을 수신했습니다. 아래 과거 실패/미검증 기록은 당시 상태로 보존합니다.

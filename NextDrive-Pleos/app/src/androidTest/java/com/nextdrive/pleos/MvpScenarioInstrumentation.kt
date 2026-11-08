@@ -34,6 +34,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("socColdOnly")=="true"){val lines=SocPocChecks(this).cold();result.putString("stream","CARITDA_SOC_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("compatColdOnly")=="true"){val lines=CompatibilityChecks(this).cold();result.putString("stream","CARITDA_COMPAT_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("automaticPreservationOnly")=="true"){val lines=AutomaticChecks(this).preservation();result.putString("stream","CARITDA_AM_PRESERVATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("designPreservationOnly")=="true"){val lines=DesignChecks(this).preservation();result.putString("stream","CARITDA_DESIGN_PRESERVATION_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
@@ -44,6 +45,8 @@ class MvpScenarioInstrumentation : Instrumentation() {
             if(preservationOnly){result.putString("stream",RecordMigrationChecks.verifyAfter(targetContext));finish(Activity.RESULT_OK,result);return}
             if(coldOnly){val lines=ReliabilityChecks(this).coldCheck();result.putString("stream","CARITDA_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             ValidationEnvironment.prepare(targetContext)
+            if(argumentsBundle?.getString("socPocOnly")=="true"){val lines=SocPocChecks(this).rules();result.putString("stream","CARITDA_SOC_RULE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("socLiveOnly")=="true"){val lines=SocPocChecks(this).live();result.putString("stream","CARITDA_SOC_LIVE_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("compatOnly")=="true"){val lines=CompatibilityChecks(this).run();result.putString("stream","CARITDA_COMPAT_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("designOnly")=="true"){val lines=DesignChecks(this).run();result.putString("stream","CARITDA_DESIGN_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(automaticOnly){val lines=AutomaticChecks(this).run();result.putString("stream","CARITDA_AM_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

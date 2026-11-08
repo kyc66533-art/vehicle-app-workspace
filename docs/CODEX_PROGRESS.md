@@ -1,5 +1,44 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 21:48 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 실제 Virtual Console SOC callback·자동 기록 PoC (AI는 미연결)
+
+- **부분 성공:** Console→실제 SDK GET/18·45 변화 callback→사용자 기준→중복 없는 사건/해제/원본 저장·화면·cold 복원 성공. 실제 인증된 AI 모델은 승인된 중계/앱 인증·모델/비용 설정을 받지 못해 호출하지 않았습니다. HTTPS200/Mock는 AI 성공이 아닙니다. [상세 단계·근거·P1표·승인·시연](CARITDA_VIRTUAL_DRIVING_AI_POC.md).
+- 기준 main3c1a5f5a034a0515bda5a9d1202863bb8d7fd17b와 로컬88개 공유 파일 SHA를 확인해 차이가 없었습니다. 최신 연구3개·기존 자동화/디자인/호환 자료, 공식 Console/SDK/릴리즈/Gleo와 OpenAI Docs의 키 보안 지침을 확인했습니다. Aside8개/기존 이력을 보존합니다. Git/.git/clone/push·Codex 재실행·SDK/AVD 재설치는 하지 않았습니다.
+- 기존 forward가 없어8088을 한 번 등록했고 Console HTTP200을 확인했습니다. 복합 명령/자동 브라우저 실행은 자동 승인 검토가 거절했습니다. 허용된 개별 명령과 **공식 Console 페이지가 쓰는 동일 웹 요청**으로 진행했으며 GUI 자동화 성공이라고 하지 않습니다. 처음 emulator_inactive는 페이지의 browser 세션 비활성 원인이었고 같은 정상 세션 유지 요청 뒤 bridge_ready/active와SOC 변경200을 확인했습니다. 비공개 SDK/VHAL 강제 쓰기·sandbox/TLS/시스템 정책 해제는 없었습니다.
+- 새 PleosSocObserver는 공개SOC Listener/Capability/get/CAR_ENERGY만 사용합니다. 사용자 켜기·앱 가시·ALLOWED에서 시작하며 redraw/탭으로 재등록/무한 polling하지 않습니다. onStop/제한/실패 시 unregister/release·generation 차단과 관측 공백을 기록합니다. 기존 단발GET/스냅샷은 유지하며 callbackSOC만으로 가짜 ODO/연료 배치를 만들지 않습니다.
+- 새 LowSocStore는 별도 sidecar v1(policy/evaluations/episodes/changes/gaps)입니다. 원관측 commit 후 실제 insert의 storeUUID/rowID를 받는 appendRef를 추가하고 기존 append(Unit)는 유지했습니다. 사용자 미만 기준/2%p 해제 여유·규칙/설정버전·근거·상태 이력과 중복 키를 저장합니다. 같은 scope의 active 사건은 재시작/날짜/운전자/정책 버전 변경만으로 재무장하지 않습니다. 이전15%만으로 새 카드/실패·오래됨으로 해제를 만들지 않습니다. 실패 주입 rollback/원본 보존·replay를 검증했습니다.
+- 일반 차량 정보에 ‘충전량 자동 안내·설정과 기록’ 화면을 추가했습니다. 기준·수신값/출처/시간·켜기/끄기·공백·조건 해제와 접힌 근거를 보여줍니다. 고장 진단/사용자 문제 해결/수리 완료가 아니며 네 수동 상태/원 작성자·이력·초안·불변 링크는 그대로입니다. 일반 앱은 기본 꺼짐이며 AI 미연결 안내만 표시합니다.
+- AI 최소 입력/JSON 계약·HTTPS relay client를 구현했습니다. provider key는 APK에 없고 승인된 HTTPS endpoint와 임시 앱 토큰이 없으면 호출할 수 없습니다. 리다이렉트 금지/응답16KiB·시간 제한/요청ID/짧은 한국어·정보 목적/확정 문구 거부를 검사합니다. 이름/VIN/위치/전체DB/로컬 근거ID는 payload에서 제외하며 실사용 기록 전송·새 서버·유료 요청·계정/키 발급을 하지 않았습니다. 실제 모델 품질/수치 일치/동의·취소·AI 저장/화면 응답은 미검증/미완료입니다. 모델 글을 상태 writer/명령으로 쓰지 않습니다.
+
+### 최종 실제 검사와 앱 적용
+
+- 최종3APK offline assembleDebug/assembleValidation/assembleValidationAndroidTest BUILD SUCCESSFUL in1m31s,93작업13실행/80 up-to-date. 일반 Debug SHA2568F94DEDE4E98F3172C255F8A4806F6298FCE1F59A88D6ADF5E2BAA695EE4205F. 기존 JBR/Gradle8.11.1/API34/Build-Tools35.0.0/Vehicle2.3.2 유지, Release 아님.
+- 기존297=CP48/cold3+MVP24/관측6/UI27+migration18+RR36/cold2+NAV17/cold12+ON32+AM35/cold4/사본보존2+PX25/3DB보존6을 **동일 최종 후보**에서 재통과했습니다. 신규 규칙/JSON13+실제ConsoleSDK8+cold2=23, 총320 assertion. 신규/기존 최종 로그는 app/build/validation/poc-candidate-*.txt입니다. 기존PX198/ON200/NAV낮은 높이6 render도 재통과했으며 사람이 이해하는지/실차/신규SOC 전체 창·접근성 통과와 다릅니다.
+- 실제80 GET→18 CALLBACK→반복18 GET→45 CALLBACK, 사건1개/진입1개→해제 포함변경2개·같은ID를 확인했습니다. 원본 source=PLEOS_EMULATOR_SDK/unit%/앱receivedAt/UUID+행 참조를 보존했고 콜드 프로세스 뒤에도 유지됐습니다. 실제 수동 화면 확인에서18% 안내와45% 조건 해제를 확인했습니다. snapshot/사용자 문제의 해결 상태는 바꾸지 않았습니다.
+- validation 네트워크 HEAD 실제HTTP200/TLS_AES_128_GCM_SHA256/359ms. 모델 인증/유료API 호출/사용자 데이터 전송은 없었습니다. JSON Mock와 MODEL로 표시한 합성 위험 문구 거부는 격리 검사뿐이며 실제 모델 응답으로 집계하지 않았습니다.
+- 가상 Drive+20km/h에서 CarDrivingState0→1→2, UXR RequiresDO/0x50 및 입력 버튼 disabled를 확인했습니다. Activity는 이 환경에서 계속 보였으며 모든 Pleos에서 표시/백그라운드 동작을 보장하지 않습니다. 이 수동 실험은 Main/Safety/Observer가 최종과 동일한 전단계 APK에서 수행했습니다. 복원 P/0km/h/SOC100과DO→NoDO/0을 실제 확인했습니다. Console 세션 만료 때 복원이 한 번 거절돼 새 세션에서 정상 복원200을 재확인했고 가상 주행 상태로 남겨두지 않았습니다.
+- 초기Kotlin 지역 함수 줄 구문 오류는 수정했습니다. 중간 초기80 확인 실패/메뉴 복귀 정확 픽셀 한 번 실패를 보존했고 값 재설정·같은APK 재검사/최종후보 전체재검사 통과를 구분했습니다. 이 두 간헐 실패의 단일 원인은 확정하지 않았습니다. 계측 캡처가 프레임 전환 전18%를 찍은 경우는 최종 수동45% 화면 확인으로 별도 검증했고 원래 캡처를 삭제하지 않았습니다.
+
+### 현재 사용자 데이터와 보존
+
+- user10 일반 앱을 먼저멈추고 .tools/poc-backup/20261108-virtual-poc/before.tar(databases/shared_prefs/files 전체)와3DB로 새로 백업했습니다. 기존 개인 백업/AVD/과거 출처 불명 기록을 초기화/삭제하지 않았습니다. 실제SDK validation 사본/화면·Console응답/제한 로그·after-install.tar도 로컬에만 보존합니다.
+- 모든 계측·가상 주행 전후 일반3DB는 바이트 동일했습니다. 일반 앱 install-r/COLD Status:ok, 설치base.apk와위SHA 일치, 기본 안내꺼짐/안내0건/AI미연결·실제100%/0km와 **현재23건**을 확인했습니다. user 문제DB SHA256A906AA7FDEFF00A9AC444A8DB306EF06791D0DD1A0B461073932277DBAC1C92C는 교체/화면 확인 후에도 동일합니다. 현재 수를23으로 고정하는 코드는 없습니다.
+- 최신 전후 독립3DB 전체 scalar/운전자/원문/이벤트/초안·관측/스냅샷/불변 링크 포함·동일 version/integrity/FK를 확인했습니다. 일반관측/스냅샷은 기존 진입의 실제SDK100/0 결과만 추가됐고 validation의18/45 사건·Mock·합성fixture를 복사하지 않았습니다. 일반 앱의 시험 증상/프로필/메모 추가도 없었습니다.
+- Repository/Service/IssueModels/RecordMigration/SnapshotStore/PleosReadClient/EntryReadState/CarSafetyGate는 기준과 SHA 동일합니다. 기존3DB version/열은 그대로이며 새 sidecar는 일반 앱 첫 생성v1입니다. validation 개발 중 임시sidecar만 보호 runner의격리fixture 준비에서 초기화했습니다. 추가manifest 권한은INTERNET뿐이고 새로운 차량/제어·특권 권한은 없습니다.
+
+### 변경 파일·미완료·다음 작업·게시
+
+- 앱6: MainActivity.kt, ObservationStore.kt, AndroidManifest.xml, 신규 PleosSocObserver.kt·LowSocStore.kt·ai/AiExplanation.kt. 검사3: MvpScenarioInstrumentation.kt, ValidationEnvironment.kt, 신규 SocPocChecks.kt. 문서8: AGENTS.md, SDK_CAPABILITY_MATRIX.md, docs/AUTOMATION_FOUNDATION.md·CARITDA_DESIGN_SYSTEM.md·CODEX_PROGRESS.md·신규CARITDA_VIRTUAL_DRIVING_AI_POC.md, 루트/앱 README.md. 총17파일입니다.
+- 미완료/미검증: 실제 인증된 AI/외부 모델·AI동의/취소/응답저장·전체 이력 UI, 새SOC화면 전체 접근성/장시간 부하·실차·종료중상시관측·시동자동실행/FGS, P1도어/창문/속도SDK·타이어/ABS, Gleo Schema/실행·실차/고장진단·수리완료판정·푸시, Lint(기존캐시부재로재실행안함)/Release서명·제출APK. 사용자직접검수6개는이전보고로이번자동검사와구분합니다.
+- 다음은 승인된중계URL/임시앱인증/모델·비용/선택데이터동의 확인 후 실제모델요청→응답→오류/취소/근거·문구/차량UI를 검증하는 것입니다. 키를채팅/소스/APK에전달하지 않습니다. 승인이없어도Console→SDK→자동안내 시연은가능하나전체AI연결완료라고발표하지않습니다.
+- 검증한17파일만 최신main부모/기대HEAD를확인해 **GitHub 연결 도구를 통한 게시**하고원격SHA·부모/Aside보존을검증합니다. DB/키/백업/개인화면/로그/APK/캐시는게시하지않습니다. 최종커밋은완료응답으로보고하며자기SHA삽입반복커밋은하지않습니다.
+
+아래는 과거 개발 기록으로 보존합니다.
+
+---
+
 마지막 업데이트: 2026-11-08 20:02 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 차종 호환 표시·독립 공통 메뉴·KST 조회 시각 안정화

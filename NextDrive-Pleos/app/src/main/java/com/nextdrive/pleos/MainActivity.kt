@@ -25,7 +25,7 @@ import java.util.Calendar
 
 /** Manual journal and explicit one-shot vehicle reads. No diagnosis or remote transmission. */
 class MainActivity : Activity() {
-    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS }
+    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS, SOC_NOTICES }
     private lateinit var guide: GuideState
     private var guideReplay=false
     private data class RetainedSession(val driverId:String?,val entry:EntryReadState)
@@ -33,6 +33,11 @@ class MainActivity : Activity() {
     private var visible=false
     private lateinit var snapshots:SnapshotStore
     private lateinit var vehicleDisplay:VehicleDisplaySettings
+    private lateinit var lowSoc:LowSocStore
+    private lateinit var socObserver:PleosSocObserver
+    private var socThresholdInput:EditText?=null
+    private var socThresholdDraft:String?=null
+    private var socTechnical=false
     private var palette=CaritdaPalette.of(false)
     private val ui get()=CaritdaComponents(this,palette)
     private var selectedSnapshot:String?=null
@@ -49,7 +54,7 @@ class MainActivity : Activity() {
     private var freshnessKey=""
     private val freshnessTick=object:Runnable{
         override fun run(){
-            if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY,Screen.DETAIL,Screen.SUMMARY) && !isFinishing && !isDestroyed){
+            if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY,Screen.DETAIL,Screen.SUMMARY,Screen.SOC_NOTICES) && !isFinishing && !isDestroyed){
                 val key=freshnessMarker()
                 if(key!=freshnessKey){freshnessKey=key;positions[screen]=scrollView?.scrollY?:0;draw()}
             }
@@ -107,9 +112,13 @@ class MainActivity : Activity() {
         observations = ObservationStore(this)
         snapshots=SnapshotStore(this)
         vehicleDisplay=VehicleDisplaySettings(getSharedPreferences("caritda_vehicle_display",MODE_PRIVATE))
+        lowSoc=LowSocStore(this)
+        socObserver=PleosSocObserver(this,observations,{visible&&canEdit()&&lowSoc.policy().enabled},{
+            runCatching{lowSoc.reconcile(observations)}.onFailure{notice="차량 정보는 저장됐지만 안내 갱신에 실패했어요. 자동 안내에서 다시 시도해 주세요."}
+        },{if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.SOC_NOTICES))draw()})
         entry=(lastNonConfigurationInstance as? RetainedSession)?.entry ?: EntryReadState()
         pleos = PleosReadClient(this, observations) {
-            if(!pleos.busy)reconcileSnapshots()
+            if(!pleos.busy){reconcileSnapshots();maybeSocWatch()}
             if(screen in setOf(Screen.HOME,Screen.VEHICLE,Screen.LOAD_DETAIL,Screen.SNAPSHOTS)){positions[screen]=scrollView?.scrollY?:0;draw()}
         }
         safety = CarSafetyGate(this) { state ->
@@ -124,7 +133,7 @@ class MainActivity : Activity() {
                 }
                 draw()
             }
-            if(state!=EditingState.ALLOWED)pleos.stop() else maybeAutomaticRead()
+            if(state!=EditingState.ALLOWED){pleos.stop();stopSocWatch("안전 상태 변경으로 자동 확인을 멈췄어요.")} else {maybeAutomaticRead();maybeSocWatch()}
         }
         service = CaritdaService(repository, { safety.state == EditingState.ALLOWED })
         service.restoreConfiguration((lastNonConfigurationInstance as? RetainedSession)?.driverId)
@@ -132,6 +141,7 @@ class MainActivity : Activity() {
         lastDraft = journal
         pendingDriver = journal?.ownerId ?: repository.currentDriver()?.id
         savedInstanceState?.let {
+            socThresholdDraft=it.getString("socThresholdDraft")
             pendingDriver=journal?.ownerId?:it.getString("pendingDriver",pendingDriver)
             editingDriver=it.getString("editingDriver")
             driverNameDraft=it.getString("driverNameDraft")
@@ -171,14 +181,15 @@ class MainActivity : Activity() {
         reconcileSnapshots()
         freshnessHandler.removeCallbacks(freshnessTick);freshnessHandler.post(freshnessTick)
     }
-    override fun onStop() { visible=false;if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop(); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
-    override fun onDestroy() { repository.close(); observations.close();snapshots.close();super.onDestroy() }
+    override fun onStop() { visible=false;if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop();stopSocWatch("앱이 보이지 않아 자동 확인을 멈췄어요. 관측 공백이 있어요."); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
+    override fun onDestroy() { repository.close(); observations.close();snapshots.close();lowSoc.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putString("snapshot",selectedSnapshot);outState.putString("card",selectedCard)
         outState.putInt("historyPage",historyPage);outState.putBoolean("technicalExpanded",technicalExpanded);outState.putBoolean("recordExtras",recordExtras)
         outState.putString("screen", screen.name); outState.putString("issue", selectedIssue)
         outState.putString("menuReturn",menuReturn?.name)
+        outState.putString("socThresholdDraft",socThresholdInput?.text?.toString()?:socThresholdDraft)
         outState.putString("recordFilter", recordFilter.name); outState.putString("type", draft.type.name)
         searchText=searchInput?.text?.toString()?:searchText
         outState.putString("recordQuery",recordQuery);outState.putString("searchText",searchText);outState.putString("pendingRecordFilter",pendingRecordFilter?.name)
@@ -194,7 +205,10 @@ class MainActivity : Activity() {
 
     private fun reconcileSnapshots(){
         runCatching{snapshots.reconcile(observations)}.onSuccess{snapshotError=""}.onFailure{snapshotError="차량 원본은 저장됐지만 자동 기록을 정리하지 못했어요. 다시 열면 재시도해요."}
+        runCatching{lowSoc.reconcile(observations)}.onFailure{snapshotError="차량 원본은 남아 있지만 자동 안내 갱신을 다시 시도해야 해요."}
     }
+    private fun maybeSocWatch(){if(::socObserver.isInitialized&&visible&&canEdit()&&screen!=Screen.WELCOME&&!pleos.busy&&lowSoc.policy().enabled)socObserver.start()}
+    private fun stopSocWatch(reason:String){if(::socObserver.isInitialized){if(socObserver.running)runCatching{lowSoc.gap(reason)};socObserver.stop(reason)}}
     private fun maybeAutomaticRead(){
         if(entry.claim(visible,canEdit(),screen!=Screen.WELCOME,pleos.busy)){
             android.util.Log.i("Caritda","entry_read_once")
@@ -258,6 +272,7 @@ class MainActivity : Activity() {
         Screen.HISTORY->"전체 조회 이력";Screen.HELP->"사용법";Screen.HELP_TOPIC->helpTitles[helpTopic]
         Screen.ACTION->if(journal?.kind=="NOTE")"점검·조치 메모"else"다시 발생한 증상";Screen.WELCOME->""
         Screen.MENU->"메뉴";Screen.VEHICLE_SETTINGS->"차량 정보 표시 설정"
+        Screen.SOC_NOTICES->"충전량 자동 안내"
     }
     private fun chooseDriver(){
         if(service.draft()!=null&&service.confirmed()){
@@ -286,6 +301,7 @@ class MainActivity : Activity() {
     }
     private fun draw() {
         if (!::service.isInitialized || isDestroyed || isFinishing) return
+        socThresholdDraft=socThresholdInput?.text?.toString()?:socThresholdDraft;socThresholdInput=null
         captureDraft()
         searchText=searchInput?.text?.toString()?:searchText;searchInput=null
         driverNameDraft=driverNameInput?.text?.toString()?:driverNameDraft;driverNameInput=null
@@ -318,6 +334,7 @@ class MainActivity : Activity() {
             when(screen){
                 Screen.MENU->moreMenu(body)
                 Screen.VEHICLE_SETTINGS->vehicleSettings(body)
+                Screen.SOC_NOTICES->socNotices(body)
                 Screen.HOME->home(body)
                 Screen.ISSUES->issues(body)
                 Screen.DRIVERS->driverScreen(body)
@@ -375,6 +392,10 @@ class MainActivity : Activity() {
         body.addView(label(if(service.confirmed())"${service.driver().label}님의 차량 기록"else"차량 정보와 느낀 증상을 함께 남겨요.",20))
         body.addView(label("최근 차량 정보",24,true))
         metricGroup(body)
+        if(lowSoc.policy().enabled)lowSoc.notices().firstOrNull{it.version==lowSoc.policy().version}?.let{n->
+            val stale=System.currentTimeMillis()-n.last>=600000||n.last>System.currentTimeMillis()+60000
+            body.addView(ui.attention(AttentionContent(if(n.phase=="LOW")"${if(stale)"이전에 받은 "else""}낮은 충전량 안내"else"낮은 충전량 조건 해제 기록","${n.value}${n.unit} · 사용자 기준 ${n.threshold}% 미만\n${vehicleDisplay.time(n.last)}","고장이나 수리 완료를 판단한 결과는 아니에요.")))
+        }
         if(pleos.busy)body.addView(label("차량 정보를 불러오는 중이에요.",20).apply{tag="auto_read_status"})
         val planned=managed.count{it.status==IssueStatus.PLANNED}
         val title=when{unread>0->"아직 읽지 않은 전달 기록 ${unread}건";planned>0->"점검 예정인 기록 ${planned}건";managed.isNotEmpty()->"관리 중인 기록 ${managed.size}건";all.isNotEmpty()->"완료한 기록 ${all.size}건";else->"아직 남긴 증상이 없어요."}
@@ -561,6 +582,7 @@ class MainActivity : Activity() {
         val refresh=ui.action("차량값 불러오기","read_vehicle",ActionStyle.PRIMARY,canEdit()&&!pleos.busy,HmiIcon.VEHICLE){edit{entry.markRequested();pleos.readOnce()}}
         val history=ui.action("조회 기록 보기","auto_snapshots",ActionStyle.SECONDARY,canEdit(),HmiIcon.CLOCK){edit{openScreen(Screen.SNAPSHOTS)}}
         body.addView(ui.grid(listOf(refresh,history),columns()))
+        body.addView(ui.action("충전량 자동 안내 · 설정과 기록","soc_notices",ActionStyle.QUIET,canEdit(),HmiIcon.BATTERY){edit{openScreen(Screen.SOC_NOTICES)}})
         body.addView(label("차량 전체의 고장 여부를 판단한 결과는 아니에요.",20))
         body.addView(ui.expandable("제공되지 않는 항목","unavailable",showUnavailable,canEdit()){edit{showUnavailable=!showUnavailable;draw()}})
         if(showUnavailable){
@@ -571,6 +593,35 @@ class MainActivity : Activity() {
         snapshots.latest()?.let{historyPreview(body,it.cardId)}
     }
     private fun openSnapshot(s:Snapshot){openScreen(Screen.SNAPSHOT_DETAIL){selectedSnapshot=s.id;technicalExpanded=false}}
+    private fun socNotices(body:LinearLayout){
+        val p=lowSoc.policy()
+        body.addView(label("${if(p.enabled)"사용자 안내 켜짐"else"사용자 안내 꺼짐"} · ${p.threshold}% 미만",26,true).apply{tag="soc_policy"})
+        body.addView(label(socObserver.message,22).apply{tag="soc_watch_status"})
+        body.addView(label("앱이 보이고 입력이 허용된 동안만 SOC 변화를 확인해요. 종료·제한·연결 끊김 동안에는 관측 공백이 있어요.",20))
+        body.addView(label("사용자 편의 기준이에요. 제조사 고장 기준이 아니며, 안내 해제는 기준보다2%p 높은 값부터 기록해요.",20))
+        socThresholdInput=input("안내 기준(1~95%)",2).apply{tag="soc_threshold";inputType=InputType.TYPE_CLASS_NUMBER;setText(socThresholdDraft?:p.threshold.toString());minLines=1}
+        body.addView(socThresholdInput)
+        body.addView(button("이 기준으로 안내 켜기","enable_soc",enabled=canEdit()){
+            val threshold=socThresholdInput?.text?.toString()?.toIntOrNull()?:throw IllegalArgumentException("안내 기준을 숫자로 입력해 주세요.")
+            lowSoc.configure(true,threshold,observations);socThresholdDraft=null;socThresholdInput=null;notice="사용자 기준을 저장했어요. 새로 받은 값부터 안내해요.";stopSocWatch("설정을 반영하고 있어요.");maybeSocWatch();draw()
+        })
+        if(p.enabled)body.addView(button("안내 끄기","disable_soc",enabled=canEdit()){lowSoc.configure(false,p.threshold,observations);stopSocWatch("자동 안내를 껐어요. 이전 기록은 남아 있어요.");draw()})
+        body.addView(button("자동 기록 다시 정리","reconcile_soc",enabled=canEdit()){lowSoc.reconcile(observations);notice="저장된 관측으로 안내를 다시 확인했어요.";draw()})
+        body.addView(label("AI 설명: 아직 연결되지 않았어요. 실제 AI 모델 응답은 표시하지 않아요.",22).apply{tag="ai_connection_status"})
+        body.addView(ui.expandable("수신 근거 자세히","soc_evidence",socTechnical,canEdit()){edit{socTechnical=!socTechnical;draw()}})
+        val notices=lowSoc.notices()
+        if(notices.isEmpty())body.addView(ui.state("아직 낮은 충전량 안내가 없어요.","실제로 새 값을 받은 뒤에만 사용자 기준과 비교해요."))
+        notices.take(20).forEach{n->
+            val card=panel().apply{tag="soc_notice_${n.id}"}
+            card.addView(label(if(n.phase=="LOW")"낮은 충전량 안내"else"낮은 충전량 조건 해제",26,true))
+            card.addView(label("${n.value}${n.unit} · 사용자 기준 ${n.threshold}% 미만\n${vehicleDisplay.time(n.last)}",22))
+            card.addView(label("${if(n.source==ObservationSource.PLEOS_EMULATOR_SDK.name)"Pleos 에뮬레이터"else"차량 SDK"} · ${if(n.version!=p.version)"이전 설정의 기록"else if(!p.enabled||!socObserver.running)"현재 관측 중이 아님"else"화면 표시 중 자동 확인"}",20))
+            if(socTechnical)card.addView(label("규칙 ${SocRule.VERSION}:${n.version} · 실제 수신 근거 ${n.store}:${n.row}",20))
+            if(System.currentTimeMillis()-n.last>=600000||n.last>System.currentTimeMillis()+60000)card.addView(label("오래된 이전 관측이에요. 현재 충전량은 다시 확인해 주세요.",22))
+            card.addView(label("고장 원인이나 차량 수리 완료를 의미하지 않아요.",20))
+            body.addView(card)
+        }
+    }
     private fun historyRows(body:LinearLayout,card:String,limit:Int,offset:Int=0){
         val first=snapshots.first(card)?.id
         snapshots.timeline(card,limit,offset).forEach{s->

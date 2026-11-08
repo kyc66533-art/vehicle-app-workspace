@@ -44,6 +44,10 @@ class ObservationStore(context: Context, name: String = "caritda-observations.db
         ObservationMigration.migrate(db)
     }
     fun append(value: VehicleObservation) {
+        appendRef(value)
+    }
+    /** Returns the immutable identity of this insertion, never a guessed latest-row ID. */
+    fun appendRef(value:VehicleObservation):ObservationRef {
         require(value.kind.isNotBlank() && value.session.isNotBlank())
         if (value.status == ObservationStatus.RECEIVED) {
             require(!value.raw.isNullOrBlank() && !value.unit.isNullOrBlank() && value.receivedAt != null &&
@@ -59,7 +63,8 @@ class ObservationStore(context: Context, name: String = "caritda-observations.db
             put("status", value.status.name); put("detail", value.detail)
             put("recorded_at", value.recordedAt); put("driver_id", value.driverId)
         }
-        writableDatabase.insertOrThrow("observations", null, values)
+        val row=writableDatabase.insertOrThrow("observations", null, values)
+        return ObservationRef(identity(),row,value)
     }
     fun latest(limit: Int = 20): List<VehicleObservation> {
         require(limit in 1..100)

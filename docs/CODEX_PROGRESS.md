@@ -1,5 +1,56 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 13:22:34 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 고정 홈·검색 로컬 구현/빌드, 에뮬레이터 검증 대기
+
+### 기준과 실제 구현
+
+- 최신 main aee62bf2548470ee11bfd1e5154639e2ce79e1e5와 필수 로컬 파일31개 SHA가 일치함을 확인했습니다. Aside의 CARITDA_NAVIGATION_RECORD_GLEO_UX와 CARITDA_RECOVERY_STATUS_AUTOMATION_RESEARCH가 둘 다 존재하여 전체 기준과 NAV/REC를 읽었습니다. 기존 RR/AC/ON/진행 기록·v3 소스·SDK·관측·validation 구조를 확인했습니다. 연구 파일은 수정하지 않았습니다.
+- 사용자가 네 수동 상태 변경 정상 동작을 확인한 사실을 유지합니다. 이미 해결된 문제를 재발 버그로 간주하지 않았습니다. 이번 Codex 실행 검증과 사용자 확인을 구분합니다.
+- 본문 ScrollView 밖 고정 홈 바를 구현했습니다. 충분한 창은 홈/기록/차량 정보, 좁거나 큰 글꼴/입력 화면은 홈/메뉴입니다. 홈은 내부 HOME과 중첩 이력 정리, 이전은 직전 맥락, 사용법은 원래 화면 복귀입니다. OS HOME intent나 운전자 확정·기록 삭제·수동 상태 변경을 호출하지 않습니다.
+- 홈의 전체 문제/내 작성/문제 남기기/차량 정보/사용법, 네 필터와 전체 본문/메모/카테고리 로컬 검색·현재 조건/결과 수·조건 초기화를 구현했습니다. 상세 복귀의 검색/필터/가능한 스크롤 위치를 보존합니다. 내 작성은 영구 ID 기준이며 미확정이면 명시 이름 선택 뒤 목표로 연결합니다.
+- 수정 후 같은 ID 상세와 이전 목록 조건을 유지하고 검색 불일치를 설명합니다. 수정 취소는 원문 상세로 돌아가고, 변경 없는 수정은 초안만 끝내며 새 이벤트/revision을 만들지 않습니다. 기존 작성자/삭제 권한과 논리 삭제/이력은 그대로입니다. 복원/영구 파기 UI는 추가하지 않았습니다.
+- 홈/이전 이동 전 초안 저장 실패를 확인해 입력 화면에 남기도록 했습니다. 소스의 기존 revision 의미를 유지하며 내용 버전과 이벤트 기반 재발 횟수를 나눠 표시합니다. 상태 선택에는 점검 완료/해결 확인의 뜻을 설명합니다. 수동 STATUS 이벤트 저장 로직은 유지했습니다.
+- 새로운 DB/권한/SDK API/자동 회복/AI/Gleo 기능은 없습니다. docs/AUTOMATION_FOUNDATION.md에 future sidecar의 출처·행 참조·최신 시도·issue state token/evidenceEpoch·두 DB 경합/원자 승인/유보/중복 방지 설계만 기록했습니다. 공식 권한 문서와 샘플 PublicApiPolicy를 재확인했고 새 접근이 가능한 것으로 과장하지 않습니다.
+
+### 실제 빌드와 현재 장애
+
+- 기존 Windows/JBR/Gradle8.11.1/API34/Build-Tools35.0.0/Pleos SDK2.3.2 캐시의 offline assembleDebug+assembleValidation+assembleValidationAndroidTest 최종 성공: BUILD SUCCESSFUL in38s, exit0,93작업 중4실행/89 up-to-date. 일반 APK SHA256 53383639ce3a01e76f749880e23ebd9bb27991d142ee9845ae4742a3c2d539ca.
+- 시작 시 Studio/에뮬레이터가 실행 중이지 않았고 ADB 127.0.0.1:5037 연결은 10061 connection refused였습니다. 기본 adb start-server도 could not read ok from ADB Server / failed to start daemon으로 실패했습니다. 원인은 확정하지 않았으며 권한 확대/보안 변경/다른 AVD 복제 등으로 우회하지 않았습니다. 사용자에게 일반 Android Studio에서 기존 Pleos_Connect_v2.1.0 실행을 요청했습니다.
+- 따라서 이번에 일반/validation APK를 교체 설치하지 않았고 차량 SDK 값을 새로 수신하지 않았습니다. 사용자 DB의 새 백업/전후 해시 비교도 실행하지 못했습니다. 기존22건이나 이전 성공 수신값을 이번 검증 성공으로 재사용하지 않습니다. DB 삭제·초기화·과거 검증 기록 정리는 하지 않았습니다.
+- 보조 호스트 Java 검색 실험도 시도했으나 classpath/파일 realPath의 AccessDeniedException으로 실행하지 못했습니다. APK 공식 Gradle 빌드 성공과 별개이며 검색 검사8개가 통과했다고 세지 않습니다. 실험 파일은 build/validation에만 남겼습니다.
+
+### 검사 준비/미검증
+
+- 신규 NavigationChecks N01~17과 프로세스 종료 뒤 N18~28을 작성하고 테스트 APK로 컴파일했습니다. 고정 홈, 네 필터, 긴 본문/메모/카테고리 검색,0건/초기화, 상세 이전, 새/수정 초안, 취소/무변경 수정, 네 상태 전후/actor/time, 초안 SQL 쓰기 실패, UNKNOWN,낮은 높이6조합을 검사하도록 준비했습니다. **28개는 작성한 assertion 수이며 실행/통과 수가 아닙니다.**
+- 기존 Mvp/Onboarding 검사는 실제 이전 버튼 tag를 home에서 back으로 바꾸어 의미를 구분했습니다. 기존 AC/ON/RR 및 운영 DB 불변 검사는 이번에는 미실행입니다. 과거145개 성공은 이전 코드의 기록으로만 보존합니다.
+- Aside NAV01~28별 구현·부분·범위 밖·실행 미검증은 docs/NAV_ACCEPTANCE.md에 적었습니다. Gleo A/B/C와 휴지통 제안은 실제 구현과 구분합니다. REC는 후속 설계이며 자동 회복을 실현하거나 판정한 적이 없습니다.
+- TalkBack/키보드/rotary·실제 OS 분할/IME·실제 주행 제한 전환·실차·사용자 이해도는 미검증입니다. 기존 Lint 캐시 부족도 성공으로 바꾸지 않았습니다.
+
+### 파일과 게시 범위
+
+로컬에서 변경한 앱/계측 파일(미게시):
+
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/CaritdaService.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/ConsultationSummary.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/data/SqliteIssueRepository.kt
+- 신규 NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/RecordSearch.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MvpScenarioInstrumentation.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+- 신규 NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/NavigationChecks.kt
+
+이번에 공유 가능한 문서4개: AGENTS.md, 신규 docs/AUTOMATION_FOUNDATION.md, 신규 docs/NAV_ACCEPTANCE.md, docs/CODEX_PROGRESS.md. 문서·경로·공유 안전 검사와 최신 HEAD/대상 SHA 확인 후 **GitHub 연결 도구를 통한 게시**를 사용합니다. 실행 미검증 앱 소스는 제외하고 로컬에 보존합니다. 로컬 Git push가 아닙니다. 원격 부모/파일 SHA와 Aside·나머지 파일을 보존하고 커밋은 응답에 보고합니다.
+
+### 다음에 이어갈 작업
+
+사용자는 Android Studio → Device Manager → 기존 Pleos_Connect_v2.1.0의 ▶만 실행하고 차량 화면 부팅을 알려 주세요. 기존 AVD/앱/데이터를 초기화할 필요는 없습니다. 그 뒤 실제 serial/current user 확인→새 개인 백업→validation NAV 두 단계와 AC/ON/RR/이전/SDK 회귀→사용자 DB 불변 확인→일반 APK install-r/화면 확인→검증된 소스 게시 순서로 계속합니다. 새 기능 명세나 별도 업로드 프롬프트는 필요하지 않습니다. 현재 일반 앱이 새 UI로 실행된 것으로 보고하지 않습니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-08 01:35:34 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 사용자 기록 신뢰성·본인 수정/논리 삭제·테스트 격리

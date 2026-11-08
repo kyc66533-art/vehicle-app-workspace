@@ -16,5 +16,6 @@ object ValidationEnvironment {
         context.deleteDatabase("caritda-snapshots.db")
         context.openOrCreateDatabase("caritda_v01.db",0,null).use { DriverMigration.createV1(it);it.version=1 }
         check(context.getSharedPreferences("caritda_help",Context.MODE_PRIVATE).edit().putInt("version",1).putString("outcome","existing").commit())
+        check(context.getSharedPreferences("caritda_vehicle_display",Context.MODE_PRIVATE).edit().clear().commit())
     }
 }

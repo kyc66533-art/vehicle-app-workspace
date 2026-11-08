@@ -9,17 +9,17 @@ object VehicleUi {
         val evidence=s?.evidence.orEmpty().filter{it.value.kind==kind}
         return evidence.firstOrNull()?.value to evidence.lastOrNull{SnapshotStore.accepted(it.value)}?.value
     }
-    fun name(kind:String)=if(kind=="EV_SOC")"배터리 충전량" else "누적 주행거리"
+    fun name(kind:String)=VehicleInfoPolicy.name(kind,PowertrainLayout.UNKNOWN)
     fun shortTime(at:Long?)=at?.let{ConsultationSummary.time(it)}?:"수신한 기록 없음"
     fun source(s:Snapshot?):String=when(s?.evidence?.firstOrNull()?.value?.source){
         ObservationSource.PLEOS_EMULATOR_SDK->"에뮬레이터에서 받은 값이에요."
         ObservationSource.PLEOS_VEHICLE_SDK->"차량 SDK에서 받은 값이에요."
         else->"차량 정보 수신 전이에요."
     }
-    fun compact(s:Snapshot):String=listOf("EV_SOC","ODOMETER").joinToString(" · "){kind->
+    fun compact(s:Snapshot):String=VehicleInfoPolicy.kinds(PowertrainLayout.UNKNOWN,{values(s,it).first},{values(s,it).second}).joinToString(" · "){kind->
         val(attempt,valid)=values(s,kind)
         val v=VehiclePresentation.card(kind,attempt,valid,System.currentTimeMillis())
-        "${if(kind=="EV_SOC")"충전량"else"거리"} ${if(valid==null)"값 없음"else v.value}"
+        "${when(kind){"EV_SOC"->"구동 배터리 충전량";"FUEL_PERCENT"->"연료";else->"거리"}} ${if(valid==null)"값 없음"else v.value}"
     }
     fun technical(s:Snapshot):String=buildString{
         appendLine("Vehicle SDK 2.3.2\n기록 ID: ${s.id}\n카드 ID: ${s.cardId}")

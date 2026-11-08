@@ -10,10 +10,10 @@ data class VehicleCard(val value:String,val time:String,val source:String,val at
 
 object VehiclePresentation {
     const val STALE_AFTER_MS=600_000L
-    fun card(kind:String,attempt:VehicleObservation?,valid:VehicleObservation?,now:Long):VehicleCard {
+    fun card(kind:String,attempt:VehicleObservation?,valid:VehicleObservation?,now:Long,formatTime:(Long)->String=ConsultationSummary::time):VehicleCard {
         val number=valid?.raw?.toDoubleOrNull()
         val accepted=valid?.takeIf {
-            it.status==ObservationStatus.RECEIVED && it.valid && it.supported==true &&
+            it.kind==kind && it.status==ObservationStatus.RECEIVED && it.valid && it.supported==true &&
                 it.source in setOf(ObservationSource.PLEOS_EMULATOR_SDK,ObservationSource.PLEOS_VEHICLE_SDK) &&
                 it.receivedAt!=null && number!=null && number.isFinite() && number>=0 &&
                 if(kind=="ODOMETER")it.unit=="km" else it.unit=="%" && number<=100
@@ -32,8 +32,8 @@ object VehiclePresentation {
         }
         val value=if(accepted==null)"아직 불러온 값이 없어요." else
             (if(failed||stale)"이전 값 · " else "")+"${displayNumber(accepted.raw!!)} ${accepted.unit}"
-        val time=if(at==null)"마지막 수신: 없음" else if(future)"수신 시각을 확인해 주세요 · ${ConsultationSummary.time(at)}" else
-            "마지막 수신 · ${ConsultationSummary.time(at)}"+(if(stale)"\n오래된 값이에요. 지금 상태가 아닐 수 있어요." else "")
+        val time=if(at==null)"마지막 수신: 없음" else if(future)"수신 시각을 확인해 주세요 · ${formatTime(at)}" else
+            "마지막 수신 · ${formatTime(at)}"+(if(stale)"\n오래된 값이에요. 지금 상태가 아닐 수 있어요." else "")
         val source=when(accepted?.source ?: attempt?.source) {
             ObservationSource.PLEOS_EMULATOR_SDK->"에뮬레이터에서 받은 값이에요. 실제 차량 측정값은 아니에요."
             ObservationSource.PLEOS_VEHICLE_SDK->"차량에서 불러와 저장한 값이에요."

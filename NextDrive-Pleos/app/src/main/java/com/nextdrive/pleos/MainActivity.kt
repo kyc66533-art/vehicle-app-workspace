@@ -25,13 +25,14 @@ import java.util.Calendar
 
 /** Manual journal and explicit one-shot vehicle reads. No diagnosis or remote transmission. */
 class MainActivity : Activity() {
-    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY }
+    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS }
     private lateinit var guide: GuideState
     private var guideReplay=false
     private data class RetainedSession(val driverId:String?,val entry:EntryReadState)
     private var entry=EntryReadState()
     private var visible=false
     private lateinit var snapshots:SnapshotStore
+    private lateinit var vehicleDisplay:VehicleDisplaySettings
     private var palette=CaritdaPalette.of(false)
     private val ui get()=CaritdaComponents(this,palette)
     private var selectedSnapshot:String?=null
@@ -80,7 +81,7 @@ class MainActivity : Activity() {
     private var actionField: EditText? = null
     private var notice = ""
     private var feedback: TextView? = null
-    private var menuOpen = false
+    private var menuReturn:Screen?=null
     private val history = java.util.ArrayDeque<Screen>()
     private val positions = mutableMapOf<Screen,Int>()
     private var scrollView: ScrollView? = null
@@ -105,6 +106,7 @@ class MainActivity : Activity() {
         repository = SqliteIssueRepository(this)
         observations = ObservationStore(this)
         snapshots=SnapshotStore(this)
+        vehicleDisplay=VehicleDisplaySettings(getSharedPreferences("caritda_vehicle_display",MODE_PRIVATE))
         entry=(lastNonConfigurationInstance as? RetainedSession)?.entry ?: EntryReadState()
         pleos = PleosReadClient(this, observations) {
             if(!pleos.busy)reconcileSnapshots()
@@ -137,6 +139,7 @@ class MainActivity : Activity() {
             guideReplay=it.getBoolean("guideReplay")
             helpTopic=it.getInt("helpTopic")
             pausedGuide=it.getString("pausedGuide")?.let{name->runCatching{Screen.valueOf(name)}.getOrNull()}
+            menuReturn=it.getString("menuReturn")?.let{name->runCatching{Screen.valueOf(name)}.getOrNull()}
             if(lastNonConfigurationInstance!=null)it.getStringArrayList("history")?.forEach { name->runCatching{history.addLast(Screen.valueOf(name))} }
             Screen.entries.forEach{target->positions[target]=it.getInt("position_${target.name}")}
             screen = runCatching { Screen.valueOf(it.getString("screen") ?: "HOME") }.getOrDefault(Screen.HOME)
@@ -155,7 +158,7 @@ class MainActivity : Activity() {
         val info=packageManager.getPackageInfo(packageName,0)
         val existing=info.firstInstallTime<info.lastUpdateTime || repository.drivers(true).isNotEmpty() || repository.issues().isNotEmpty() || journal!=null || observations.latest(1).isNotEmpty()
         if(guide.prepare(existing) && !guideReplay)screen=Screen.WELCOME
-        else if(savedInstanceState!=null && lastNonConfigurationInstance!=null && savedInstanceState.getString("screen") in listOf("HELP","HELP_TOPIC","WELCOME"))screen=Screen.valueOf(savedInstanceState.getString("screen")!!)
+        else if(savedInstanceState!=null && lastNonConfigurationInstance!=null && savedInstanceState.getString("screen") in listOf("HELP","HELP_TOPIC","WELCOME","MENU","VEHICLE_SETTINGS"))screen=Screen.valueOf(savedInstanceState.getString("screen")!!)
         draw()
     }
     override fun onStart() {
@@ -175,6 +178,7 @@ class MainActivity : Activity() {
         outState.putString("snapshot",selectedSnapshot);outState.putString("card",selectedCard)
         outState.putInt("historyPage",historyPage);outState.putBoolean("technicalExpanded",technicalExpanded);outState.putBoolean("recordExtras",recordExtras)
         outState.putString("screen", screen.name); outState.putString("issue", selectedIssue)
+        outState.putString("menuReturn",menuReturn?.name)
         outState.putString("recordFilter", recordFilter.name); outState.putString("type", draft.type.name)
         searchText=searchInput?.text?.toString()?:searchText
         outState.putString("recordQuery",recordQuery);outState.putString("searchText",searchText);outState.putString("pendingRecordFilter",pendingRecordFilter?.name)
@@ -202,8 +206,9 @@ class MainActivity : Activity() {
         if(!canEdit()){toast("화면 입력이 가능한 뒤에 이동해 주세요.");return}
         if(!captureDraft())return
         rememberLocation()
+        if(screen==Screen.MENU){screen=menuReturn?:Screen.HOME;menuReturn=null;draw();return}
         if(history.isNotEmpty())screen=history.removeLast() else if(screen!=Screen.HOME)screen=Screen.HOME else {super.onBackPressed();return}
-        menuOpen=false;draw()
+        draw()
     }
 
     private fun rememberLocation(){
@@ -216,7 +221,7 @@ class MainActivity : Activity() {
         if(!captureDraft())return
         rememberLocation()
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken,0)
-        history.clear();menuOpen=false;guideReplay=false;pausedGuide=null;pendingRecordFilter=null;notice="";screen=Screen.HOME;draw()
+        history.clear();menuReturn=null;guideReplay=false;pausedGuide=null;pendingRecordFilter=null;notice="";screen=Screen.HOME;draw()
     }
     private fun openRecords(filter:RecordFilter){
         if(filter==RecordFilter.MINE&&!service.confirmed()){
@@ -235,10 +240,13 @@ class MainActivity : Activity() {
         }
         add("홈","nav_HOME",HmiIcon.HOME,screen==Screen.HOME){goHome()}
         if(expanded){
-            add("기록","nav_ISSUES",HmiIcon.RECORD,screen in setOf(Screen.ISSUES,Screen.DETAIL,Screen.SUMMARY)){openScreen(Screen.ISSUES){menuOpen=false}}
-            add("차량 정보","nav_VEHICLE",HmiIcon.VEHICLE,screen in setOf(Screen.VEHICLE,Screen.LOAD_DETAIL,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY)){openScreen(Screen.VEHICLE){menuOpen=false}}
+            add("기록","nav_ISSUES",HmiIcon.RECORD,screen in setOf(Screen.ISSUES,Screen.DETAIL,Screen.SUMMARY)){openScreen(Screen.ISSUES)}
+            add("차량 정보","nav_VEHICLE",HmiIcon.VEHICLE,screen in setOf(Screen.VEHICLE,Screen.LOAD_DETAIL,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY)){openScreen(Screen.VEHICLE)}
         }
-        add("메뉴","menu",HmiIcon.MENU,menuOpen){if(canEdit()&&captureDraft()){rememberLocation();menuOpen=!menuOpen;draw()}}
+        add("메뉴","menu",HmiIcon.MENU,screen==Screen.MENU){
+            if(screen==Screen.MENU)onBackPressed()
+            else if(canEdit()&&captureDraft()){rememberLocation();menuReturn=screen;screen=Screen.MENU;positions[Screen.MENU]=0;draw()}
+        }
         return ui.appHeader(actions)
     }
     private fun pageTitle()=when(screen){
@@ -249,22 +257,30 @@ class MainActivity : Activity() {
         Screen.LOAD_DETAIL->"자세한 수신 기록";Screen.SNAPSHOTS->"차량 조회 기록";Screen.SNAPSHOT_DETAIL->"조회한 차량 정보"
         Screen.HISTORY->"전체 조회 이력";Screen.HELP->"사용법";Screen.HELP_TOPIC->helpTitles[helpTopic]
         Screen.ACTION->if(journal?.kind=="NOTE")"점검·조치 메모"else"다시 발생한 증상";Screen.WELCOME->""
+        Screen.MENU->"메뉴";Screen.VEHICLE_SETTINGS->"차량 정보 표시 설정"
     }
     private fun chooseDriver(){
-        menuOpen=false
-        if(service.draft()!=null&&service.confirmed()){notice="작성 중인 내용을 먼저 저장하거나 취소해 주세요.";draw()}
+        if(service.draft()!=null&&service.confirmed()){
+            if(screen==Screen.MENU){screen=menuReturn?:Screen.HOME;menuReturn=null}
+            notice="작성 중인 내용을 먼저 저장하거나 취소해 주세요.";draw()
+        }
         else{pendingDriver=service.draft()?.ownerId?:repository.currentDriver()?.id;openScreen(Screen.DRIVERS)}
     }
     private fun moreMenu(body:LinearLayout){
         val menu=panel().apply{tag="more_menu"}
         val items=mutableListOf<View>()
-        fun item(title:String,key:String,icon:HmiIcon,action:()->Unit){items.add(ui.action(title,key,ActionStyle.QUIET,canEdit(),icon){edit{menuOpen=false;action()}})}
-        if(root.findViewWithTag<View>("nav_ISSUES")==null)item("전체 기록","nav_ISSUES",HmiIcon.RECORD){openScreen(Screen.ISSUES){menuOpen=false}}
+        fun item(title:String,key:String,icon:HmiIcon,action:()->Unit){items.add(ui.action(title,key,ActionStyle.QUIET,canEdit(),icon){edit{action()}})}
+        // Compact navigation replaces missing header tabs; it is separate from the same five menu items.
+        if(root.findViewWithTag<View>("nav_ISSUES")==null){
+            val record=ui.action("기록","nav_ISSUES",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.ISSUES)}}
+            val vehicle=ui.action("차량 정보","nav_VEHICLE",ActionStyle.QUIET,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}}
+            body.addView(ui.grid(listOf(record,vehicle),columns()))
+        }
+        item("기록할 사람 선택·변경","change_driver",HmiIcon.PERSON){chooseDriver()}
         item("내가 작성한 기록","my_issues",HmiIcon.PERSON){openRecords(RecordFilter.MINE)}
-        if(root.findViewWithTag<View>("nav_VEHICLE")==null)item("최근 차량 정보","nav_VEHICLE",HmiIcon.VEHICLE){openScreen(Screen.VEHICLE){menuOpen=false}}
         item("차량 조회 기록","auto_snapshots",HmiIcon.CLOCK){openScreen(Screen.SNAPSHOTS)}
-        item("기록할 사람 · ${repository.currentDriver()?.label?:"선택 전"}","change_driver",HmiIcon.PERSON){chooseDriver()}
         item("사용법 · 화면 설정","help",HmiIcon.RECORD){openScreen(Screen.HELP)}
+        item("차량 동력 방식 · 시각 설정","vehicle_settings",HmiIcon.VEHICLE){openScreen(Screen.VEHICLE_SETTINGS)}
         menu.addView(ui.grid(items,columns()))
         body.addView(menu)
     }
@@ -287,7 +303,8 @@ class MainActivity : Activity() {
             val helpScreen=screen in setOf(Screen.HELP,Screen.HELP_TOPIC)
             root.addView(navigationBar(available),0)
             if(screen!=Screen.WELCOME){
-                val leading=if(helpScreen)ui.action("원래 화면으로","close_help",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{closeHelp()}}
+                val leading=if(screen==Screen.MENU)ui.action("메뉴 닫기","close_menu",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{onBackPressed()}}
+                    else if(helpScreen)ui.action("원래 화면으로","close_help",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{closeHelp()}}
                     else if(screen !in setOf(Screen.HOME,Screen.ISSUES,Screen.VEHICLE,Screen.DRIVERS))ui.action("이전","back",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{onBackPressed()}}else null
                 body.addView(ui.pageHeading(pageTitle(),leading,available))
             }
@@ -298,8 +315,9 @@ class MainActivity : Activity() {
             }
             val height=if(root.height>0)root.height/resources.displayMetrics.density else resources.configuration.screenHeightDp.toFloat()
             if(height>=600 && resources.configuration.fontScale<1.5f)root.addView(feedback,1)else body.addView(feedback,0)
-            if(menuOpen)moreMenu(body)
             when(screen){
+                Screen.MENU->moreMenu(body)
+                Screen.VEHICLE_SETTINGS->vehicleSettings(body)
                 Screen.HOME->home(body)
                 Screen.ISSUES->issues(body)
                 Screen.DRIVERS->driverScreen(body)
@@ -331,6 +349,22 @@ class MainActivity : Activity() {
                 check(getPreferences(MODE_PRIVATE).edit().putString("theme",when(preference){"dark"->"light";"light"->"system";else->"dark"}).commit())
                 draw()
             })
+    }
+    private fun vehicleSettings(body:LinearLayout){
+        body.addView(label("차량 동력 방식",26,true))
+        body.addView(label("화면에 먼저 보여드릴 정보를 정해요. 차량이 알려준 차종이나 인증 정보가 아니에요.",22))
+        body.addView(label("현재: ${vehicleDisplay.layoutDescription}",22).apply{tag="layout_current"})
+        PowertrainLayout.entries.forEach{layout->
+            body.addView(ui.action((if(vehicleDisplay.layout==layout)"✓ "else"")+layout.label,"layout_${layout.name}",ActionStyle.SECONDARY,canEdit()){
+                edit{vehicleDisplay.setLayout(layout);notice="화면 배치를 저장했어요. 차량 정보와 이전 기록은 바꾸지 않아요.";draw()}
+            }.apply{isSelected=vehicleDisplay.layout==layout})
+        }
+        body.addView(label("차종을 몰라도 이용할 수 있어요. 지원되지 않는 값은 만들지 않으며, 이전 조회 기록은 그대로 남아요.",20))
+        body.addView(label("차량 조회 시각",26,true))
+        body.addView(label("${vehicleDisplay.timeDescription}\n기기 시간대: ${ZoneId.systemDefault().id}\n차량 조회·연결 정보의 표시만 바뀌어요. 원본 시각과 기기 설정은 그대로예요.",22).apply{tag="time_zone_setting"})
+        for(device in listOf(false,true))body.addView(ui.action((if(vehicleDisplay.deviceTime==device)"✓ "else"")+(if(device)"기기 시간 사용"else"한국 시간 사용"),if(device)"time_device"else"time_seoul",ActionStyle.SECONDARY,canEdit()){
+            edit{vehicleDisplay.setDeviceTime(device);notice="시각 표시 설정을 저장했어요.";draw()}
+        }.apply{isSelected=vehicleDisplay.deviceTime==device})
     }
     private fun statusText(status:IssueStatus)=status.label
     private fun sectionName()=when(screen){Screen.HOME->"홈";Screen.ISSUES->"문제";Screen.VEHICLE->"차량";Screen.DRIVERS,Screen.DRIVER_EDIT->"운전자";else->"기록"}
@@ -492,7 +526,7 @@ class MainActivity : Activity() {
     }
     private fun freshnessMarker():String {
         val times=mutableListOf<Long>()
-        listOf("EV_SOC","ODOMETER").forEach{kind->observations.mostRecent(kind,true)?.receivedAt?.let{times.add(it)}}
+        listOf("EV_SOC","FUEL_PERCENT","ODOMETER").forEach{kind->observations.mostRecent(kind,true)?.receivedAt?.let{times.add(it)}}
         val shown=mutableListOf<Snapshot>()
         selectedSnapshot?.let{snapshots.get(it)?.let(shown::add)}
         if(screen in setOf(Screen.DETAIL,Screen.SUMMARY))selectedIssue?.let{snapshots.linked(it)?.let(shown::add)}
@@ -503,12 +537,18 @@ class MainActivity : Activity() {
         return times.distinct().joinToString{"$it:${now-it>=VehiclePresentation.STALE_AFTER_MS}:${it>now+60_000}"}
     }
     private fun metricGroup(body:LinearLayout,snapshot:Snapshot?=null,fromSnapshot:Boolean=false){
-        val cards=listOf("EV_SOC","ODOMETER").map{kind->
-            val pair=if(fromSnapshot)VehicleUi.values(snapshot,kind)else observations.mostRecent(kind) to observations.mostRecent(kind,true)
-            val view=VehiclePresentation.card(kind,pair.first,pair.second,System.currentTimeMillis())
-            ui.metric(VehicleUi.name(kind),if(pair.second==null)"확인 전"else view.value,view.time,view.attempt,kind,if(kind=="EV_SOC")HmiIcon.BATTERY else HmiIcon.DISTANCE)
+        fun pair(kind:String)=if(fromSnapshot)VehicleUi.values(snapshot,kind)else observations.mostRecent(kind) to observations.mostRecent(kind,true)
+        val layout=if(fromSnapshot)PowertrainLayout.UNKNOWN else vehicleDisplay.layout
+        val kinds=VehicleInfoPolicy.kinds(layout,{pair(it).first},{pair(it).second})
+        if(!fromSnapshot)body.addView(label(vehicleDisplay.layoutDescription,20).apply{tag="powertrain_context"})
+        val cards=kinds.map{kind->
+            val pair=pair(kind)
+            val view=VehiclePresentation.card(kind,pair.first,pair.second,System.currentTimeMillis(),vehicleDisplay::time)
+            val value=if(pair.second==null)when(pair.first?.status){ObservationStatus.UNSUPPORTED->"지원되지 않음";null->"확인 전";else->"확인할 수 없음"}else view.value
+            ui.metric(VehicleInfoPolicy.name(kind,layout),value,view.time,view.attempt,kind,when(kind){"ODOMETER"->HmiIcon.DISTANCE;"FUEL_PERCENT"->HmiIcon.FUEL;else->HmiIcon.BATTERY})
         }
         body.addView(ui.grid(cards,columns()))
+        body.addView(label(vehicleDisplay.timeDescription,20).apply{tag="vehicle_time_zone"})
         val source=if(fromSnapshot)VehicleUi.source(snapshot)else{
             val item=observations.mostRecent("EV_SOC")?:observations.mostRecent("ODOMETER")
             when(item?.source){ObservationSource.PLEOS_EMULATOR_SDK->"에뮬레이터에서 받은 값이에요.";ObservationSource.PLEOS_VEHICLE_SDK->"차량 SDK에서 받은 값이에요.";else->"아직 차량 정보를 받지 못했어요."}
@@ -535,7 +575,7 @@ class MainActivity : Activity() {
         val first=snapshots.first(card)?.id
         snapshots.timeline(card,limit,offset).forEach{s->
             val meaning=when{first==s.id->"처음 저장한 조회";s.changed->"이전 조회와 달라진 정보";else->"같은 값 다시 확인"}
-            body.addView(ui.history(VehicleUi.shortTime(s.at),"$meaning\n${VehicleUi.compact(s)}","snapshot_${s.id}",canEdit()){edit{openSnapshot(s)}})
+            body.addView(ui.history(vehicleDisplay.time(s.at),"$meaning\n${VehicleUi.compact(s)}","snapshot_${s.id}",canEdit()){edit{openSnapshot(s)}})
         }
     }
     private fun historyPreview(body:LinearLayout,card:String){
@@ -552,7 +592,7 @@ class MainActivity : Activity() {
             val card=panel().apply{tag="snapshot_card"}
             card.addView(label(VehicleUi.source(s),20))
             card.addView(label(VehicleUi.compact(s),26,true))
-            card.addView(label("조회 ${VehicleUi.shortTime(s.at)}",20))
+            card.addView(label("조회 ${vehicleDisplay.time(s.at)}",22))
             card.addView(ui.action("조회 내용 보기","open_snapshot",ActionStyle.SECONDARY,canEdit(),HmiIcon.CHEVRON){edit{openSnapshot(s)}})
             card.addView(ui.action(if(hiddenSnapshots)"다시 표시"else"이 정보 숨기기","hide_snapshot",ActionStyle.QUIET,canEdit()){edit{snapshots.hide(s.cardId,!hiddenSnapshots);draw()}})
             body.addView(card);historyPreview(body,s.cardId)
@@ -582,7 +622,7 @@ class MainActivity : Activity() {
         val card=panel().apply{tag=testTag}
         card.addView(label("함께 저장한 차량 정보",24,true))
         card.addView(label(VehicleUi.compact(s),24))
-        card.addView(label("조회 ${VehicleUi.shortTime(s.at)} · ${VehicleUi.source(s)}",20))
+        card.addView(label("조회 ${vehicleDisplay.time(s.at)} · ${VehicleUi.source(s)}",22))
         card.addView(ui.action("차량 정보 자세히","linked_snapshot_detail",ActionStyle.QUIET,canEdit(),HmiIcon.CHEVRON){edit{openSnapshot(s)}})
         body.addView(card)
     }
@@ -817,7 +857,9 @@ class MainActivity : Activity() {
         if(!captureDraft())return
         rememberLocation()
         searchInput=null
-        if(screen!=target)history.addLast(screen)
+        val origin=if(screen==Screen.MENU)menuReturn?:Screen.HOME else screen
+        if(origin!=target)history.addLast(origin)
+        menuReturn=null
         prepare();screen=target;draw()
     }
     private fun edit(action:()->Unit){

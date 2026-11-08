@@ -1,5 +1,42 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 20:02 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 차종 호환 표시·독립 공통 메뉴·KST 조회 시각 안정화
+
+- 기준 main26bcaed41007b5a4cd2d2db3068d48edaa4df959와 로컬 공유 대상85파일 SHA를 대조해 미게시 차이가 없음을 확인했습니다. Aside 두 연구/디자인·검사/자동 기록 자료를 다시 기준으로 삼고 공식 Vehicle SDK 문서·설치2.3.2 AAR의 공개 메서드/권한 annotation을 확인했습니다. 연구와 다른 작업의 파일을 수정하지 않습니다. Git/.git/clone/push/재설치/보안 정책 변경은 수행하지 않았습니다.
+- 홈의 기존 정보/확인할 기록/두 주요 행동을 유지했습니다. VehicleDisplaySettings는 차종 미확인/전기차/내연기관/HEV/PHEV/기타의 수동 화면 배치와 차량 시각 설정만 SharedPreferences에 저장합니다. SDK 식별·VIN 디코딩·고장 판정 데이터가 아닙니다. 연료·구동 배터리·거리의 실제 지원/미수신/과거 값/실패를 분리하며 미지원을0으로 만들지 않습니다. 선택해도 수집 정책·과거 조회·불변 링크는 그대로입니다.
+- 설치 AAR의 CarInfo에는 VIN/CRN 읽기·각 Capability가 있고 CAR_INFO가 필요합니다. getCapabilityInfo는 PRIVATE_CAR_INFO annotation입니다. 동력 방식/모델 직접 읽기 공개 메서드는 찾지 못했습니다. 추가 권한이나 VIN/CRN 수집·특권 map 호출은 하지 않았고 CarInfo 실제 Capability/수신은 미검증입니다. SOC 성공이나 연료 미지원으로 EV를 확정하지 않았습니다. 세부 근거·공식 링크는 VEHICLE_DISPLAY_COMPATIBILITY.md에 있습니다.
+- 메뉴를 독립 MENU 화면/동일5항목·순서로 통일했습니다. 원래 본문을 같이 그리지 않고 메뉴만 선택합니다. menuReturn으로 닫기/같은 메뉴/이전과 목적지 복귀의 검색어·필터·위치/초안을 유지합니다. 좁은 창의 접힌 탭 이동은 별도 영역입니다. 원문·운전자 확정·상태/읽음/SDK 조회를 메뉴 열기로 바꾸지 않습니다.
+- 차량 조회/이력/연결 시각은 기본 KST(+09:00), 선택 기기 IANA 시간대/당시 offset을22sp/본문 대비로 표시합니다. 원래 epoch와 OS America/Los_Angeles는 그대로입니다. 발견 시각/이벤트의 기존 기기 시간 의미도 유지했습니다. 상담에서 내부 내용 버전/확인 revision 차수만 숨기고 실제 재발/점검·수정/인계/상태 이력과 DB revision은 그대로입니다. P1 상담 구획 전체 재작성은 보류했습니다.
+
+### 실제 빌드·검사와 실패 보완
+
+- 최종3APK assembleDebug/assembleValidation/assembleValidationAndroidTest offline BUILD SUCCESSFUL in1m26s,93작업13실행/80 up-to-date. 기존 JBR/Gradle8.11.1/API34/Build-Tools35.0.0/Vehicle2.3.2. 일반 Debug APK SHA25602D2BA03BBD58F9A78977D30FB68A17A71EF0FB53B2F283583050968FE5BCCA2.
+- 기존246개를 최종 소스에서 재통과했습니다: MVP24/관측6/UI27/migration18/RR36+실제cold2/NAV17+실제cold12/ON32/AM35+실제cold4+관측 사본보존2/PX25+일반3DB보존6. 신규 CP48+실제cold3=51, **총297 assertion 통과**. 최종 compat-final-*.txt와 이전 실패 로그를 로컬에 남겼습니다.
+- 신규 검사: 세 출발 화면 메뉴 이름·순서/본문 분리/단일 선택·복귀,6수동 배치/지원별 정보, 유효0과 결측/미지원/이전 실패, 다른 신호/TEST_ONLY 거부, 같은 epoch의 KST/LA, 설정·초안·menu recreate/cold, 내부 번호 없는 실제 이력을 검증했습니다. 메뉴/설정의320/600/1024dp·100/200%·두 테마24상태를 추가했고 기존PX198 native render·ON200·NAV낮은 높이6도 재통과했습니다. 실제 OS 분할·IME/모든 차종·물리 접근성/사용자 이해도 통과로 확대 해석하지 않습니다.
+- 첫 시간 검사 실패는 Android의 z가 KST 대신 GMT+09:00을 출력하는 것을 실제 XML에서 확인해 명시 라벨로 수정했습니다. 중간 기본 UI 검사는 dirty 초안의 전환 차단 안내가 메뉴에 남아 실패했습니다. 차단 시 작성 화면으로 돌아가 원문/현재 운전자와 안내를 유지하도록 수정하고 새 검사1개를 추가한 뒤 전체를 다시 실행했습니다. 첫 jar 경유 javap의 AccessDenied 종료와 추출 class 직접 읽기 exit0도 구분했습니다.
+- 최종 실제 SDK session ed1d15fb-1df1-48bb-91bd-d874c096d4d9: SOC100%/receivedAt1794135239509, 거리0.0km/1794135239728, READ/RECEIVED·PLEOS_EMULATOR_SDK. 연료 UNSUPPORTED/ERROR_NOT_SUPPORTED_PROPERTY·값 없음. 합성 연료/차종 fixture는 validation 메모리에서만 검사했습니다. 실제 ICE/HEV/PHEV나 CarInfo 수신 성공이라고 보고하지 않습니다.
+- force-stop 후 validation 실제 화면에서도 하이브리드 수동 배치와 기기 시간 설정 복원을 확인했습니다. 초안 ID/원문은 cold 저장 검사로 확인했고 화면 아래 초안 배너를 보지 않은 캡처만으로 UI 전체 성공을 주장하지 않습니다. 일반 홈/메뉴/설정 전체 앱 창과 validation KST 홈/설정 두 테마 native1024dp·cold 화면을 시각 확인했습니다.
+
+### 최신 사용자 데이터 백업·일반 앱 적용
+
+- emulator-5554/user10의 일반 앱을 먼저 멈추고 databases/shared_prefs/files 전체를 .tools/compat-backup/20261108-193209/before.tar와3DB로 새로 백업했습니다. tar SHA25613AEA0E77E341DB53DE5B22AA526DB6B13440820B4F282219F2CB8B9E9E1F6B2. 기존 개인 백업/AVD/과거 시험/출처 불명 데이터는 삭제하지 않았습니다. 모든 UI 계측은 validation 패키지이며 일반 앱에는 시험 문제/프로필/초안을 만들지 않았습니다.
+- 모든 검증 전후 일반3DB 바이트 동일을 확인한 후 install-r 성공/COLD Status:ok. 설치 base.apk SHA256은 위 최종 APK와 같았습니다. 실제 일반 홈의 차종 미확인·100%/0km·19:57:41 KST(+09:00)·출처와 동일 메뉴를 확인했고 현재 일반 목록은 **23건**이었습니다.22건으로 고정하지 않았습니다. OS 시간대는 America/Los_Angeles로 그대로입니다.
+- 설치/화면 확인 뒤 문제 DB SHA256A296015F415A8CAFE775C7E149C78EB2E46166AFCF5FD04344386FABF47D8FFB는 설치 전과 같습니다.3DB 독립 사본의 모든 원본 scalar/운전자/이벤트/초안/관측/불변 연결 포함·동일 schema version·integrity/FK를 확인했습니다. 원관측/스냅샷에는 일반 진입의 실제 결과가 추가됐고 기존 행은 남았습니다. after-install.tar·개별 사본·개인 캡처/XML도 같은 비공개 폴더에 보존했습니다.
+- 보호 파일 IssueModels/CaritdaService/IssueRepository/SqliteIssueRepository/RecordMigration/PleosReadClient/ObservationStore/SnapshotStore/EntryReadState/CarSafetyGate는 기준 SHA와 동일합니다. 새 DB schema/migration·권한·상시 관측·서버는 없습니다. 실제 PC의 소스와 일반 앱에 적용됐으며 원격 문서만 바꾼 작업이 아닙니다.
+
+### 수정 파일·미완료·다음 작업·게시
+
+- 앱6: MainActivity.kt, domain/ConsultationSummary.kt, ui/CaritdaDesign.kt·VehiclePresentation.kt·VehicleUi.kt, 신규 ui/VehicleDisplaySettings.kt. 검사4: MvpScenarioInstrumentation.kt, ValidationEnvironment.kt, ValidationUiActions.kt, 신규 CompatibilityChecks.kt. 문서6: AGENTS.md, docs/CARITDA_DESIGN_SYSTEM.md·CODEX_PROGRESS.md·신규VEHICLE_DISPLAY_COMPATIBILITY.md, 루트/앱 README.md. 총16파일입니다.
+- 미검증/미완료: 실차 동력 방식·연료/HEV/PHEV 데이터, CarInfo Capability/실제 수신, 실제 OS 분할/IME·물리 TalkBack/rotary·고령 사용자 과제, 실차 주행 제한, Lint(기존 캐시 부재로 재실행 안 함), Release 서명/실행/제출 APK. 별도 src/test 소스는 없으며 실제 계측과 빌드를 근거로 합니다. P1 상담 전체 재배치와 새 AI/회복/푸시/상시 수집은 구현하지 않았습니다.
+- 다음은 공통 메뉴/차종·시간 설정의 사용자 검수와 필요한 안정화, Release/기획서·시연 영상·심사 접근 점검입니다.11월15일 제출 전 대규모 기능 확장보다 검증된 버전 확보를 우선합니다. 키·DB·개인 캡처·APK·캐시·로그는 게시하지 않습니다.
+- 검증된 이번16파일만 최신 main 부모/기대HEAD로 **GitHub 연결 도구를 통한 게시**하고 원격 파일SHA·부모·연구 보존을 검증합니다. 최종 커밋은 완료 응답에 보고하며 자기SHA를 문서에 넣기 위한 반복 커밋은 만들지 않습니다.
+
+아래는 과거 개발 기록으로 보존합니다.
+
+---
+
 마지막 업데이트: 2026-11-08 18:33 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — Premium Automotive UI 구현·실행·데이터 보존

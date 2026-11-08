@@ -17,13 +17,12 @@ object ConsultationSummary {
         appendLine("발생 상황: ${issue.situation}")
         if (issue.memo.isNotBlank()) appendLine("추가 메모: ${issue.memo}")
         appendLine("현재 상태: ${statusText(issue.status)}")
-        appendLine("내용 버전: ${issue.revision}")
         appendLine("재발 기록: ${events.count{it.kind==EventKind.RECURRENCE}}회")
         appendLine()
         appendLine("운전자 확인 이력")
         val acknowledgements = events.filter { it.kind == EventKind.ACKNOWLEDGED }
         if (acknowledgements.isEmpty()) appendLine("다른 운전자의 확인 기록이 아직 없습니다.")
-        acknowledgements.forEach { appendLine("${time(it.at)} · ${it.actor.label} · ${it.revision}차 기록 확인") }
+        acknowledgements.forEach { appendLine("${time(it.at)} · ${it.actor.label} · 내용을 읽었어요") }
         appendLine()
         appendLine("점검·조치 및 상태 이력")
         val actions = events.filter { it.kind in setOf(EventKind.NOTE, EventKind.STATUS, EventKind.RECURRENCE) }

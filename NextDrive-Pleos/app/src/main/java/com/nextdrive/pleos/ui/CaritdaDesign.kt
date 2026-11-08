@@ -40,7 +40,7 @@ object CaritdaTokens {
     const val METRIC=42
 }
 enum class ActionStyle { PRIMARY, SECONDARY, QUIET, DANGER }
-enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK }
+enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, FUEL, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK }
 data class AttentionContent(val title:String,val preview:String,val explanation:String)
 
 /** Original consistent 24-unit outline symbols. No OEM or third-party icon data. */
@@ -58,6 +58,7 @@ class CaritdaIcon(private val icon:HmiIcon,private val tint:Int):Drawable(){
             HmiIcon.BACK->path(14f,5f,7f,12f,14f,19f)
             HmiIcon.CHEVRON->path(9f,5f,16f,12f,9f,19f)
             HmiIcon.BATTERY->{canvas.drawRoundRect(3f,6f,20f,18f,2f,2f,p);path(22f,10f,22f,14f);path(7f,9f,7f,15f);path(11f,9f,11f,15f)}
+            HmiIcon.FUEL->{canvas.drawRoundRect(4f,3f,14f,21f,1f,1f,p);canvas.drawRect(7f,6f,11f,10f,p);path(14f,12f,17f,12f,17f,18f,21f,18f,21f,8f,18f,5f);path(2f,21f,16f,21f)}
             HmiIcon.DISTANCE->{canvas.drawArc(3f,4f,21f,22f,180f,180f,false,p);path(5f,18f,19f,18f);path(12f,15f,16f,9f)}
             HmiIcon.PERSON->{canvas.drawCircle(12f,7f,4f,p);canvas.drawArc(4f,13f,20f,26f,180f,180f,false,p)}
             HmiIcon.CHECK->path(4f,12f,10f,18f,20f,6f)
@@ -142,7 +143,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
         tag="metric_$key"
         addView(text(name,22,true).apply{setCompoundDrawablesRelative(CaritdaIcon(icon,colors.secondary).apply{setBounds(0,0,dp(CaritdaTokens.METRIC_ICON),dp(CaritdaTokens.METRIC_ICON))},null,null,null);compoundDrawablePadding=dp(CaritdaTokens.MEDIUM)})
         addView(text(value,CaritdaTokens.METRIC,true).apply{tag="value_$key";setPadding(0,dp(12),0,dp(8))})
-        addView(text(time,20,secondary=true).apply{tag="time_$key"})
+        addView(text(time,22,true).apply{tag="time_$key"})
         if(state.isNotBlank())addView(text(state,20,secondary=true).apply{tag="attempt_$key"})
     }
     fun history(title:String,subtitle:String,key:String,enabled:Boolean,click:()->Unit)=action("$title\n$subtitle",key,ActionStyle.QUIET,enabled,HmiIcon.CLOCK,click)

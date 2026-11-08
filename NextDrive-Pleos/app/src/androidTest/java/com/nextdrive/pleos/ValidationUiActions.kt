@@ -12,7 +12,7 @@ object ValidationUiActions {
             if(a.window.decorView.findViewWithTag<View>(key)!=null)return@runOnMainSync
             val opener=when(key){
                 "memo","select_snapshot","discovered_at"->"record_extras"
-                "my_issues","auto_snapshots","help","change_driver","nav_ISSUES","nav_VEHICLE"->"menu"
+                "my_issues","auto_snapshots","help","change_driver","vehicle_settings","nav_ISSUES","nav_VEHICLE"->"menu"
                 else->null
             }
             opener?.let{

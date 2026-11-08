@@ -16,14 +16,14 @@ class ReliabilityChecks(private val instrumentation:Instrumentation) {
     private fun await(label:String,test:()->Boolean){val end=System.currentTimeMillis()+20_000;while(System.currentTimeMillis()<end){if(test())return;Thread.sleep(80)};error(label)}
     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
     private fun tag(a:MainActivity,key:String):View?=a.window.decorView.findViewWithTag(key)
-    private fun click(a:MainActivity,key:String){main{val v=tag(a,key)?:error("Missing $key");check(v.isEnabled){"Disabled $key"};check(v.performClick())};instrumentation.waitForIdleSync()}
+    private fun click(a:MainActivity,key:String){ValidationUiActions.reveal(instrumentation,a,key);main{val v=tag(a,key)?:error("Missing $key");check(v.isEnabled){"Disabled $key"};check(v.performClick())};instrumentation.waitForIdleSync()}
     private fun navigate(a:MainActivity,key:String){if(main{tag(a,"nav_$key")==null})click(a,"menu");click(a,"nav_$key")}
     private fun select(a:MainActivity,id:String){await("driver ready"){main{tag(a,"driver_$id")?.isEnabled==true}};click(a,"driver_$id");click(a,"start_driving")}
     private fun text(a:MainActivity)=main{
         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
         collect(a.window.decorView)
     }
-    private fun fill(a:MainActivity,body:String,memo:String="",type:SymptomType=SymptomType.NOISE){main{(tag(a,"symptom_type") as Spinner).setSelection(type.ordinal);(tag(a,"situation") as EditText).setText(body);(tag(a,"memo") as EditText).setText(memo)};instrumentation.waitForIdleSync()}
+    private fun fill(a:MainActivity,body:String,memo:String="",type:SymptomType=SymptomType.NOISE){click(a,"type_${type.name}");ValidationUiActions.reveal(instrumentation,a,"memo");main{(tag(a,"situation") as EditText).setText(body);(tag(a,"memo") as EditText).setText(memo)};instrumentation.waitForIdleSync()}
     private fun finish(a:MainActivity){main{a.finish()};instrumentation.waitForIdleSync()}
     private fun accessible(label:String){
         await("dialog $label"){instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText(label)?.any{it.isClickable && it.text?.toString()==label}==true}

@@ -55,6 +55,12 @@ class SnapshotStore(context:Context,name:String="caritda-snapshots.db"):
     fun get(id:String):Snapshot?=readableDatabase.rawQuery("SELECT * FROM snapshots WHERE id=?",arrayOf(id)).use{if(it.moveToFirst())decode(it)else null}
     fun history(card:String):List<Snapshot> = readableDatabase.rawQuery("SELECT * FROM snapshots WHERE card_id=? AND changed=1 ORDER BY rowid DESC",arrayOf(card)).use{c->buildList{while(c.moveToNext())add(decode(c))}}
     fun first(card:String):Snapshot?=readableDatabase.rawQuery("SELECT * FROM snapshots WHERE card_id=? ORDER BY rowid LIMIT 1",arrayOf(card)).use{if(it.moveToFirst())decode(it)else null}
+    /** Presentation pagination only: no schema, ordering or evidence changes. */
+    fun timeline(card:String,limit:Int=3,offset:Int=0):List<Snapshot>{
+        require(limit in 1..100 && offset>=0)
+        return readableDatabase.rawQuery("SELECT * FROM snapshots WHERE card_id=? ORDER BY rowid DESC LIMIT ? OFFSET ?",arrayOf(card,limit.toString(),offset.toString())).use{c->buildList{while(c.moveToNext())add(decode(c))}}
+    }
+    fun snapshotCount(card:String):Int=readableDatabase.rawQuery("SELECT count(*) FROM snapshots WHERE card_id=?",arrayOf(card)).use{it.moveToFirst();it.getInt(0)}
     fun hide(card:String,hidden:Boolean){writableDatabase.execSQL("UPDATE cards SET hidden=? WHERE id=?",arrayOf(if(hidden)1 else 0,card))}
     fun select(draft:String,snapshot:String?){
         if(snapshot==null)writableDatabase.delete("selections","draft_id=?",arrayOf(draft))

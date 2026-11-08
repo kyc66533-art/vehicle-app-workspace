@@ -1,5 +1,44 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 18:33 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Premium Automotive UI 구현·실행·데이터 보존
+
+- 기준/게시 직전 확인 대상 main: c112d72ee3d37d10d593583e60944e7e233eaf45. 중단 직전 로컬 UI 변경과 빌드/로그를 먼저 확인해 보존했고 완료된 검증을 처음부터 반복하지 않았습니다. 네 Aside 연구와 기존 AM/NAV/ON/RR 자료, 공식 Pleos UI/Layout/Typography·현대차그룹 소개·Android for Cars 기준을 읽었습니다. 연구8개/기존 이력은 수정하지 않습니다. 로컬 Git/.git/clone/push·Codex 재실행은 수행하지 않았습니다.
+- 실제 Kotlin Android View UI: 고정 적응형 탐색, 두 수치 카드/한 확인 영역/두 CTA 홈, 메뉴의 이름·도움말, 짧은 차량 기본 화면과3건 미리보기/20건 페이지·선택 조회 상세, 간편 증상 버튼·선택 정보 접기, 문제/상담·불변 연결·역순 이력을 구현했습니다. snapshotText 장문 반복 대신 구조화한 표시를 사용합니다. 주행 상태는 UI 행동 실행 시에도 현재 값을 재검사합니다.
+- CaritdaDesign.kt의 색/타입/간격/상태·버튼·카드·자체 Canvas 아이콘과 VehicleUi.kt의 읽기 전용 표현을 분리했습니다. OEM 자산/로고/폰트를 복제하거나 설치하지 않았습니다. 자체 토큰과 공식 원칙의 차이·60대 이상 과제표는 CARITDA_DESIGN_SYSTEM.md/DESIGN_ACCEPTANCE.md에 기록했습니다. 새 SDK/API/DB schema/AI/자동 회복/저SOC/원격 기능은 추가하지 않았습니다.
+
+### 이번 실제 검사와 오류 구분
+
+- 최종 assembleDebug/assembleValidation/assembleValidationAndroidTest offline BUILD SUCCESSFUL in1m32s,93작업(10실행/83 up-to-date). 일반 APK SHA256 0425332311983A4A52F0268AAA52376B947CA17BD4E488D15E11B7234166B15A. 기존 JBR/Gradle8.11.1/API34/Build-Tools35.0.0/Vehicle2.3.2를 유지했습니다.
+- 기존215개 재통과: MVP24+observation6+UI27+migration18+RR36/실제cold2+NAV17/실제cold12+ON32+AM35/실제cold4/일반 관측 사본보존2. 신규PX UI25+운영3DB 독립사본6=31, 총246 assertion 통과입니다. 구형 단계의 통과 결과를 새 앱 결과로 재사용하지 않았습니다.
+- ON 최초 실행은 예전 고정 change_driver 버튼을 기다린 선택자에서 실패했습니다. 새 운전자 선택 화면의 실제 start_driving 대기만 수정했고 테스트 APK 재빌드1m2s/4실행·89 up-to-date, 일반 앱 SHA 불변 확인 후 ON32만 재실행해 통과했습니다. 이전 실패 로그도 보존합니다. 첫 Java 환경 알림을 PowerShell이 stderr 오류로 중단한 건과 실제 Gradle 성공은 구분합니다.
+- 새 native198 render는320/600/1024dp·100/150/200%·두 테마·10화면 상태와 낮은 높이 홈18조합입니다. 버튼76dp/말줄임·가로 넘침/스크롤 공간/고정 탐색을 측정했습니다. 기존ON200/NAV낮은 높이6도 재통과했습니다. 실제 전체 Pleos 앱 창을 복원한 밝음·어두움 홈과 선택 조회/작성/상세를 시각 확인했습니다. 자동 검사가 사람의 이해도·모든 OS 분할·IME·물리 접근성을 증명하지 않습니다.
+- 최종 실제 SDK session b1d3eb8b-4d94-47c5-b11f-0e5500c026b6: SOC100%/1794129662676, 누적거리0.0km/1794129662844, READ/RECEIVED·PLEOS_EMULATOR_SDK. 연료는 UNSUPPORTED/ERROR_NOT_SUPPORTED_PROPERTY·값 없음. 원본/단위·시각·Capability·ID/세션은 기술 상세에 보존됩니다. 에뮬레이터 기기 시간대는PST, 보고 시각은KST이며 차량 측 측정시각 미제공은 그대로입니다.
+
+### 일반 앱 설치와 원본 보존
+
+- emulator-5554/user10 확인, 일반 앱 force-stop·databases/shared_prefs/files 전체 바이너리 백업 후 validation에서만 계측했습니다. .tools/design-backup/20261108-173150/에 before.tar/before-validation.tar/after-install.tar와3DB 전후 사본·비공개 캡처를 보존했습니다. 이전 개인 백업도 삭제하지 않았습니다.
+- 계측 전후 일반 문제/관측/스냅샷 DB는 각각 바이트 동일했습니다. 일반 앱 install-r 성공/COLD Status:ok, 설치 base.apk SHA256과 빌드 SHA 일치, 홈·차량 정보의 실제100%/0km/시각/출처·일반 목록22건을 확인했습니다. 운전자 확정이나 검증 문제/프로필/메모를 일반 앱에 추가하지 않았습니다.
+- 문제 DB는 교체·화면 확인 후에도 856D222EAC66E9109F71D41AC7413358698F02424415B95C5DBC036F1D21B1DE로 바이트 동일합니다.3DB 전후 전체 원본 scalar/작성자·초안·이벤트/불변 링크 포함·동일 schema version·integrity/FK를 validation의 읽기 전용 사본에서 확인했습니다. 관측/스냅샷은 일반 진입의 실제 SDK 결과만 추가됐습니다. 기존22건·연구·AVD·과거 검증 이름/출처 불명 기록을 임의 삭제하지 않았습니다.
+- 보호 backend9파일은 기준 blob SHA와 동일하고 SnapshotStore는 SELECT 페이지 조회/건수만 추가했습니다. 데이터 의미·SDK 단발 진입 상태·CarSafetyGate·영구 ID·권한·네 수동 상태·논리 삭제/초안 정책을 유지합니다. 로컬 소스와 실제 일반 앱에 반영됐으며 GitHub만 바꾼 작업이 아닙니다.
+
+### 이번 명시적 변경 파일
+
+- 앱4개: MainActivity.kt, vehicle/SnapshotStore.kt, 신규 ui/CaritdaDesign.kt·ui/VehicleUi.kt. 빌드 설정/manifest/아이콘 리소스·다른 backend는 변경하지 않았습니다.
+- 계측7개: MvpScenarioInstrumentation.kt, AutomaticChecks.kt, NavigationChecks.kt, ReliabilityChecks.kt, OnboardingChecks.kt, 신규 DesignChecks.kt·ValidationUiActions.kt. 실제 새 버튼/메뉴·선택 접기 경로를 검사하며 숨은 가짜 UI를 두지 않았습니다.
+- 문서6개: AGENTS.md, 신규 docs/CARITDA_DESIGN_SYSTEM.md·docs/DESIGN_ACCEPTANCE.md, docs/CODEX_PROGRESS.md, 루트 README.md, NextDrive-Pleos/README.md. 총17파일이며 연구/DB/키/백업/로그/캡처/APK는 게시 대상이 아닙니다.
+
+### 미검증·미완료와 다음 작업
+
+- 실제60대 이상2~3명 과제, TalkBack/rotary·시스템 고대비/반사광, OS 분할/회전/IME·모든 대화상자 확대, 실차/실제 주행 RESTRICTED는 미검증입니다. synthetic/UNKNOWN 안전 검사를 실차 성공으로 바꾸지 않습니다. 별도 src/test 단위 소스는 없으며 Lint는 기존 캐시 부재 상태에서 재실행하지 않았습니다.
+- Release 서명/Release 실행/제출 APK·비공개 저장소 심사자 접근은 미완료입니다. Debug APK를 Release로 부르거나 키를 게시하지 않습니다. 자동 진단·AI·자동 회복·Gleo·휴대폰/정비소 연동은 구현하지 않았습니다.
+- 다음은 문서 과제표로 실제 사용자 시험→막힌 문구/경로 개선→OS 분할/키보드·접근성·Release 검증입니다. 검증된 이번17파일만 최신 main을 부모/기대HEAD로 GitHub 연결 도구를 통한 게시 후 원격 파일SHA·부모·Aside 연구 보존을 확인합니다. 실제 최종 커밋은 완료 응답으로 제공하며 자기SHA 삽입을 위한 반복 커밋은 하지 않습니다.
+
+아래는 과거 개발 기록으로 보존합니다.
+
+---
+
 마지막 업데이트: 2026-11-08 16:53 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 실제 SDK 자동 스냅샷 P0 구현·검증

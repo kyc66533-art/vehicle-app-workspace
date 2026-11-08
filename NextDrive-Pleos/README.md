@@ -1,3 +1,13 @@
+# CARITDA(가칭) — Premium Automotive UI
+
+2026-11-08: 실제 차량 정보 두 카드·확인할 기록·기록 확인/증상 남기기 중심 홈, 고정 적응형 탐색, 간편 작성과 선택 정보, 짧은 조회 이력/기술 상세를 구현했습니다. Kotlin Android View와 SDK2.3.2·기존 데이터/권한/단발 자동 조회를 유지합니다. 현대차 공식 자산을 복제하지 않은 CARITDA 자체 디자인입니다.
+
+Pleos v2.1.0에서 기존215+신규31=246 assertion 통과, 일반 APK 데이터 유지 교체 설치/화면 확인, 기존 문제22건과3DB 원본 보존을 확인했습니다. 실제 고령 사용자 시험·OS 분할/IME·TalkBack/rotary·실차·Release는 미검증/미완료입니다. [디자인 시스템](../docs/CARITDA_DESIGN_SYSTEM.md)과 [검사 범위·전후 비교·직접 확인 순서](../docs/DESIGN_ACCEPTANCE.md)를 확인하세요.
+
+이 프로젝트를 Android Studio로 열어 기존 AVD에서 app Run을 사용합니다. 일반 앱은 차량 아이콘, 검증 앱은 [TEST] 플라스크입니다. Debug APK는 로컬 app/build/outputs/apk/debug/app-debug.apk이며 앱 데이터/키/백업/로그/개인 캡처/APK는 GitHub 게시 대상이 아닙니다. 아래 이전 기록을 보존합니다.
+
+---
+
 # CARITDA(가칭) — 실제 SDK 자동 스냅샷 P0
 
 2026-11-08 검증: 앱 가시·입력 허용 진입당 한 번 실제 SOC/누적거리 조회 → 원본 저장 → 차량 상태 카드 한 개 갱신 → 사용자가 선택한 증상에 불변 스냅샷 연결. 고장 진단/자동 상태 변경/상시 감시가 아닙니다. 일반 차량 아이콘과 [TEST] 플라스크 검증 앱을 구분합니다.

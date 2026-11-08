@@ -22,13 +22,13 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
     private fun finish(a:MainActivity){main{a.finish()};instrumentation.waitForIdleSync()}
     private fun tag(a:MainActivity,key:String):View?=a.window.decorView.findViewWithTag(key)
-    private fun click(a:MainActivity,key:String){main{val view=tag(a,key)?:error("Missing $key");check(view.isEnabled){"Disabled $key"};check(view.performClick())};instrumentation.waitForIdleSync()}
+    private fun click(a:MainActivity,key:String){ValidationUiActions.reveal(instrumentation,a,key);main{val view=tag(a,key)?:error("Missing $key");check(view.isEnabled){"Disabled $key"};check(view.performClick())};instrumentation.waitForIdleSync()}
     private fun select(a:MainActivity,id:String){await("driver $id input allowed"){main{tag(a,"driver_$id")?.isEnabled==true}};click(a,"driver_$id");click(a,"start_driving")}
     private fun text(a:MainActivity)=main{
         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
         collect(a.window.decorView)
     }
-    private fun set(a:MainActivity,key:String,value:String){main{(tag(a,key) as EditText).setText(value)};instrumentation.waitForIdleSync()}
+    private fun set(a:MainActivity,key:String,value:String){ValidationUiActions.reveal(instrumentation,a,key);main{(tag(a,key) as EditText).setText(value)};instrumentation.waitForIdleSync()}
     private fun search(a:MainActivity,value:String){set(a,"record_search",value);click(a,"apply_search")}
     private fun dialog(label:String){
         await("dialog $label"){instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText(label)?.any{it.isClickable&&it.text?.toString()==label}==true}

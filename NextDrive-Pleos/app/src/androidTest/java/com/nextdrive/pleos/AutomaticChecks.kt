@@ -20,7 +20,7 @@ class AutomaticChecks(private val inst:Instrumentation){
     private fun <T> main(f:()->T):T{var r:T?=null;inst.runOnMainSync{r=f()};@Suppress("UNCHECKED_CAST")return r as T}
     private fun await(label:String,f:()->Boolean){val until=System.currentTimeMillis()+25000;while(System.currentTimeMillis()<until){if(f())return;Thread.sleep(80)};error(label)}
     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
-    private fun click(a:MainActivity,k:String){main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled){"Disabled $k"};v.performClick()};inst.waitForIdleSync()}
+    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled){"Disabled $k"};v.performClick()};inst.waitForIdleSync()}
     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
     private fun rows(db:SQLiteDatabase,table:String)=db.rawQuery("SELECT * FROM $table ORDER BY 1",null).use{r->buildList{while(r.moveToNext())add((0 until r.columnCount).map{if(r.isNull(it))null else r.getString(it)})}}
     fun run():List<String>{
@@ -44,12 +44,12 @@ class AutomaticChecks(private val inst:Instrumentation){
         verify(batch.single{it.kind=="FUEL_PERCENT"}.let{it.raw==null&&it.status==ObservationStatus.UNSUPPORTED},"AM unsupported fuel remains valueless")
         verify(before==before.keys.associateWith{rows(repo.readableDatabase,it)},"AM auto snapshot before driver start changes no driver issue event or draft")
         click(a,"driver_A");click(a,"start_driving")
-        repeat(3){click(a,"nav_HOME");click(a,"vehicle_data");click(a,"nav_HOME")}
+        repeat(3){click(a,"nav_HOME");click(a,"nav_VEHICLE");click(a,"nav_HOME")}
         Thread.sleep(1200)
         verify(obs.latest(100).size==3&&cards.cards().size==1,"AM screen navigation and freshness redraw never poll or duplicate cards")
         val monitor=inst.addMonitor(MainActivity::class.java.name,null,false)
         main{a.recreate()};a=monitor.waitForActivityWithTimeout(15000) as? MainActivity?:error("recreated activity missing");inst.removeMonitor(monitor)
-        await("recreated app safe"){main{tag(a,"auto_snapshots")?.isEnabled==true}}
+        await("recreated app safe"){main{tag(a,"new_issue")?.isEnabled==true}}
         Thread.sleep(1000)
         verify(obs.refs().size==3,"AM actual Activity recreation retains foreground entry claim")
         click(a,"auto_snapshots");click(a,"hide_snapshot")

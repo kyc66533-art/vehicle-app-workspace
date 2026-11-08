@@ -35,6 +35,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         try {
             ValidationEnvironment.requireIsolated(targetContext)
             if(argumentsBundle?.getString("automaticPreservationOnly")=="true"){val lines=AutomaticChecks(this).preservation();result.putString("stream","CARITDA_AM_PRESERVATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("designPreservationOnly")=="true"){val lines=DesignChecks(this).preservation();result.putString("stream","CARITDA_DESIGN_PRESERVATION_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             automaticOnly=argumentsBundle?.getString("automaticOnly")=="true"
             automaticColdOnly=argumentsBundle?.getString("automaticColdOnly")=="true"
             if(automaticColdOnly){val lines=AutomaticChecks(this).cold();result.putString("stream","CARITDA_AM_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
@@ -42,6 +43,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
             if(preservationOnly){result.putString("stream",RecordMigrationChecks.verifyAfter(targetContext));finish(Activity.RESULT_OK,result);return}
             if(coldOnly){val lines=ReliabilityChecks(this).coldCheck();result.putString("stream","CARITDA_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             ValidationEnvironment.prepare(targetContext)
+            if(argumentsBundle?.getString("designOnly")=="true"){val lines=DesignChecks(this).run();result.putString("stream","CARITDA_DESIGN_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(automaticOnly){val lines=AutomaticChecks(this).run();result.putString("stream","CARITDA_AM_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(navigationOnly){val lines=NavigationChecks(this).run();result.putString("stream","CARITDA_NAV_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(reliabilityOnly){val lines=RecordMigrationChecks.run(targetContext)+ReliabilityChecks(this).run();result.putString("stream","CARITDA_RECORD_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
@@ -135,8 +137,9 @@ class MvpScenarioInstrumentation : Instrumentation() {
         click(activity, "driver_A")
         click(activity, "start_driving")
         click(activity, "new_issue")
+        click(activity,"type_VIBRATION")
+        ValidationUiActions.reveal(this,activity,"memo")
         main {
-            (tagged(activity, "symptom_type") as Spinner).setSelection(SymptomType.VIBRATION.ordinal)
             (tagged(activity, "situation") as EditText).setText("가속할 때 핸들이 진동함")
             (tagged(activity, "memo") as EditText).setText("에뮬레이터 시나리오 검증용 수기 예시입니다.")
         }
@@ -210,7 +213,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val activity = launch()
         await("parked UX before connection screen") { main { tagged(activity, "driver_B")?.isEnabled == true } }
         click(activity,"driver_B");click(activity,"start_driving")
-        click(activity, "vehicle_data")
+        click(activity, "nav_VEHICLE")
         val production = ObservationStore(targetContext)
         val original = production.latest(100)
         val before = System.currentTimeMillis()
@@ -228,7 +231,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val restarted = launch()
         await("parked UX after restart") { main { tagged(restarted, "driver_B")?.isEnabled == true } }
         click(restarted,"driver_B");click(restarted,"start_driving")
-        click(restarted, "vehicle_data")
+        click(restarted, "nav_VEHICLE")
         verify(production.latest(100).size >= original.size && responses.all { it in production.latest(100) },
             "actual SDK observations persist after app activity restart")
         production.close()
@@ -371,6 +374,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }) as MainActivity
     private fun click(activity: Activity, tag: String) {
+        ValidationUiActions.reveal(this,activity,tag)
         main { val view = tagged(activity, tag) ?: error("Missing UI: $tag"); check(view.isEnabled) { "Disabled UI: $tag" }; check(view.performClick()) }
         waitForIdleSync()
     }

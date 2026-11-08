@@ -23,7 +23,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
     private fun finish(activity:MainActivity){main{activity.finish()};instrumentation.waitForIdleSync()}
     private fun tagged(a:MainActivity,tag:String):View?=a.window.decorView.findViewWithTag(tag)
-    private fun click(a:MainActivity,tag:String){main{val view=tagged(a,tag)?:error("Missing $tag");check(view.isEnabled){"Disabled $tag"};check(view.performClick())};instrumentation.waitForIdleSync()}
+    private fun click(a:MainActivity,tag:String){ValidationUiActions.reveal(instrumentation,a,tag);main{val view=tagged(a,tag)?:error("Missing $tag");check(view.isEnabled){"Disabled $tag"};check(view.performClick())};instrumentation.waitForIdleSync()}
     private fun text(a:MainActivity):String=main{
         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
         collect(a.window.decorView)
@@ -54,7 +54,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             verify(prefs.getString("outcome",null)=="skipped" && snapshot(repo)==baseline && rows(obs.readableDatabase,"observations")==oldObservations,"ON skip changes only guide preference, no driver confirmation event or SDK read")
             verify(main{tagged(a,"start_driving")!=null && tagged(a,"new_issue")==null},"ON skip still requires explicit driver start")
             finish(a);a=launch();activity=a
-            await("existing route after skip"){main{tagged(a,"change_driver")?.isEnabled==true}}
+            await("existing driver route after skip"){main{tagged(a,"start_driving")?.isEnabled==true}}
             verify(main{tagged(a,"welcome_title")==null},"ON skipped guide is not repeated on relaunch")
             click(a,"help");click(a,"replay_guide")
             verify(main{tagged(a,"close_guide")!=null && tagged(a,"guide_skip")==null},"ON replay offers close and does not repeat setup actions")
@@ -67,11 +67,11 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             verify(prefs.getString("outcome",null)=="completed" && snapshot(repo)==baseline,"ON choose completes explanation only, no automatic driver selection")
             val driver=repo.currentDriver()?:repo.drivers().first()
             click(a,"driver_${driver.id}");click(a,"start_driving")
-            verify(text(a).contains("지금은 차량의 이상을 자동으로 찾아주지는 않아요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
+            verify(text(a).contains("자동 고장 진단 결과가 아니에요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
             click(a,"all_issues");click(a,"filter_COMPLETED");navigate(a,"HOME");click(a,"all_issues")
             verify(main{(tagged(a,"filter_ALL") as Button).text.startsWith("✓ ")},"ON home record action opens all records instead of hiding a previous selection")
             navigate(a,"HOME")
-            click(a,"vehicle_data")
+            click(a,"nav_VEHICLE")
             val basic=text(a)
             verify(listOf("SDK","Capability","RECEIVED","UNSUPPORTED","세션 ID","ERROR_").none{basic.contains(it)} && basic.contains("배터리 충전량") && basic.contains("누적 주행거리"),"ON basic vehicle page separates technical codes and enlarges named values")
             await("entry automatic read completes before manual request"){main{tagged(a,"read_vehicle")?.isEnabled==true}}

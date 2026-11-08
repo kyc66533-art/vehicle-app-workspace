@@ -27,14 +27,14 @@ class CaritdaService(
     }
     fun discardDraft(id:String) { requireEditing();repository.discardDraft(id) }
     fun issues() = repository.issues()
-    fun issues(filter:RecordFilter):List<VehicleIssue> {
+    fun issues(filter:RecordFilter,query:String=""):List<VehicleIssue> {
         val all=issues()
         return when(filter){
             RecordFilter.ALL->all
             RecordFilter.MANAGED->all.filter{it.status!=IssueStatus.RESOLVED}
             RecordFilter.COMPLETED->all.filter{it.status==IssueStatus.RESOLVED}
             RecordFilter.MINE->{require(confirmed()) { "기록할 이름을 먼저 선택해 주세요." };all.filter{it.reporter.id==driver().id}}
-        }
+        }.filter{RecordSearch.matches(it,query)}
     }
     fun issue(id: String) = repository.issue(id) ?: throw IllegalArgumentException("문제를 찾을 수 없습니다.")
     fun events(id: String) = repository.events(id)

@@ -24,14 +24,18 @@ class MvpScenarioInstrumentation : Instrumentation() {
     private var reliabilityOnly=false
     private var coldOnly=false
     private var preservationOnly=false
-    override fun onCreate(arguments: Bundle?) { coldOnly=arguments?.getString("coldOnly")=="true";preservationOnly=arguments?.getString("preservationOnly")=="true";reliabilityOnly=arguments?.getString("reliabilityOnly")=="true";onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
+    private var navigationOnly=false
+    private var navigationColdOnly=false
+    override fun onCreate(arguments: Bundle?) { navigationOnly=arguments?.getString("navigationOnly")=="true";navigationColdOnly=arguments?.getString("navigationColdOnly")=="true";coldOnly=arguments?.getString("coldOnly")=="true";preservationOnly=arguments?.getString("preservationOnly")=="true";reliabilityOnly=arguments?.getString("reliabilityOnly")=="true";onboardingOnly=arguments?.getString("onboardingOnly")=="true";migrationOnly=arguments?.getString("migrationOnly")=="true";verifyProduction=arguments?.getString("verifyProduction")=="true";super.onCreate(arguments); start() }
     override fun onStart() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(navigationColdOnly){val lines=NavigationChecks(this).coldRun();result.putString("stream","CARITDA_NAV_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(preservationOnly){result.putString("stream",RecordMigrationChecks.verifyAfter(targetContext));finish(Activity.RESULT_OK,result);return}
             if(coldOnly){val lines=ReliabilityChecks(this).coldCheck();result.putString("stream","CARITDA_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             ValidationEnvironment.prepare(targetContext)
+            if(navigationOnly){val lines=NavigationChecks(this).run();result.putString("stream","CARITDA_NAV_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(reliabilityOnly){val lines=RecordMigrationChecks.run(targetContext)+ReliabilityChecks(this).run();result.putString("stream","CARITDA_RECORD_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(onboardingOnly){val lines=OnboardingChecks(this).run();result.putString("stream","CARITDA_ON_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
             if(migrationOnly){val lines=MigrationChecks.run(targetContext);result.putString("stream","MIGRATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}\n");finish(Activity.RESULT_OK,result);return}
@@ -165,7 +169,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
             verify(main { tagged(activity, "new_issue")!!.width <= narrowWidth }, "home fits a 600dp viewport")
             click(activity, "new_issue")
             verify(main { tagged(activity, "situation")!!.width <= narrowWidth }, "record form fits a 600dp viewport")
-            click(activity, "home")
+            click(activity, "back")
         } finally {
             main { content.layoutParams = content.layoutParams.apply { width = originalWidth }; content.requestLayout() }
         }
@@ -291,7 +295,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         clickAccessible("확인")
         await("archive committed"){repo.drivers().none{it.id==profile.id}}
         verify(repo.drivers(true).single{it.id==profile.id}.archived && repo.issue(draftId)!!.reporter.label==name && repo.issues().map{it.id}.containsAll(oldIds),"UI archive preserves all previous user records and new authored history")
-        click(activity,"home");click(activity,"cancel_driver")
+        click(activity,"back");click(activity,"cancel_driver")
         val issueCount=repo.issues().size
         click(activity,"new_issue");main{(tagged(activity,"situation") as EditText).setText("취소할 새 문제 초안")}
         click(activity,"discard_draft");clickAccessible("확인")

@@ -156,6 +156,10 @@ class SqliteIssueRepository(context: Context, databaseName: String = "caritda_v0
             require(event.actor.id==current.reporter.id && event.kind==EventKind.EDITED) { "원래 작성자만 수정할 수 있어요." }
             if(event.draftId!=null && db.rawQuery("SELECT 1 FROM events WHERE issue_id=? AND draft_id=? AND kind='EDITED' AND actor_id=?",arrayOf(id,event.draftId,event.actor.id)).use{it.moveToFirst()}){db.setTransactionSuccessful();return false}
             require(current.revision==expectedRevision && event.revision==expectedRevision+1) { "기록이 변경되었어요. 현재 기록과 초안을 다시 확인해 주세요." }
+            if(current.type==type && current.situation==body && current.memo==memo){
+                event.draftId?.let{db.delete("drafts","id=?",arrayOf(it))}
+                db.setTransactionSuccessful();return false
+            }
             check(db.update("issues",ContentValues().apply{
                 put("symptom_type",type.name);put("situation",body);put("memo",memo);put("updated_at",event.at);put("revision",event.revision)
             },"id=? AND revision=? AND deleted_at IS NULL",arrayOf(id,expectedRevision.toString()))==1)

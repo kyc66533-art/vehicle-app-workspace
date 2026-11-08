@@ -17,7 +17,8 @@ object ConsultationSummary {
         appendLine("발생 상황: ${issue.situation}")
         if (issue.memo.isNotBlank()) appendLine("추가 메모: ${issue.memo}")
         appendLine("현재 상태: ${statusText(issue.status)}")
-        appendLine("기록 차수: ${issue.revision}")
+        appendLine("내용 버전: ${issue.revision}")
+        appendLine("재발 기록: ${events.count{it.kind==EventKind.RECURRENCE}}회")
         appendLine()
         appendLine("운전자 확인 이력")
         val acknowledgements = events.filter { it.kind == EventKind.ACKNOWLEDGED }

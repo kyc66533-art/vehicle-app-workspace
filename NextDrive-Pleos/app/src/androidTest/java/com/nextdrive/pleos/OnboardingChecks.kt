@@ -85,7 +85,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             verify(text(a).contains("연료 잔량") && text(a).contains("확인할 수 없어요"),"ON unsupported fuel is explained without zero percent")
             click(a,"load_details")
             verify(text(a).contains("SDK 2.3.2") && text(a).contains("Capability") && text(a).contains("세션 ID") && text(a).contains("ERROR_NOT_SUPPORTED_PROPERTY"),"ON loading details retain SDK capability original error and session")
-            click(a,"home")
+            click(a,"back")
             val received=rows(obs.readableDatabase,"observations")
             Thread.sleep(1300)
             verify(rows(obs.readableDatabase,"observations")==received,"ON display freshness refresh performs no SDK polling")

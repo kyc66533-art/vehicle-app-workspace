@@ -1,5 +1,62 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-08 15:11:09 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 고정 홈·검색 실행 검증 및 일반 앱 교체 설치 완료
+
+### 중단 지점 재개와 데이터 보존
+
+- 사용자가 기존 Pleos Connect v2.1.0을 실행한 뒤 이어서 진행했습니다. 시작 main은 acb615068e61a2b8a5830389e266e21ff61ff68b이며 이전에 보류한 로컬 소스8개와 빌드된 APK의 시각/해시를 확인했습니다. 연구7개와 다른 작업 결과를 보존합니다. 로컬 Git/인증/clone/push는 재시도하지 않았습니다.
+- ADB emulator-5554 device, 현재 Android user10 연결을 확인했습니다. 일반 앱을 force-stop하고 databases/journal·shared_prefs·files 전체를 .tools/navigation-backup/before.tar 및 개별 문제/관측 DB로 바이너리 보관했습니다. tar SHA256 1095df849caccc3ba4edfe60567554328314986a90141be9658e87c676148c91. 기존 백업은 지우지 않았습니다.
+- validation 검사 전후 일반 문제 DB SHA256 1e5d28543a72fc34fad3c2af076b702ed3c074fdcc275d2e9f7ee5e40327717f, 관측 DB SHA256 dd89e12f70919ed6b997cffcd89dfc520f4eb3824b6eb70372375d64df6d4263가 같았습니다. 이번 새 검증 문제·프로필·메모는 별도 validation UID/DB에서만 작성했습니다.
+- 주요 검사 통과 뒤 일반 APK install -r Success, user10 COLD 실행 Status ok. 일반 앱에서는 운전자를 확정하거나 기록/상태/읽음/센서 조회를 변경하지 않고 홈·전체 목록 스크롤·차량 정보·사용법 화면만 확인했습니다. 앱 패키지를 지정한 조회 조작이며 운영 대상 instrumentation은 실행하지 않았습니다.
+- 일반 앱의 전체 문제 기록22건 표시와 스크롤 전후 고정 홈의 동일 화면 좌표를 확인했습니다. 교체 설치·조회 후에도 두 DB가 위 백업 해시와 동일했습니다. 기존 운전자·원문·이벤트·초안·관측/논리 삭제 정보를 바이트 단위로 유지했습니다. AVD/앱/사용자 DB 초기화나 과거 검증 기록 정리는 하지 않았습니다.
+
+### 구현 동작과 실제 검사
+
+- 고정 앱 홈/이전/사용법 복귀 분리, 좁은 창 홈·메뉴/넓은 창 세 영역 탐색을 실제 앱에서 확인했습니다. 홈은 OS 홈 intent·운전자 확정·기록 저장/삭제·상태 변경을 하지 않습니다. 홈 반복과 이전 상세 부활 방지도 검증했습니다.
+- 홈 전체/내 작성, 네 상태 필터, 카테고리·추가 메모·미리보기100자 밖 전체 본문 검색, 검색0건과 빈 저장소 구분, 조건 초기화, 상세 이전의 필터/검색/스크롤 위치를 검증했습니다. 내 작성은 영구 ID 기준입니다.
+- 새/수정 초안의 홈·이전 이동/프로세스 중지 후 복원, 초안 쓰기 실패 시 이동 차단과 입력 유지, 수정 취소/같은 ID 수정/변경 없는 저장/버전 충돌을 검증했습니다. N29는 버전이 달라진 무변경 편집도 조용히 초안을 제거하거나 덮어쓰지 않음을 확인합니다.
+- 네 수동 상태 변경은 유지했고 전후 상태·운전자·시각과 기존 원문/재발/점검 이력 보존을 확인했습니다. 사용자가 확인한 상태 변경을 버그로 다시 처리하지 않았습니다. 점검 완료와 해결 확인, 내용 버전과 재발 횟수의 표시를 구분합니다.
+- 신규 CARITDA_NAV_PASS checks=17, 실제 force-stop 뒤 CARITDA_NAV_COLD_PASS checks=12. 신규29개 assertion 통과입니다. Aside NAV01~28 자체가 모두 통과했다는 뜻은 아닙니다.
+- 기존 CARITDA_RECORD_PASS checks=36, CARITDA_COLD_PASS checks=2, MIGRATION_PASS checks=18, CARITDA_MVP_PASS checks=24, CARITDA_OBSERVATION_PASS checks=6, CARITDA_UI_PASS checks=27, CARITDA_ON_PASS checks=32. 기존145+신규29 = 총174개 자동 검사 통과입니다. 위험 검사는 모두 validation 앱에서 수행했습니다.
+- ON 주요 화면200개 폭/글꼴/테마 조합과 NAV의 낮은 높이320dp에서 폭320/600/1024dp × 글꼴100/200% 6개 조합을 확인했습니다. 실제 OS 분할/IME·물리 장비의 전 범위 검사는 아닙니다.
+- SDK2.3.2 실제 validation 수신은 SOC100%/누적 주행거리0.0km READ/RECEIVED, 연료 ERROR_NOT_SUPPORTED_PROPERTY/UNSUPPORTED·값 없음입니다. source=PLEOS_EMULATOR_SDK, 세션 ad950a11-e23f-4168-8dee-e5661c077445. 원본·단위·수신 시각·세션 저장과 재시작 복원을 확인했습니다. 실차/회복 판정이 아닙니다.
+- 일반 앱의 과거15%/1000000.0km는 원래 시각·이전 값·오래됨·에뮬레이터 출처로 표시됐습니다. validation100%/0km와 합쳐 회복 증거로 쓰지 않았습니다. 새 SDK API·권한·스키마·자동 상태 변경·Gleo·휴지통 복원은 없습니다. 자동화는 기존 후속 설계 문서만 유지합니다.
+
+### 빌드·초기 실패·미검증
+
+- 기존 JBR/Gradle8.11.1/API34/Build-Tools35.0.0/SDK2.3.2 캐시 offline assembleDebug+assembleValidation+assembleValidationAndroidTest 최종 BUILD SUCCESSFUL in54s, exit0,93작업 중4실행/89 up-to-date. 마지막 변경은 계측 보강이며 일반 앱 소스/APK는 전 회귀와 동일합니다. APK SHA256 53383639ce3a01e76f749880e23ebd9bb27991d142ee9845ae4742a3c2d539ca.
+- 첫 NAV는 N14가 루트 Back을 무조건 Activity 종료라고 가정해 실패했습니다. Android12+의 정상 백그라운드 동작을 공식 자료와 대조하고, 요구사항인 이전 상세 부활 방지를 검사하도록 수정했습니다. 앱을 강제 종료하도록 바꾸지 않았습니다. 이후 N01~29 통과했고 첫 실패 로그도 보존했습니다. 현재 주요 기능 검사 실패는 없습니다.
+- 지난 회차의 ADB 서버 실패와 보조 호스트 javac AccessDenied 실험 실패는 아래 과거 사실로 남깁니다. 이번 ADB/Android 실행이 성공했으나 그 호스트 실험을 성공으로 바꿔 기록하지 않습니다.
+- NAV 기준 판정은 통과11/부분9/미검증2/조사 전용·범위 밖6입니다. 상세 표는 docs/NAV_ACCEPTANCE.md 최신 절에 있습니다. 부분 항목의 모든 OS 중단·진짜 주행 RESTRICTED·확인창 경합·focus/커서·독립 contentVersion·휴지통 복원·stale 상담·OS 분할/IME는 완료라고 주장하지 않습니다.
+- TalkBack/물리 키보드/rotary·일반/고령 사용자 독립 과제·실차·Release·Lint는 미검증/미완료입니다. 기존 자동화 연구 REC는 설계이며 실제 회복 엔진 검증이 아닙니다.
+
+### 파일·공유·사용 방법
+
+로컬과 검증된 게시 대상12개 파일:
+
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/CaritdaService.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/ConsultationSummary.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/data/SqliteIssueRepository.kt
+- NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/domain/RecordSearch.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/MvpScenarioInstrumentation.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+- NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/NavigationChecks.kt
+- docs/NAV_ACCEPTANCE.md
+- docs/CODEX_PROGRESS.md
+- README.md
+- NextDrive-Pleos/README.md
+
+위 소스는 실제 사용자 PC의 NextDrive-Pleos에 반영됐고 일반 APK도 교체 설치했습니다. GitHub 연결 도구를 통한 게시를 사용하며 최신 main/대상 SHA·커밋 부모·blob SHA·Aside 포함 나머지 파일을 확인합니다. 로컬 Git push가 아닙니다. 연구 문서는 수정하지 않고 DB/개인 백업/키/APK/캐시/로그/화면은 게시하지 않습니다. 이 보고서에 자기 자신의 SHA를 넣으려는 반복 커밋은 하지 않으며 최종 SHA는 응답에서 보고합니다.
+
+사용자는 일반 CARITDA에서 이름 선택→운전 시작→전체 문제 기록/내가 작성한 문제→검색/네 필터/조건 초기화→상세→이전→고정 홈 순서로 확인해 주세요. 기존 초안은 원 작성자로 이어 쓰고, 수정 취소는 원문을 유지합니다. 파일 수동 수정·재설치·데이터 초기화는 필요 없습니다. 다음 단계는 부분/미검증 접근성·실제 창/IME·사용자 이해도 검증이며 자동 회복/추가 SDK/Gleo/복원은 별도 승인된 개발 단계입니다.
+
+## 아래는 이전 작업 기록입니다
+
+# Codex 개발 진행 기록
+
 마지막 업데이트: 2026-11-08 13:22:34 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — 고정 홈·검색 로컬 구현/빌드, 에뮬레이터 검증 대기

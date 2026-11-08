@@ -1,8 +1,70 @@
 # 홈 중심 UX·기록 탐색 구현과 검증 상태
 
+## 최신 결과 — 2026-11-08 실행·설치 검증 완료
+
+사용자가 기존 Pleos Connect v2.1.0을 부팅한 뒤 중단 지점에서 재개했습니다. 재개 기준 main은 acb615068e61a2b8a5830389e266e21ff61ff68b입니다. 이전의 ADB/런타임 대기와 호스트 실험 실패 기록은 아래에 보존하며 현재 결과는 이 절이 우선합니다.
+
+- ADB emulator-5554 device, Android user10 연결. 일반 앱 force-stop 후 DB/journal·shared_prefs/files 전체를 `.tools/navigation-backup/before.tar`와 개별 DB 사본으로 보관했습니다. 백업 tar SHA256 1095df849caccc3ba4edfe60567554328314986a90141be9658e87c676148c91. 개인 백업/화면/DB/키/로그는 게시하지 않습니다.
+- 기존 캐시의 offline assembleDebug/assembleValidation/assembleValidationAndroidTest 최종 BUILD SUCCESSFUL in54s, exit0. 일반 APK SHA256은 53383639ce3a01e76f749880e23ebd9bb27991d142ee9845ae4742a3c2d539ca로 이전 빌드와 같습니다. 마지막 변경은 계측 검사 보강이며 앱 소스는 같은 APK로 검증했습니다.
+- 신규 CARITDA_NAV_PASS checks=17, 별도 force-stop 뒤 CARITDA_NAV_COLD_PASS checks=12. 새 N29는 내용이 같더라도 편집을 열어 둔 사이 버전이 바뀌면 저장을 거부하고 원문/이력/초안을 유지하는 검사입니다. **신규29개 assertion과 Aside NAV28개 기준은 서로 다릅니다.**
+- 기존 CARITDA_RECORD_PASS checks=36, CARITDA_COLD_PASS checks=2, MIGRATION_PASS checks=18, CARITDA_MVP_PASS checks=24, CARITDA_OBSERVATION_PASS checks=6, CARITDA_UI_PASS checks=27, CARITDA_ON_PASS checks=32. 신규29+기존145 = 총174개 자동 검사 통과입니다.
+- 기존 ON의 다섯 주요 화면/다섯 폭/네 fontScale/두 테마 200개 렌더링 조합과 새 낮은 높이320dp의 폭320/600/1024dp×fontScale100/200% 6개 조합을 확인했습니다. 이는 앱 콘텐츠 크기/리소스 계측이며 실제 OS 분할·IME·물리 접근성의 전 범위 시험은 아닙니다.
+- SDK2.3.2의 실제 validation 응답: SOC100%, 주행거리0.0km READ/RECEIVED, 연료 ERROR_NOT_SUPPORTED_PROPERTY/UNSUPPORTED·값 없음. SDK 원본·단위·시각·출처·세션 저장과 재시작 복원을 재검사했습니다. 에뮬레이터 값이며 실차나 자동 회복 성공이 아닙니다.
+- validation 검사 전후 일반 앱 DB 해시가 같음을 확인하고 일반 APK를 install -r로 교체했습니다. user10의 COLD 실행 Status ok. 일반 앱에서는 운전자를 확정하거나 기록/상태를 변경하지 않고 홈·목록 스크롤·차량 정보·사용법만 확인했습니다. 홈 버튼의 실제 화면 좌표는 목록 스크롤 전후 같았습니다. UI XML/캡처는 build/validation/navigation-*.xml/png에만 보관했습니다.
+- 일반 앱의 전체 문제 기록22건 표시를 확인했습니다. 교체 설치·조회 후 문제 DB SHA256 1e5d28543a72fc34fad3c2af076b702ed3c074fdcc275d2e9f7ee5e40327717f, 관측 DB SHA256 dd89e12f70919ed6b997cffcd89dfc520f4eb3824b6eb70372375d64df6d4263가 사전 백업과 동일합니다. 기존 원문·운전자·이벤트·초안·관측 전체의 바이트 보존이며 새 검증 기록을 일반 앱에 추가하지 않았습니다.
+- 일반 앱의 과거 SOC15%/1000000.0km는 원래 시각과 ‘이전 값/오래된 값’으로 표시됐습니다. validation 앱의 새로운100%/0km와 합쳐 회복 증거로 쓰지 않았습니다. 이번 일반 앱 화면 확인에서는 차량값 불러오기를 누르지 않았습니다.
+
+### 실패와 수정
+
+첫 NAV 실행은 N14가 root launcher의 Back을 항상 Activity 종료로 단정해 중단됐습니다. Android12+는 루트 task를 종료 대신 백그라운드로 보낼 수 있으므로 [공식 문서](https://developer.android.com/guide/components/activities/tasks-and-back-stack#back-tap-action)를 확인하고 ‘이전 상세가 부활하지 않음’을 검사하도록 고쳤습니다. 앱의 홈 동작을 억지로 종료로 바꾸지 않았습니다. 수정 후 N01~29 모두 통과했습니다. 초기 로그는 navigation-first-failure.txt에 남겼습니다. 현재 주요 기능 검사 실패는 없습니다. 아래의 과거 보조 호스트 실험 실패는 별도이며 이번 Android 검색 실행으로 기능을 확인했습니다.
+
+### Aside NAV01~NAV28 최신 판정
+
+통과11, 부분9, 미검증2, 조사 전용/범위 밖6입니다. 통과는 표의 실행 범위를 뜻하며 실제 사용자 사용성·실차/주행 인증이 아닙니다.
+
+| 기준 | 판정 | 실제 확인 범위와 남은 항목 |
+|---|---|---|
+| NAV01 | 해당 없음 | 연구 파일 단독 게시 기준은 Aside 조사 작업 전용. 이번은 사용자 승인한 소스 구현/검증이며 연구 무수정 |
+| NAV02 | 통과 | 일반 화면과 사용법에서 앱 내부 홈1회 이동, OS 홈 호출 없음. 삭제는 기존 확인/취소 경로 유지 |
+| NAV03 | 부분 | 홈/이전/사용법 닫기 의미, 검색·필터·픽셀 위치 복원 확인. 물리 focus/커서 종합 검증은 남음 |
+| NAV04 | 부분 | 새/수정 초안의 홈·이전/프로세스 종료 복원과 실패 이동 차단 통과. 모든 실제 OS 중단 조합 미실행 |
+| NAV05 | 부분 | 영구 ID·미확정·UNKNOWN 차단과 기존 도메인 제한 검사. 실제 주행 RESTRICTED/확인창 중 모든 경합은 미실행 |
+| NAV06 | 통과 | 전체는 모든 상태, 내 작성은 영구 ID, 이름 변경 뒤 작성 snapshot·권한 보존 회귀 통과 |
+| NAV07 | 통과 | 같은 ID 수정·실제 저장 후 성공 안내, 연속 탭/재시도·SQL 실패 롤백 회귀 통과 |
+| NAV08 | 통과 | 수정 취소·무변경 저장·stale 버전 충돌에서 원문/이력/초안 보존 |
+| NAV09 | 부분 | 읽음/revision 관계 보존·재발 횟수 표시 분리. 독립 contentVersion/재발 차수 DB 이전은 하지 않음 |
+| NAV10 | 부분 | 삭제 확인 취소·실패 시 원본/이력 보존. 모든 OS 전환/시스템 뒤로 조합 미실행 |
+| NAV11 | 부분 | 승인된 한 건 논리 삭제·조회 제외·ID/이력 보존 회귀. 복원 UI는 미구현 |
+| NAV12 | 통과 | 일반 앱 관측 DB 해시 불변, validation SDK 실제 저장/복원 회귀 |
+| NAV13 | 부분 | stale 편집 저장 거부·초안 유지와 삭제 ID 재사용 방지. 모든 stale 상담/외부 경로는 미실행/미구현 |
+| NAV14 | 통과 | 기본 화면과 코드에서 새 독립 Gleo/가짜 상담·전송 버튼 없음. 기존 요약은 로컬로 유지 |
+| NAV15 | 범위 밖 | Gleo Action 수신 미연동 |
+| NAV16 | 범위 밖 | Gleo Callback/7초 취소 실제 시험 미실행 |
+| NAV17 | 범위 밖 | 새 외부 전달·동의 경로 없음 |
+| NAV18 | 범위 밖 | 새 AI payload/답변 기능 없음 |
+| NAV19 | 통과 | ScrollView 밖 홈 구조와 실제 일반 앱 긴 목록 스크롤 전후 동일 좌표 확인 |
+| NAV20 | 통과 | 카테고리·메모·100자 밖 전체 본문,0건/빈 저장소 구분, 조건/결과 수/초기화 |
+| NAV21 | 부분 | 상세 이전의 조건/위치, 수정 후 검색 불일치 안내 통과. 내용 변화 때 위치는 best effort, 물리 focus 남음 |
+| NAV22 | 부분 | 주요200+낮은 높이6조합 통과. 실제 OS 분할·IME·모든 대화상자 조합은 남음 |
+| NAV23 | 미검증 | TalkBack·물리 키보드·rotary 종합 과제 미실행 |
+| NAV24 | 통과 | 실제 작성/저장/목록/재실행/편집 RR·프로세스 재시작 회귀 통과 |
+| NAV25 | 범위 밖 | 기존 선택1건 정비 상담 요약 유지. 새 상담 준비/Gleo 기능 미구현 |
+| NAV26 | 통과 | 사용법 복귀·홈 반복·초안 보존/실패 중단, 원치 않는 저장/삭제/운전자 확정 없음 |
+| NAV27 | 미검증 | 일반·고령 사용자 독립 과제 미실행 |
+| NAV28 | 통과 | 자체 native UI/문구·공식 API 유지, 연구·키/DB/캐시/로그 보호. 검증한 파일만 게시 |
+
+### 사용자가 확인할 순서
+
+이미 일반 APK를 데이터 보존 방식으로 교체 설치했습니다. 일반 CARITDA에서 본인 이름 선택→운전 시작→전체 문제 기록/내가 작성한 문제→검색/네 필터/조건 초기화→상세→이전으로 조건 복원→고정 홈을 확인해 주세요. 수정은 같은 ID 상세로 돌아가며 취소는 원문을 유지합니다. 기존 초안이 있다면 원 작성자로 먼저 이어서 저장하거나 명시적으로 취소해 주세요. 파일 수동 수정·AVD/앱 데이터 초기화는 필요 없습니다.
+
+자동 회복·자동 상태 변경·Gleo·휴지통 복원은 여전히 미구현입니다. 실제 SDK/판정 근거가 없는 안내를 일반 앱에 넣지 않았습니다. [자동화 후속 설계](AUTOMATION_FOUNDATION.md)를 유지합니다. 실차·실제 주행 제한 전환·종합 접근성·일반 사용자 이해도·Release·Lint는 이번 성공으로 대체하지 않습니다.
+
+---
+
+아래는 13:22 실행 대기 당시의 기록입니다. 현재 결과/판정은 위의 실행 완료 절을 따릅니다.
 2026-11-08, Asia/Seoul. 기준 main `aee62bf2548470ee11bfd1e5154639e2ce79e1e5`와 로컬 필수 파일31개 SHA가 일치했습니다. 새 Aside 자동화 연구가 존재함을 확인하고 두 연구·현재 v3 코드·기존 AC/ON/RR 기록을 읽었습니다. 연구 파일은 수정하지 않았습니다.
 
-## 현재 결과 — 로컬 구현·빌드 완료, 런타임 대기
+## 이전 대기 기록 — 13:22 로컬 구현·빌드 완료, 런타임 대기
 
 앱·validation·계측 APK는 빌드했지만 **이번 NAV/AC/ON/RR 실행은 아직 하지 못했습니다.** 시작 시 Studio/에뮬레이터가 실행 중이지 않았고 ADB 서버 연결이 거부됐습니다. ADB 기본 start-server도 `could not read ok from ADB Server`로 실패했습니다. 제한을 우회하거나 AVD/SDK를 초기화하지 않았습니다. 사용자에게 기존 Pleos AVD 실행을 요청했습니다.
 
@@ -29,7 +91,7 @@ NavigationChecks는 validation 앱만 허용합니다. N01~17은 홈/필터/카�
 
 보조 호스트 Java 검색 실험도 별도로 시도했으나 javac classpath/파일 realPath AccessDeniedException 때문에 실행하지 못했습니다. 이를 검색 통과로 세지 않습니다. 공식 Gradle APK 컴파일 성공과 이 보조 실험 실패를 구분합니다. 로그/실험 파일은 build/validation에만 둡니다.
 
-## Aside NAV01~NAV28 대응표
+## 이전 NAV01~NAV28 대응표 — 실행 전 기록
 
 | 기준 | 현재 상태 | 구현·남은 범위 |
 |---|---|---|

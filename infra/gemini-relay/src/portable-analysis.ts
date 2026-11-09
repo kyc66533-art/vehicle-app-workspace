@@ -21,8 +21,9 @@ export async function explain(payload:string,operationId:string,secret:string,pr
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
  try{
   const upstream=await providerFetch('https://generativelanguage.googleapis.com/v1beta/models/'+MODEL+':generateContent',{
-   method:'POST',redirect:'error',signal:controller.signal,headers:{'content-type':'application/json','x-goog-api-key':secret},
+   method:'POST',redirect:"manual",signal:controller.signal,headers:{'content-type':'application/json','x-goog-api-key':secret},
    body:JSON.stringify({systemInstruction:{parts:[{text:'Explain only the supplied SOC receipt summary in one or two short polite Korean sentences. Emulator values are simulated. Do not include digits, inferred causes, diagnoses, repair claims or driving safety judgments. Do not use 고장, 수리, 안전, 운행 가능, 브레이크, 타이어, 교체, 정비 완료. Do not invent vehicle conditions. Suggest checking the actual vehicle display; insufficient samples mean a comparison cannot be made. Return the exact supplied action. No tools.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({analysis:facts,required_action:action})}]}],generationConfig:{maxOutputTokens:512,responseMimeType:'application/json',responseJsonSchema:{type:'object',properties:{explanation:{type:'string'},action:{type:'string',enum:[action]}},required:['explanation','action'],additionalProperties:false}}})});
+  reject(upstream.status<300||upstream.status>=400,'MODEL_REDIRECT_BLOCKED',502);
   if(!upstream.ok)throw new ApiError(upstream.status===429?429:502,upstream.status===429?'MODEL_QUOTA':upstream.status===401||upstream.status===403?'PROVIDER_AUTH':upstream.status===400?'MODEL_REQUEST_REJECTED':'MODEL_HTTP_ERROR');
   let result:any;try{result=JSON.parse(await bodyText(upstream,16384));}catch{throw new ApiError(502,'MODEL_BODY_INVALID');}
   const c=result?.candidates?.[0];reject((!result?.promptFeedback?.blockReason||result.promptFeedback.blockReason==='BLOCK_REASON_UNSPECIFIED')&&c&&!c.safetyRatings?.some((x:any)=>x.blocked)&&c.finishReason==='STOP','MODEL_FINISH_REJECTED',502);

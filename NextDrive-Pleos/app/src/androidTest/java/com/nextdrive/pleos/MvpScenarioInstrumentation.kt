@@ -34,6 +34,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("issueAiOnly")=="true"){val lines=IssueAiChecks(this).run();result.putString("stream","CARITDA_ISSUE_AI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("portableAiOnly")=="true"){val lines=PortableAiChecks(this).run();result.putString("stream","CARITDA_PORTABLE_AI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("portableAiUiOnly")=="true"){val lines=PortableAiChecks(this).ui();result.putString("stream","CARITDA_PORTABLE_AI_UI_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("portableAuthInteractiveOnly")=="true"){val lines=PortableAuthChecks(this).interactive();result.putString("stream","CARITDA_PORTABLE_AUTH_INTERACTIVE_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

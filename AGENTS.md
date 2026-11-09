@@ -1,11 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — Portable AI / Firebase 인증
-- 최신 사용자 지시는 Aside의 ASIDE_CARITDA_PORTABLE_AI를 기준으로 Firebase 이메일 인증·기기 등록·기존 Worker·Gemini를 연결하는 것이다. 기존 local-only/합성 v1 제한은 보존 이력이며 이 단계에 우선하지 않는다. 모델OFF 배포·인증만 승인됐고, 정식 예산·실제 모델·실차 전송은 별도 승인 전 실행하지 않는다. 과거 합성 최대1회 승인을 v2 추가 비용 승인으로 확대하지 않는다.
-- Auth 24.2.0은 Pleos TEST에서 실제 로그인·세션 복원·토큰 갱신을 확인했다. 25.0.0은 Kotlin 메타데이터 불일치로 제외했다. 공개 Firebase 설정과 Secret을 구분하며 키·비밀번호·JWT·SDK 개인 세션·백업은 게시/조회하지 않는다. TEST와 일반 패키지·DB·Keystore는 독립이다.
-- v2는 같은 BUDGET/BudgetGate/namespace/객체의 기존 budget을 보존하고 portable:v2만 추가한다. 합계 사용량에 과거5회 사용을 포함한다. 기본 모델 OFF/추가 허용0, 인가 UID·기기·일·전역·동시성·nonce·서명·단일 dispatch로 제한하며 UNKNOWN 예약을 환불/재전송/삭제하여 우회하지 않는다. v1 모델 경로는 cutover 후 꺼지며 원장/코드/preflight를 보존한다.
-- 일반 앱은 최초 로그인/등록/범위 동의 후 SDK SOC 요약만 설명한다. 공급자키/공통토큰을 APK에 넣지 않는다. 실제 MODEL과 로컬 규칙/Mock를 구분하고 원 분석/DB/상태를 바꾸지 않는다. 실차 전송은 이번 검증 범위 밖이며 동의 철회·UXR·onStop에서 새 전송/늦은 표시를 차단한다.
-- docs/PORTABLE_AI_ACCEPTANCE.md와 infra/gemini-relay/PORTABLE_SETUP.md의 실제/로컬/미검증·승인 경계를 유지한다. 서버 배포/실모델/PC B/Release 서명을 로컬 검사로 대체하지 않는다. 사용자·관측·초안·SDK 세션·AVD를 보존하고 일반 앱 계측과 기존 validation DB 초기화 없이 검증한다. GitHub 연결 도구 게시 규칙을 따른다.
+## 현재 작업 — 선택한 사용자 기록 Gemini 설명
+- 최신 사용자 지시가 아래 SOC/합성 중심 제한보다 우선한다. 일반 앱의 선택한 한 건 category/situation만 설명하며 이름·메모·ID·시각·이력·차량값·다른 기록은 전송하지 않는다. 원문/네 상태/DB/관측/초안/AVD는 보존한다. AI 전송 사본 편집은 원문 수정이 아니다.
+- Firebase Auth24.2.0/세션·Keystore·기존 Worker v2/Secret/BUDGET을 재사용한다. v1/v2 배포 문제는 해결됐으므로 재조사/재설정하지 않는다. issue-explanation-v1 동의/기록별 암호화 결과·pending을 SOC와 분리하며 scope 철회로 다른 동의를 지우지 않는다.
+- 일반 앱 등록은 성공했다. 기존TEST1/정식0/잔여0을 확인했고 개인정보 없는 선택기록 Gemini 최대1회·모델ON·비용을 승인받았다. 불확실요청없음 확인 후 global2·UID/일/기기1·분1로만 시험한다. 소진/실패 후 추가 호출은 재승인 전 금지한다. v1 budget/portable:v2·누적1/UNKNOWN을 삭제·환불·우회하지 않는다. Secret 전용키·manual/3xx차단을 유지한다.
+- 고정 system 지시/격리 증상 JSON/no tools/스키마·원문 인용/hash/수치·조건부 표현을 검증한 실제 공급자 응답만 MODEL이다. 모든 개인정보·의미적 공격·오답을 필터가 완전히 검출한다고 하지 않는다. 실제/fixture/Mock를 구분하고 AI가 원문/점검 상태를 바꿀 경로를 만들지 않는다.
+- docs/ISSUE_GEMINI_ACCEPTANCE.md와 infra/gemini-relay/ISSUE_AI_SETUP.md의 승인·검증 경계를 유지한다. 위험한 계측은 validation의 고유 fixture만 사용하고 기존 validation 기본 DB도 초기화하지 않는다. 모델·PC B·Release는 로컬 검사로 대체하지 않는다. 아래 GitHub 연결 도구 게시/Aside 보호 규칙을 따른다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

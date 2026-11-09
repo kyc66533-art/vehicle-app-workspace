@@ -1,6 +1,38 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-10 01:20 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-10 02:57 +09:00 (Asia/Seoul).
+
+## 현재 단계 — 일반 앱 등록 성공·선택 기록 실제1회 승인/시험 대기
+
++- 공개 수정본d99f21c0…의 manual feature/401/pass true(02:30:46KST)를 확인했고 일반 앱 등록도 사용자 검수로 성공했습니다. API기존사용1/정식0/잔여0/modelOFF를 확인했습니다. 기존1회를 보존합니다. 불확실 상태는 문구가 모호해 미확인으로 남기고 최신 APK에 있음/없음·전역상한을 명시했습니다.
++- 신규 preflight가 상태/모델/잔액/불확실 결과를 먼저 읽고 본문 전송을 제어합니다. 모델OFF·잔여0에서 새 issue body/intent가 전송되지 않는2검사 추가, 최신38+140=178 PASS/전체 빌드·Lint 성공. 일반APK DC8F7E5A667847BE2F666EDFFD564D676221F3E145DBC0F60E2A79111804B811를 before-one-call 백업 후 install-r 교체했습니다. 사용자 로그인·동의는 유지했습니다.
++- 사용자가 선택 개인정보 없는 기록/최대Gemini1회/모델ON·비용을 승인했고 UID1개/after0/devices2를 확인했습니다. global2/UID·일·기기1/분1/24h 정책 안내와 종료 후MODELfalse 절차를 ISSUE_ONE_CALL_TRIAL에 모았습니다. PowerShell AST검사0오류, 실제Secret설정·실모델은 사용자가 실행하는 단계이며 현재미검증/0회입니다. 기존 누적1·원장·DB·키를 초기화하지 않았습니다.
+
+## 추가 수정 — AUTH_KEYS_UNAVAILABLE 실제 원인 재현·수정
+
++- 사용자가 안전한 고정 안내에서 AUTH_KEYS_UNAVAILABLE를 확인했습니다. 로그인 계정/기기 등록의 이전 단계인 Google 공개 서명 인증서 fetch 실패였습니다. 실제 workerd 네이티브 X509 경로가 redirect:error 미지원 TypeError로 Google 요청 전 실패함을 재현했습니다. 기존 Mock/키 override runtime 검사가 이 경로를 놓쳤음을 기록합니다. Firebase/UID/기기 키를 재설정하지 않았습니다.
++- 인증서·SOC·선택기록·보존v1의 HTTP옵션만 manual로 고치고3xx를 거부했습니다. Google HTTP/body/JSON/schema/network/timeout/cooldown 세부 코드만 추가했으며 원문 예외·토큰·cert·모델 응답을 로깅하지 않습니다. 실제사용자용 코드에는 합성 probe logger가 없습니다.
++- 최종 source→MJS/dry-run 사용자 성공, MJS에서148 assertions(공개키16+keys workerd5+provider workerd5+64+42+기존workerd16), 별도v1 fixture59 PASS. 실제 모델/Google네트워크0회입니다. 인메모리 probe와 최종 전체 소스 번들을 구분하고 probe 파일은 배포/게시하지 않습니다.
++- 최신 앱 빌드/Lint 및176 검사 재통과, 일반APK E105AFFEAC0588FAC4AD4D176B75B76A3169FA5FEABD43AB205D0AFF0B8CE614. 사용자 인증 세션/DB 포함 새 백업 뒤 install-r 교체했습니다. 사용자23건/기존DB를 삭제하거나 초기화하지 않았습니다. 최종 모델OFF 수정본 CE59954A…를 사용자가 승인했고 사용자 교체 실행을 기다립니다. 그 뒤 실제 등록/잔액 확인·별도1회 기록/비용 승인 순서이며 실제 Gemini는 아직0회입니다.
+
+## 추가 수정 — 일반 앱 기기 등록 안내 가시성·안전 진단
+
++- 사용자 검수: Firebase 로그인/문제 한 건 진입/JSON 미리보기는 성공했으나 등록 결과와 횟수가 나타나지 않았습니다. 로컬 등록 완료 동의 파일0개를 확인했습니다. 아직 서버 실패 코드는 미확인이고 서버 요청 자체가 없었다고 단정하지 않습니다. MODEL_ENABLED=false, 실제 Gemini0회를 유지합니다.
++- AI 상태 안내가 본문 스크롤에 포함되고 JSON 미리보기와 같은 message를 덮는 구조를 고쳤습니다. 진행/성공/실패 안내를 고정하고 미리보기는 별도 패널입니다. safe enum 오류 코드만 표시하고 Firebase callback15초 취소/late 응답 차단을 추가했습니다. SDK/계정/Worker/Secret/DO 정책은 바꾸지 않았습니다.
++- 최신 APK/계측 빌드·Lint 성공, 신규36/기존140 =176 PASS입니다. 이전34/174 결과를 최신 결과로 그대로 재사용하지 않았습니다. 일반 APK는 서명 호환 install-r로 갱신했고 Firebase 세션 포함 before-feedback 백업을 비공개로 보존했습니다. 새 고정 안내에서 실제 등록/잔액 결과를 기다리고 있습니다. 실모델 성공은 여전히 미검증입니다.
++- 최신 일반 APK SHA256 323ED7584F10FD3FAD1672839D539D0C18F29F6C7139C7A879AAC84EFAE2EA62. 로컬 소스와 서버 모델OFF/401 확인 결과만 GitHub 연결 도구로 게시하며 사용자 기록·키·SDK 세션·DB·백업은 제외합니다.
+
+## 최신 작업 — 선택한 사용자 문제 기록 Gemini 설명 (로컬 검증 완료·모델 OFF 인증 대기)
+
+- 기준 main db39d36c0724c8688c48b12082d8e3e2427f9d1c/트리를 GitHub 연결 도구로 읽고 로컬 tracked SHA와 대조했습니다. 시작 미게시 변경0이며 소스 사본·Android user10의 일반/validation 파일을 프로젝트 내부 비공개 백업에 보존했습니다. Firebase/SDK 재설치·기존 v2 배포 오류 재조사는 하지 않았습니다.
+- 일반 문제 상세에 AI로 쉽게 설명을 연결했습니다. 기존 PortableAiActivity/FirebaseSessionProvider/Keystore/AiRelayClient를 재사용해 선택한 category/body만 전송합니다. SOC와 별도 최초 동의, 같은 등록 기기, 기록/내용별 암호화 결과·pending, 안전 상태/수명주기 취소를 적용했습니다. 원문·메모·작성자·ID·시간·이벤트·다른 기록·차량값은 전송하지 않습니다.
+- Worker issue API/범위 철회/strict schema·PII/명백한 지시 공격 거부, 고정 system/JSON/no tools, 구조화 Gemini 응답의 원문 인용/hash/수치/조건부 원인 설명을 검증합니다. 실제 provider 완료만 MODEL이며 원 DB/상태를 변경하지 않습니다. 같은 BUDGET·v1누적/portable:v2·quota/nonce/동일operation 단일dispatch를 유지합니다. 모든 의미적 공격/오답을 완전히 차단한다고 주장하지 않습니다.
+- 신규 실제 Pleos 격리 계측34 PASS, 기존 관련 회귀140 PASS(PortableAi26/View4/Gemini86/analytics contract24), Worker 기존64/신규42/실제 로컬workerd16 PASS입니다. 소스·생성MJS·Wrangler dry-run 산출물의 같은 검사를 중복 합산하지 않습니다. 최종 Debug/validation/test APK 빌드103tasks·Lint 오류0/기존경고50, unitTest NO-SOURCE입니다. 번들/dry-run은 Codex 상위폴더 EACCES 뒤 사용자가 일반 PowerShell에서 성공했고 최종 산출물을 다시 검사했습니다.
+- 최초 fixture FK 준비 오류와 IA17 읽기전용 로딩/안전상태 generation 경쟁을 분리해 수정하고 재검사했습니다. 읽기전용 load generation과 외부요청 generation을 분리한 실제 View/회전34검사가 통과했고 ALLOWED 전송 제한을 유지합니다.
+- 일반 Debug APK install -r --user10 교체 성공. 기존172 DB의 원본행/schema/user_version/integrity/FK 유지, 일반905행 추가0(issues23/events92/drivers10/drafts0), 기존 validation8831행 추가0입니다. 새 고유 fixture6개만 TEST에 추가됐습니다. 당시23건을 다음 작업의 고정값으로 쓰지 않습니다. 실제 일반 앱을 실행했고 기존 홈/자동 조회 코드는 유지합니다.
+- 사용자는 새 문제 API의 모델OFF 교체/PORTABLE_ENABLED=true 인증만 승인했습니다. 사용자 배포 후 공개 /health200/release v2/features selected-issue-v1/portable true/model false 및 문제 API401 AUTH_REQUIRED(pass true, 2026-11-10 01:54:27 KST)를 로컬 보고서로 확인했습니다. 일반 앱 등록·잔액은 아직 대기이며 실제 기록 전송·모델ON/비용/추가예산은 아직 승인·실행하지 않았습니다. 현재 실제 Gemini0회, 일반 앱 실제 응답 미검증입니다. API 소스/Mock 성공으로 완료 처리하지 않습니다.
+- 변경: MainActivity/PortableAiActivity/AiExplanation/PortableAiClient/PortableAnalysis/신규IssueExplanation, IssueAiChecks/runner, portable-worker/gate/신규portable-issue/검사2개, ISSUE_AI_SETUP/PORTABLE 안내/AGENTS/이 기록/ISSUE_GEMINI_ACCEPTANCE. 연구·기존 원장·Secret·Firebase 공개 설정은 게시 변경에 넣지 않습니다. [상세 결과·사용자 절차](ISSUE_GEMINI_ACCEPTANCE.md)를 따릅니다.
+- 다음: 승인된 모델OFF 배포→일반 앱 로그인/기기·동의·사용량 조회→선택 한 건/최대1회 비용 승인→모델ON/실제 응답 표시. 검증된 소스·비밀정보 없는 보고서만 최신 main에 GitHub 연결 도구로 게시하고 실제 Git push라고 부르지 않습니다.
 
 ## 최신 작업 — 공개 Worker v1/v2 불일치 해소·모델OFF 실제 응답 확인
 

@@ -1,5 +1,7 @@
 # CARITDA Gemini 최소 중계 — 배포 기본 꺼짐
 
+**최신 선택 기록 AI 구현:** [ISSUE_AI_SETUP.md](ISSUE_AI_SETUP.md), [검증 결과](../../docs/ISSUE_GEMINI_ACCEPTANCE.md). SOC 기능은 유지하고 사용자 선택 한 건의 증상만 별도 동의 범위로 설명합니다. 현재 실모델 성공은 미검증이며 모델OFF 교체·인증까지만 승인됐습니다. 아래 과거 배포/합성 규칙은 이력을 보존한 것입니다.
+
 **최신 공개 배포 확인(2026-11-10):** [v1/v2 배포 불일치·1회 교체·실제 공개 응답](../../docs/WORKER_DEPLOYMENT_RECONCILIATION.md). `/health`는 v2/modelOFF, 무인증 v2 status는503 PORTABLE_DISABLED로 구형404와 구분됐습니다. 이는 AI/인증 기능 활성화 완료가 아닙니다. 후속 업로드 전 `node test/verify-upload-entry.mjs .bundle/portable-worker.mjs`로 기본 export를 확인하고, 배포 성공 메시지 대신 `node test/deployment-status.mjs --cloudflare`의 공개 응답 판정을 봅니다. 구형 `.bundle/index.js`를 배포하지 않습니다. 이미 교체했으므로 같은 배포 명령을 반복하지 않습니다.
 
 **2026-11-10 Cloudflare Edit code 진단:** [14개 타입 진단·실제 workerd 검사·최종 배포 파일](../../docs/WORKER_DEPLOYMENT_DIAGNOSTICS.md). 생성된 `.bundle/portable-worker.mjs`에만 `@ts-nocheck`를 넣고 원본 TS 검사는 유지합니다. `duplex`2곳 제거, 보안64/workerd16·원본 Wrangler dry-run 확인. 이 작업에서 실제 배포·원격 미리보기·모델 호출은 하지 않았습니다.

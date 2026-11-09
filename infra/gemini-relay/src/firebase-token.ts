@@ -6,15 +6,16 @@ let cache:Cached|undefined,pending:Promise<Cached>|undefined,cooldown=0;
 async function certificates(now:number,fetcher=fetch,force=false):Promise<Cached>{
  if(!force&&cache&&cache.until>now)return cache;
  if(pending)return pending;
- reject(now>=cooldown,"AUTH_KEYS_UNAVAILABLE",503);cooldown=now+10000;
+ reject(now>=cooldown,"AUTH_KEYS_COOLDOWN",503);cooldown=now+10000;
  pending=(async()=>{try{
-  const r=await fetcher(CERT_URL,{redirect:"error",signal:AbortSignal.timeout(5000)});reject(r.ok,"AUTH_KEYS_UNAVAILABLE",503);
-  const text=await bodyText(r,65536);const certs=JSON.parse(text);
-  reject(certs&&typeof certs==="object"&&!Array.isArray(certs)&&Object.keys(certs).length>=1&&Object.keys(certs).length<=8,"AUTH_KEYS_UNAVAILABLE",503);
-  for(const [kid,pem] of Object.entries(certs))reject(/^[A-Za-z0-9_-]{1,128}$/.test(kid)&&typeof pem==="string"&&pem.length<=8192&&pem.startsWith("-----BEGIN CERTIFICATE-----"),"AUTH_KEYS_UNAVAILABLE",503);
+  const r=await fetcher(CERT_URL,{redirect:"manual",signal:AbortSignal.timeout(5000)});reject(r.ok,"AUTH_KEYS_HTTP_"+r.status,503);
+  let text:string;try{text=await bodyText(r,65536);}catch{throw new ApiError(503,"AUTH_KEYS_BODY");}
+  let certs:any;try{certs=JSON.parse(text);}catch{throw new ApiError(503,"AUTH_KEYS_JSON");}
+  reject(certs&&typeof certs==="object"&&!Array.isArray(certs)&&Object.keys(certs).length>=1&&Object.keys(certs).length<=8,"AUTH_KEYS_SCHEMA",503);
+  for(const [kid,pem] of Object.entries(certs))reject(/^[A-Za-z0-9_-]{1,128}$/.test(kid)&&typeof pem==="string"&&pem.length<=8192&&pem.startsWith("-----BEGIN CERTIFICATE-----"),"AUTH_KEYS_SCHEMA",503);
   const age=Number(/(?:^|,)\s*max-age=(\d+)/i.exec(r.headers.get("cache-control")||"")?.[1]||"60");
   cache={certs,until:now+Math.min(3600,Math.max(0,age))*1000};return cache;
- }catch{throw new ApiError(503,"AUTH_KEYS_UNAVAILABLE");}})();
+ }catch(e){if(e instanceof ApiError)throw e;const name=(e as {name?:string})?.name;throw new ApiError(503,name==="TimeoutError"||name==="AbortError"?"AUTH_KEYS_TIMEOUT":"AUTH_KEYS_NETWORK");}})();
  try{return await pending;}finally{pending=undefined;}
 }
 export interface Principal {uid:string,authTime:number,issuedAt:number}

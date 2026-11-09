@@ -132,7 +132,7 @@ export async function handle(request, env, providerFetch = fetch, now = Date.now
     try {
       diagnostic.stage="PROVIDER_HTTP";
       upstream = await providerFetch("https://generativelanguage.googleapis.com/v1beta/models/"+MODEL+":generateContent", {
-        method:"POST",redirect:"error",signal:controller.signal,
+        method:"POST",redirect:"manual",signal:controller.signal,
         headers:{"Content-Type":"application/json","x-goog-api-key":env.GEMINI_API_KEY},
         body:JSON.stringify({
           systemInstruction:{parts:[{text:"You explain a SYNTHETIC SOC test, not a real vehicle. Return short polite Korean, at most two sentences, without any digits, diagnoses, named components, repair claims, or driving-safety judgments. Do not use the words 고장, 수리, 안전, 브레이크, 타이어, 교체. Explain only that a user-configured charging threshold was crossed; suggest checking a charging plan. Action must be CHECK_CHARGING_PLAN. Never invent facts. This is not a diagnosis."}]},

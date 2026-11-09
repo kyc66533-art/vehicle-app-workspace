@@ -1,5 +1,7 @@
 # CARITDA Portable AI — 구현·인수 기록
 
+**2026-11-10 후속 구현:** [선택한 사용자 문제 한 건 Gemini 설명](ISSUE_GEMINI_ACCEPTANCE.md). 기존 SOC/Firebase 구조를 재사용하고 기록 동의를 별도로 추가했습니다. 로컬·Pleos fixture 검증을 실제 Gemini 성공으로 대체하지 않습니다. 새 문제 API 배포와 실모델 승인은 [관리자 안내](../infra/gemini-relay/ISSUE_AI_SETUP.md)를 따릅니다. 아래 SOC 전용 제한과 과거 미완료 기록은 당시 사실로 보존합니다.
+
 2026-11-10 00:03 +09:00, Asia/Seoul. 기준 main `b156648ab31fa615b2a26c8cd819db42c1bd0154`. Aside의 [통합 조사](research/ASIDE_CARITDA_PORTABLE_AI.md), [이전 Gemini 오류 수정](GEMINI_RESPONSE_FIX.md)을 읽고 구현했습니다. 소스 게시와 서버 배포·실모델·PC B 검증은 각각 별도입니다. 최종 게시 SHA는 완료 응답에 기록합니다.
 
 ## 현재 결론

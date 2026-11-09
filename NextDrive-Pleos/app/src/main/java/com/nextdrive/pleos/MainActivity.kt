@@ -928,6 +928,9 @@ class MainActivity : Activity() {
         if(issue.memo.isNotBlank())content.addView(label("메모 · ${issue.memo}",22))
         if(service.events(id).any{it.kind==EventKind.EDITED})content.addView(label("내용이 수정됐어요. 이전 내용은 아래 이력에 남아 있어요.",20))
         body.addView(content)
+        body.addView(ui.action("AI로 쉽게 설명","issue_ai_explain",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){
+            if(canEdit())startActivity(android.content.Intent(this,PortableAiActivity::class.java).putExtra("issue_id",id))
+        })
         snapshots.linked(id)?.let{linkedVehicle(body,it)}
         if(service.canManage(issue)&&snapshots.linked(id)==null){
             body.addView(ui.action(if(snapshots.pending(id))"차량 정보 연결 다시 시도"else"차량 정보 함께 저장","link_snapshot",ActionStyle.QUIET,canWrite(),HmiIcon.VEHICLE){

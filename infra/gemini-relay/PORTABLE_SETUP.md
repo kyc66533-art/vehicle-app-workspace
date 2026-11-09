@@ -1,5 +1,7 @@
 # CARITDA Portable AI v2 — 배포 전 관리자 절차
 
+**선택한 문제 기록 API 추가(2026-11-10):** 최신 단계는 [ISSUE_AI_SETUP.md](ISSUE_AI_SETUP.md)를 따릅니다. 기존 Firebase/v2 해결 결과를 재설정하지 않습니다. 새 문제 API 번들 해시·모델OFF 인증·실제 기록/비용 승인 절차는 새 문서에 있습니다. 아래 고정 해시/과거 SOC 절차를 이번 업로드 파일로 오인하지 마세요.
+
 **2026-11-10 편집기 진단 수정:** [Worker 진단·최종 파일](../../docs/WORKER_DEPLOYMENT_DIAGNOSTICS.md)을 먼저 확인합니다. `duplex`2곳을 제거했고 생성 JS만 타입 재추론 대상에서 제외합니다. 원본 TS/보안64/workerd16 및 일반 PowerShell Wrangler dry-run으로 검증했습니다. 최신 Edit code용 파일은 `.bundle/portable-worker.mjs`(SHA256 `24FAC496B41181FA7295E3A0AFFE1AB2BE7B2F9D6281C0BF2664D2E6DB3FD09A`)입니다. 이 진단 작업에서는 실제 배포·Gemini 호출을 하지 않았습니다. 아래의 과거 승인/배포 절차를 이번 작업의 실행 허가로 해석하지 않습니다.
 
 이 문서는 기존 v1 안내보다 우선합니다. **소스 게시·로컬 번들은 서버 배포 승인이 아닙니다.** 현재 서버를 Codex가 배포하거나 모델을 호출하지 않았습니다. 먼저 모델 호출 없이 인증을 확인하고, 별도 승인된 횟수만 실제 모델을 시험합니다.

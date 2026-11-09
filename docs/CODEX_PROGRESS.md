@@ -1,6 +1,19 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-09 20:30 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-10 00:06 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Portable AI / Firebase 실제 호환·정식 인증 구현 (모델 OFF 배포 승인·사용자 실행 대기)
+
+- 기준 main `b156648ab31fa615b2a26c8cd819db42c1bd0154`, 원격133 blob/로컬 공유115개가 시작 시 일치했습니다. Aside의 ASIDE_CARITDA_PORTABLE_AI 전체와 이전 Gemini 수정 보고서를 읽었습니다. 기존 연구18개와 원격 이력을 보존하며 **GitHub 연결 도구를 통한 게시**를 사용합니다. 로컬 Git 연결/push가 아닙니다.
+- Firebase 공개 Android 설정을 일반/TEST별로 로컬 주입했습니다(원본 JSON Git 제외). Auth25.0.0의 Kotlin metadata2.4 충돌을 실제 확인했고 현재 Kotlin2.2.21/Gradle8.11.1/Vehicle2.3.2를 유지한 채 공식 Auth24.2.0을 선택했습니다. 사용자가 일반 Studio에서 Sync/누락 테스트 의존성, PowerShell에서 jose6.2.16 설치를 완료했습니다. 로그인 비밀번호는 TEST 앱에서만 사용자가 입력했고 Codex가 읽거나 게시하지 않았습니다.
+- 실제 Pleos user10/emulator-5554에서 사용자 TEST 로그인2 assertion, 재실행·SDK ID 토큰·명시 갱신4 assertion이 통과했습니다. SDK 초기화/완료 대기 오류를 AuthStateListener/idle 대기로 수정했고 최초 실패 기록을 성공으로 지우지 않았습니다. 이후 최종 TEST 교체 설치에서도 세션4개 검사를 다시 통과했습니다. 이 결과는 Worker JWT/기기 등록/실제 모델 성공과 별개입니다.
+- 실제 코드: FirebaseSessionProvider/DeviceKeyStore, package별 공개 옵션/backup 제외, 일반 PortableAiActivity, 기존 분석의 AI 버튼, PortableAnalysis/Client/암호화 Store, TEST 호환 화면과 fixture 전용 검사. 기존 AiRelayClient HTTPS 전송·VehicleAnalytics·AnalysisExplanation을 재사용했습니다. 고정 SOC 최소 요약/typed facts/hash 검증·지속 동의/철회·기기 서명·중단/UXR/계정 분리·intent 복구를 연결했습니다. 현재 실차·개인 증상 전송은 허용하지 않습니다.
+- 서버: jose JWT/UID allowlist·기기 JWK/nonce/P1363 증명, 고정 v2 계약, 단일 기존 DO의 global/UID/device/day/rate/concurrency 원자 예약·단일 dispatch·UNKNOWN, 상태/결과 조회·retention alarm을 구현했습니다. 기존 namespace/BUDGET/BudgetGate/객체/budget/migration/누적5회 기록은 유지합니다. 기존 사용+v2 시도가 승인 합계 상한에 포함되며 새 허용0/모델OFF가 기본입니다. v1 코드/preflight는 보존하고 모델 경로는 cutover 후 끕니다. 원장 초기화·환불·재호출로 우회하지 않습니다.
+- 최종 로컬: Worker64 security assertion(원본과 배포 번들에 동일 검사, 중복 합산 안 함), Android Auth/Keystore20+재실행2, Portable 분석/응답/암호화/intent26, 실제 새 View4, 기존 Gemini86/분석24, 세션4 및 Node WebCrypto4가 통과했습니다. Worker/provider/DO fixture는 실제 외부 연결 시험이 아닙니다. 기본 validation DB를 초기화하는 과거 전체 suite는 보존을 위해 실행하지 않았고 기존369개 전체 통과로 재사용하지 않습니다.
+- Gradle Debug/validation/androidTest/Release, lintDebug/lintVitalRelease가146 tasks로 성공했습니다. Lint0오류/50경고이며, 기존 화면 설정 버튼의 들여쓰기 오류1개만 수정했습니다. testDebugUnitTest는 NO-SOURCE라 시험 건수로 세지 않습니다. Release APK는 **미서명**이며 제출용 설치 APK라고 표시하지 않습니다. 신규 release 키를 만들지 않았습니다.
+- 실제 일반 앱은 설치 직전 유효 전체 tar와 기존 APK를 새로 백업하고 인증서 일치를 확인한 뒤 `install -r --user 10`으로 교체했습니다. 설치 직후5DB가 바이트 동일했습니다. 실제 화면·SDK SOC100%/거리0.0km·연료 미지원 재수신을 확인했습니다. 앱 진입 후 정상 GET3행·스냅샷1·분석2행이 추가됐고, 일반 문제23/이벤트92/운전자10/초안0과 두 앱10DB의 원본 행·schema/user_version·integrity/FK를 최종 백업에서 보존했습니다. 수치는 실측이며 다음 작업에 고정하지 않습니다. 초기 tar는 없는 폴더 오류로 전체 검증 실패했으나 복구에 사용하지 않았고 새 verified/final tar는 검증 성공했습니다. 백업/SDK 세션/개인 캡처는 비공개 `.tools`에만 남깁니다.
+- 사용자는 **모델 OFF Worker 교체·UID 정책·기기 등록·기존 사용량 조회**를 승인했습니다. 최종 번들 SHA256 `6BBF958083E40C8A12727F35752CB1454A66F2765A9BD8CD23FD32182FE9765D`, 기존 Secret·DO 유지/모델 허용0 설정을 안내하고 사용자의 대시보드 작업 완료를 기다립니다. Cloudflare 관리 도구/CLI 권한을 우회하지 않았습니다. 실제 Gemini 호출은 이번 작업0회이고 추가 예산·Gemini 활성화·실제 SDK 요약 전송 시험은 아직 승인되지 않았습니다.
+- 남은 것: 원격 v2 배포/release·Google 공개키/JWT/Keystore 등록·실제 잔액 확인, 해당 모델 호출 승인·실제 응답, 일반 앱 최초 로그인/동의와1버튼 왕복, 정식 서명·실제 PC B·전체 확대/주행/사용성 검수입니다. 상세 PA30/PB18·소스/실제/Mock 범위와 APK 해시는 [PORTABLE_AI_ACCEPTANCE.md](PORTABLE_AI_ACCEPTANCE.md), 설정 클릭 경로는 [PORTABLE_SETUP.md](../infra/gemini-relay/PORTABLE_SETUP.md)에 기록했습니다. 검증된 로컬 소스·보고서만 게시하며 Firebase JSON/키/DB/백업/로그/APK/연구 파일은 게시하지 않습니다.
 
 ## 최신 작업 — Gemini 응답 진단·TEST 인증 기억 (실모델 재시험은 사용자 배포 후)
 

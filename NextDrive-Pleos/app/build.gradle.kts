@@ -3,6 +3,27 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Public Firebase Android configuration only. No Google Services plugin or invented defaults.
+// Each variant must match its own registered Android package in the console download.
+fun firebasePublicConfig(path:java.io.File, packageId:String):Map<String,String> {
+    val empty=mapOf("state" to "MISSING","project" to "","app" to "","key" to "","package" to "")
+    if(!path.isFile)return empty
+    try {
+        val json=groovy.json.JsonSlurper().parse(path) as Map<*,*>
+        val project=(json["project_info"] as? Map<*,*>)?.get("project_id") as? String?:""
+        val client=(json["client"] as? List<*>)?.filterIsInstance<Map<*,*>>()?.firstOrNull {
+            (((it["client_info"] as? Map<*,*>)?.get("android_client_info") as? Map<*,*>)?.get("package_name"))==packageId
+        }?:return empty+mapOf("state" to "PACKAGE_MISMATCH")
+        val app=(client["client_info"] as? Map<*,*>)?.get("mobilesdk_app_id") as? String?:""
+        val key=(client["api_key"] as? List<*>)?.filterIsInstance<Map<*,*>>()?.firstOrNull()?.get("current_key") as? String?:""
+        require(Regex("[a-z][a-z0-9-]{4,62}").matches(project)&&Regex("1:[0-9]+:android:[a-fA-F0-9]+").matches(app)&&Regex("[A-Za-z0-9_-]{30,100}").matches(key))
+        return mapOf("state" to "READY","project" to project,"app" to app,"key" to key,"package" to packageId)
+    } catch(_:Exception){throw GradleException("Firebase 공개 Android 설정을 읽지 못했습니다. 파일 형식과 앱 등록을 확인해 주세요. 값은 출력하지 않습니다.")}
+}
+val generalFirebase=firebasePublicConfig(file("google-services.json"),"com.nextdrive.pleos")
+val validationConfigFile=file("src/validation/google-services.json").takeIf{it.isFile}?:file("google-services.json")
+val validationFirebase=firebasePublicConfig(validationConfigFile,"com.nextdrive.pleos.validation")
+
 android {
     useLibrary("android.car")
     namespace = "com.nextdrive.pleos"
@@ -16,6 +37,7 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "com.nextdrive.pleos.MvpScenarioInstrumentation"
+        generalFirebase.forEach{(key,value)->resValue("string","caritda_firebase_$key",value)}
     }
 
     // Instrumentation must never target the app holding a driver's real journal.
@@ -28,6 +50,7 @@ android {
             applicationIdSuffix = ".validation"
             matchingFallbacks += listOf("debug")
             resValue("string", "app_name", "[TEST] CARITDA 검증 전용")
+            validationFirebase.forEach{(key,value)->resValue("string","caritda_firebase_$key",value)}
         }
     }
     // The debug override is only for replacing a stale production-target runner with the
@@ -47,6 +70,10 @@ kotlin {
 }
 
 dependencies {
+    // Email/password Auth only. Public FirebaseOptions are supplied separately; no AI key.
+    // Auth 25.0.0 is Kotlin metadata 2.4; the preserved Kotlin 2.2.21 compiler rejects it.
+    // Official 24.2.0 (also mapped by BoM 34.19.0) is the compatibility candidate to verify.
+    implementation("com.google.firebase:firebase-auth:24.2.0")
     implementation("ai.pleos.playground:Vehicle:2.3.2")
     // Public ErrorCode is published as runtime-only by Vehicle.
     // Vehicle already packages this at runtime; expose only its public constants to the compiler.

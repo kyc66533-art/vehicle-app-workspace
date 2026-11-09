@@ -1,11 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — Gemini 최소 검증
-- 최신 지시는 Gemini 오류 수정이다. 사용자가 배포/DO/401/preflight 성공을 보고했다. 과거 실패 원인은 응답 코드 없이 확정하지 않는다. 로컬 검증 뒤 Worker 교체·실제 모델 최대1회 승인을 받았다(실패 후 재시도 불가). 기존 DO 이름/namespace/키/누적5 예산은 초기화·우회하지 않는다. main 자동배포 연결 없음도 확인했다.
-- TEST 인증은 선택한 경우에만 최대10분 프로세스 메모리 유지, 디스크/Bundle/로그 금지다. 만료/거부/명시적 취소 시 지우며 동의·안전 제한은 별도로 재검사한다. 진단은 허용 코드/HTTP/종료 이유만, 원문·키·토큰은 노출하지 않는다.
-- 사용자는 이번 배포/인증/실모델 호출을 보류하고 검증된 로컬 코드만 게시하도록 선택했다. 이 선택을 승인으로 해석하지 않으며 외부 작업은 별도 후속 승인 전 진행하지 않는다.
-- 사용자의 최신 지시로 고정 합성 SOC만 TEST 앱에서 명시적으로 전송하는 시험을 준비한다. infra/gemini-relay/README.md와 docs/GEMINI_MINIMUM_POC.md를 따른다. GEMINI_API_KEY는 Worker env Secret 전용이며 값을 요청·조회·게시하거나 APK에 넣지 않는다. 앱 토큰은 별도 임시 인증이며 저장/로그하지 않는다.
-- Worker는 기본 꺼짐, 만료·인증·입력·전역 DO 예산(분당2/누적5) 검증 뒤만 호출한다. 배포/DO 생성/인증 설정·실제 모델 시험은 사용자 승인 뒤 진행한다. GitHub 소스 게시는 외부 배포 승인이 아니다. 로컬 Web API/Mock 검사와 원격401·실제Gemini·TEST 표시를 분리한다. 기존 일반/validation DB·원관측은 합성값으로 변경하지 않는다.
+## 현재 작업 — Portable AI / Firebase 인증
+- 최신 사용자 지시는 Aside의 ASIDE_CARITDA_PORTABLE_AI를 기준으로 Firebase 이메일 인증·기기 등록·기존 Worker·Gemini를 연결하는 것이다. 기존 local-only/합성 v1 제한은 보존 이력이며 이 단계에 우선하지 않는다. 모델OFF 배포·인증만 승인됐고, 정식 예산·실제 모델·실차 전송은 별도 승인 전 실행하지 않는다. 과거 합성 최대1회 승인을 v2 추가 비용 승인으로 확대하지 않는다.
+- Auth 24.2.0은 Pleos TEST에서 실제 로그인·세션 복원·토큰 갱신을 확인했다. 25.0.0은 Kotlin 메타데이터 불일치로 제외했다. 공개 Firebase 설정과 Secret을 구분하며 키·비밀번호·JWT·SDK 개인 세션·백업은 게시/조회하지 않는다. TEST와 일반 패키지·DB·Keystore는 독립이다.
+- v2는 같은 BUDGET/BudgetGate/namespace/객체의 기존 budget을 보존하고 portable:v2만 추가한다. 합계 사용량에 과거5회 사용을 포함한다. 기본 모델 OFF/추가 허용0, 인가 UID·기기·일·전역·동시성·nonce·서명·단일 dispatch로 제한하며 UNKNOWN 예약을 환불/재전송/삭제하여 우회하지 않는다. v1 모델 경로는 cutover 후 꺼지며 원장/코드/preflight를 보존한다.
+- 일반 앱은 최초 로그인/등록/범위 동의 후 SDK SOC 요약만 설명한다. 공급자키/공통토큰을 APK에 넣지 않는다. 실제 MODEL과 로컬 규칙/Mock를 구분하고 원 분석/DB/상태를 바꾸지 않는다. 실차 전송은 이번 검증 범위 밖이며 동의 철회·UXR·onStop에서 새 전송/늦은 표시를 차단한다.
+- docs/PORTABLE_AI_ACCEPTANCE.md와 infra/gemini-relay/PORTABLE_SETUP.md의 실제/로컬/미검증·승인 경계를 유지한다. 서버 배포/실모델/PC B/Release 서명을 로컬 검사로 대체하지 않는다. 사용자·관측·초안·SDK 세션·AVD를 보존하고 일반 앱 계측과 기존 validation DB 초기화 없이 검증한다. GitHub 연결 도구 게시 규칙을 따른다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

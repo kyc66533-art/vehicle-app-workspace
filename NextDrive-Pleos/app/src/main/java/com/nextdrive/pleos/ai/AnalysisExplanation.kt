@@ -28,7 +28,7 @@ object AnalysisExplanation {
         guard(j.optString("evidence_digest")==consent.digest,"APP_EVIDENCE")
         val facts=j.optJSONObject("facts")?:throw AnalysisValidationFailure("APP_FACTS");val expected=JSONObject(payload)
         guard(facts.keys().asSequence().toSet()==expected.keys().asSequence().toSet(),"APP_FACTS")
-        expected.keys().forEach{k->guard(facts.get(k).toString()==expected.get(k).toString(),"APP_FACTS")}
+        guard(PortableAnalysis.equal(facts,expected),"APP_FACTS")
         val text=j.opt("explanation") as? String?:throw AnalysisValidationFailure("APP_TEXT")
         guard(text.length in 1..600&&Regex("[가-힣]").containsMatchIn(text),"APP_TEXT")
         // Numeric facts are rendered locally from the exact facts object. Free prose cannot

@@ -411,7 +411,7 @@ class MainActivity : Activity() {
     }
     private fun themeSetting(body:LinearLayout){
         val preference=getPreferences(MODE_PRIVATE).getString("theme","system")
-            body.addView(button("화면 테마: ${when(preference){"dark"->"어둡게";"light"->"밝게";else->"시스템 설정"}}","theme",enabled=canEdit()){
+        body.addView(button("화면 테마: ${when(preference){"dark"->"어둡게";"light"->"밝게";else->"시스템 설정"}}","theme",enabled=canEdit()){
                 check(getPreferences(MODE_PRIVATE).edit().putString("theme",when(preference){"dark"->"light";"light"->"system";else->"dark"}).commit())
                 draw()
             })
@@ -634,6 +634,7 @@ class MainActivity : Activity() {
         body.addView(ui.action("충전량 자동 안내 · 설정과 기록","soc_notices",ActionStyle.QUIET,canEdit(),HmiIcon.BATTERY){edit{openScreen(Screen.SOC_NOTICES)}})
         body.addView(ui.action("차량 데이터 분석","vehicle_analytics",ActionStyle.SECONDARY,canEdit(),HmiIcon.DISTANCE){edit{requestAnalytics();openScreen(Screen.ANALYTICS)}})
         if(packageName=="com.nextdrive.pleos.validation")body.addView(ui.action("Gemini 연결 시험 · 합성 SOC","gemini_poc",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{startActivity(android.content.Intent().setClassName(this,"com.nextdrive.pleos.GeminiPocActivity"))}})
+        if(packageName=="com.nextdrive.pleos.validation")body.addView(ui.action("Firebase 로그인 호환성 확인","firebase_auth_probe",ActionStyle.QUIET,canEdit(),HmiIcon.PERSON){edit{startActivity(android.content.Intent().setClassName(this,"com.nextdrive.pleos.AuthCompatibilityActivity"))}})
         body.addView(label("차량 전체의 고장 여부를 판단한 결과는 아니에요.",20))
         body.addView(ui.expandable("제공되지 않는 항목","unavailable",showUnavailable,canEdit()){edit{showUnavailable=!showUnavailable;draw()}})
         if(showUnavailable){
@@ -715,7 +716,8 @@ class MainActivity : Activity() {
         if(a.insights.isEmpty())body.addView(ui.state("추가 해석을 보류해요.","같은 값의 반복·표본 부족만으로 고장이나 효율을 판단하지 않아요. 최근 차량 표시를 확인해 주세요."))
         a.insights.take(8).forEach{i->val card=panel().apply{tag="insight_${i.kind}"};card.addView(label(i.title,24,true));card.addView(label(i.meaning,22));card.addView(label(i.action,22,true));card.addView(label(vehicleDisplay.time(i.last),20));body.addView(card)}
         body.addView(label("분석 설명은 규칙으로 작성했어요. AI 모델 응답이 아니에요. 관측값 평균은 시간 평균·배터리 효율이 아니며, 변화 시각은 실제 변화 발생 시각이 아닌 앱 수신 시각이에요.",20))
-        body.addView(ui.action("AI 전송 내용 확인 · 아직 미연결","analysis_ai",ActionStyle.SECONDARY,canEdit()&&a.points.isNotEmpty(),HmiIcon.RECORD){edit{aiPreview=AnalysisExplanation.payload(a);aiConsent=AnalysisConsent(aiPreview);openScreen(Screen.AI_PREVIEW)}})
+        if(a.kind=="EV_SOC")body.addView(ui.action("AI로 쉽게 설명","portable_ai",ActionStyle.SECONDARY,canEdit()&&a.points.isNotEmpty(),HmiIcon.RECORD){edit{startActivity(android.content.Intent(this,PortableAiActivity::class.java).putExtra("request_from_analysis",true))}})
+        body.addView(ui.action("전송 요약 미리보기 · 전송 없음","analysis_ai",ActionStyle.QUIET,canEdit()&&a.points.isNotEmpty(),HmiIcon.RECORD){edit{aiPreview=AnalysisExplanation.payload(a);aiConsent=AnalysisConsent(aiPreview);openScreen(Screen.AI_PREVIEW)}})
         body.addView(ui.expandable("상세 데이터 품질과 분석 근거","analysis_detail",analysisDetail,canEdit()){edit{analysisDetail=!analysisDetail;draw()}})
         if(analysisDetail){
             body.addView(label("단순 평균의 모집단: 선택 기간·동일 출처의 유효 수신 ${a.points.size}건(반복 수신 포함). 선은 같은 세션에서만 이어요. 10분 이상 공백은 분석상 구분 기준이며 차량 규격이 아니에요. 세션은 운행·차량 식별자가 아니에요.",22))
@@ -728,7 +730,7 @@ class MainActivity : Activity() {
         }
     }
     private fun aiPreviewScreen(body:LinearLayout){
-        body.addView(ui.state("실제 AI는 아직 연결되지 않았어요.","승인된 중계 서버·앱 인증·모델·시험 비용 설정이 없어요. 이 화면에서 동의해도 외부로 전송하지 않아요."))
+        body.addView(ui.state("로컬 전송 요약 미리보기예요.","이 화면에서는 외부로 전송하지 않아요. 계정 로그인·기기 등록을 사용하는 AI 설명은 분석 화면의 별도 버튼에서 확인해 주세요."))
         body.addView(label("전송 후보: 선택한 신호의 수치·시각·변화량·통계·품질·분석 한계예요. 이름·차량 식별자·위치·전체 DB·증상 원문은 포함하지 않아요.",22))
         body.addView(label(JSONObjectPretty(aiPreview),20).apply{tag="ai_payload_preview"})
         body.addView(button("이 내용만 전송에 동의","ai_consent",enabled=canEdit()){aiConsent?.accept();notice="동의 범위만 확인했어요. AI 미연결로 전송하지 않았어요.";draw()})

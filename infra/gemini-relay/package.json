@@ -1,11 +1,13 @@
 {
   "name": "caritda-gemini-relay-poc",
   "private": true,
+  "type": "module",
   "version": "0.0.1",
   "scripts": {
     "check": "tsc --noEmit",
     "bundle": "wrangler deploy --dry-run --outdir .bundle",
     "deploy": "wrangler deploy"
   },
-  "devDependencies": {"typescript": "^5.0.0", "wrangler": "^4.0.0"}
+  "dependencies": {"jose": "6.2.16"},
+  "devDependencies": {"typescript": "5.9.3", "wrangler": "4.158.0"}
 }

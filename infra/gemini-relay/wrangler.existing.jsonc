@@ -2,7 +2,7 @@
 // Initial installation uses wrangler.jsonc (disabled defaults), not this config.
 {
   "name":"caritda-ai-relay-dev",
-  "main":"src/index.ts",
+  "main":"src/portable-worker.ts",
   "compatibility_date":"2026-11-09",
   "workers_dev":true,
   "keep_vars":true,

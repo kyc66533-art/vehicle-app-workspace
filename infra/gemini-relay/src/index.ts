@@ -68,6 +68,8 @@ export class BudgetGate {
   ctx;
   constructor(ctx) { this.ctx = ctx; }
   async fetch(request) {
+    // Portable cutover marker prevents the preserved v1 path from bypassing the shared ledger.
+    if(request.method === "POST" && new URL(request.url).pathname === "/reserve" && await this.ctx.storage.get("portable:v2")) return json({code:"LEGACY_MODEL_DISABLED"},403);
     // This endpoint is available only through the internal DO binding, never a public route.
     if (request.method === "GET" && new URL(request.url).pathname === "/status") {
       const state = budgetState(await this.ctx.storage.get("budget"));

@@ -52,19 +52,27 @@ class AiRelayClient(private val approvedEndpoint:URL,private val transientAppTok
         val text=AnalysisExplanation.validate(response,consent,payload)
         return Explanation(text,json.getString("model"),requestId,"MODEL",android.os.SystemClock.elapsedRealtime()-start,RelayDiagnostics.read(json.optJSONObject("diagnostic")))
     }
-    private fun postAnalysis(endpoint:URL,token:String,body:ByteArray):String {
+    /** v2 reuses the bounded HTTPS transport, not the legacy shared-token authorization. */
+    internal fun postPortable(path:String,bearer:String,body:String,device:String="",version:Int=1):String {
+        require(approvedEndpoint.toString()=="https://caritda-ai-relay-dev.kyc66533.workers.dev")
+        require(Regex("/v2/(devices/(challenge|register|revoke)|account/status|explanations|operations/o2\\.[0-9]{13}\\.[a-f0-9-]{36})").matches(path))
+        require(bearer.length in 1..8192&&!bearer.contains('\n')&&!bearer.contains('\r'))
+        return postAnalysis(URL(approvedEndpoint.toString()+path),bearer,body.toByteArray(Charsets.UTF_8),mapOf("X-Caritda-Device-Id" to device,"X-Caritda-Key-Version" to version.toString()))
+    }
+    private fun postAnalysis(endpoint:URL,token:String,body:ByteArray,extraHeaders:Map<String,String> = emptyMap()):String {
         check(!cancelled)
         val c=endpoint.openConnection() as HttpsURLConnection;active=c
         try{
             check(!cancelled)
             c.connectTimeout=6000;c.readTimeout=18000;c.instanceFollowRedirects=false;c.requestMethod="POST";c.doOutput=true
             c.setRequestProperty("Authorization","Bearer $token");c.setRequestProperty("Content-Type","application/json; charset=utf-8")
+            extraHeaders.forEach{(name,value)->c.setRequestProperty(name,value)}
             require(body.size<=4096);c.setFixedLengthStreamingMode(body.size)
             c.outputStream.use{it.write(body)}
             val status=c.responseCode
-            val stream=if(status==200)c.inputStream else c.errorStream
+            val stream=if(status==200||status==202&&extraHeaders.isNotEmpty())c.inputStream else c.errorStream
             val response=stream?.use{s->val out=java.io.ByteArrayOutputStream();val chunk=ByteArray(2048);while(true){val n=s.read(chunk);if(n<0)break;if(out.size()+n>16384)throw RelayFailure(502,"APP_RESPONSE_LIMIT");out.write(chunk,0,n)};String(out.toByteArray(),Charsets.UTF_8)}?:"{}"
-            if(status!=200){val error=runCatching{JSONObject(response).getJSONObject("error")}.getOrNull();throw RelayFailure(status,error?.optString("code")?:"HTTP_ERROR",RelayDiagnostics.read(error?.optJSONObject("diagnostic")))}
+            if(status!=200&&!(status==202&&extraHeaders.isNotEmpty())){val error=runCatching{JSONObject(response).getJSONObject("error")}.getOrNull();if(extraHeaders.isNotEmpty())throw PortableFailure(error?.optString("code")?:"HTTP_ERROR");throw RelayFailure(status,error?.optString("code")?:"HTTP_ERROR",RelayDiagnostics.read(error?.optJSONObject("diagnostic")))}
             return response
         }catch(e:java.net.SocketTimeoutException){throw RelayFailure(504,"APP_TIMEOUT")}
         catch(e:java.io.IOException){throw RelayFailure(502,"APP_NETWORK")}

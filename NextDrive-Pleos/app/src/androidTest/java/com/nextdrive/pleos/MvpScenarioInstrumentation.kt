@@ -34,6 +34,12 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("portableAiOnly")=="true"){val lines=PortableAiChecks(this).run();result.putString("stream","CARITDA_PORTABLE_AI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("portableAiUiOnly")=="true"){val lines=PortableAiChecks(this).ui();result.putString("stream","CARITDA_PORTABLE_AI_UI_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("portableAuthInteractiveOnly")=="true"){val lines=PortableAuthChecks(this).interactive();result.putString("stream","CARITDA_PORTABLE_AUTH_INTERACTIVE_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("portableAuthSignedInOnly")=="true"){val lines=PortableAuthChecks(this).signedIn();result.putString("stream","CARITDA_PORTABLE_AUTH_SIGNED_IN_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("portableAuthOnly")=="true"){val lines=PortableAuthChecks(this).run();result.putString("stream","CARITDA_PORTABLE_AUTH_LOCAL_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("portableAuthColdOnly")=="true"){val lines=PortableAuthChecks(this).cold();result.putString("stream","CARITDA_PORTABLE_AUTH_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("geminiPocOnly")=="true"){val lines=GeminiPocChecks(this).run();result.putString("stream","CARITDA_GEMINI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("analyticsContractOnly")=="true"){val lines=AnalyticsChecks(this).run(true);result.putString("stream","CARITDA_ANALYTICS_CONTRACT_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("analyticsInventory")=="true"){val lines=AnalyticsChecks(this).inventory();result.putString("stream",lines.joinToString("\n"));finish(Activity.RESULT_OK,result);return}

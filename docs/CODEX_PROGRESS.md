@@ -1,6 +1,16 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-10 00:36 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-10 01:20 +09:00 (Asia/Seoul).
+
+## 최신 작업 — 공개 Worker v1/v2 불일치 해소·모델OFF 실제 응답 확인
+
+- 기준 main `4f8cc6f66e8950c533940b54c6ba0b8884885b31`을 다시 확인했습니다. 앱·Firebase·SDK·DB·AVD는 변경하지 않았습니다. 읽기 전용 진단을 먼저 수행하고 Gemini/실제 모델 요청 없이 배포 불일치만 처리했습니다.
+- 로컬원본·최종mjs·Wrangler JS의 실제 default.fetch는 health v2/503 PORTABLE_DISABLED 또는401 AUTH_REQUIRED였습니다. 남아 있던 구형 `.bundle/index.js`의 default는v1 handle이며 health synthetic-v1/v2 API404를 재현했습니다. v2 번들에도 legacy 코드가 포함되므로 문자열 존재/파일명만으로 판정하지 않았습니다. 설정 main은 올바르지만 과거 실제 명령/업로드 소스는 미확보였습니다.
+- Codex 공개 요청은EACCES/web 접근 실패였습니다. 사용자가 일반 PowerShell에서 새 `test/deployment-status.mjs --cloudflare`를 실행했고 결과 파일을 직접 읽었습니다. 실제 배포33c3375c…는 버전3265582e…(version12/source=wrangler)에100%였지만 공개 GET/v2 POST와 현재버전 지정 GET이모두v1 동작이었습니다. 따라서 최초에는 공개 합격 기준 미충족으로 기록했고 API 키/정책 오류로 잘못 진단하지 않았습니다. 조회는 Secret/정책 값·이메일을 제외하고 namespace는 hash로만 비교합니다.
+- 사용자가 **모델OFF 명시적1회 교체 배포**를 별도로 승인했습니다. 검증한mjs SHA와 실제 default.fetch guard를 확인하고, 동일 Worker/기존설정 보존 config·keep-vars·두 모델flag false를 명시한 일반 PowerShell 블록을 안내했습니다. 사용자가 교체·공개 검사를 완료했으며 Codex가 직접 배포했다고 표현하지 않습니다. 새로운 계정/DO/Secret을 만들거나 초기화하지 않았습니다.
+- 최종 공개 응답(2026-11-10 01:16:35 KST): GET health200/release=caritda-portable-ai-v2/model_enabled=false. 무인증 POST v2/account/status503/PORTABLE_DISABLED/error.release=v2. 현재 버전 지정 GET도v2입니다. 새 배포 `638eef06-c013-43b1-bb44-973f7d698e62`, 버전 `e6bb4d6a-87c1-4e62-a53f-c6ecada4b6f4`100%로 `PUBLIC_V2_MODEL_OFF_PASS`를 확인했습니다. 503은v2 기능이 아직비활성인상태이며 Firebase 등록/AI 성공으로 바꾸어 보고하지 않습니다.
+- 전후 BUDGET namespace fingerprint·BudgetGate 클래스 및 바인딩9개 이름/타입이 동일했습니다. GEMINI_API_KEY/PORTABLE_POLICY/TEST_APP_TOKEN Secret 이름을 유지했습니다. Secret값·원격원장숫자는 읽지 않았고 모델/인증 요청·원장초기화를 하지 않았습니다. before-repair.json은 생성되지 않아 백업 성공으로 세지 않으며 기존에 읽은 메타데이터로 비교했습니다. Gemini 호출0입니다.
+- 추가한 것은 읽기 전용 진단/출력 redaction4검사·upload default guard(최신v2 허용/old index거부), README·이 기록·[WORKER_DEPLOYMENT_RECONCILIATION.md](WORKER_DEPLOYMENT_RECONCILIATION.md)입니다. Worker 런타임·budget/namespace/config/package·연구·앱 코드는 그대로입니다. 과거 정확한 잘못된 파일 선택 경로는 미확정이나, v1을 제공하던 코드/진입점 불일치를 명시적v2교체로 해소하고 실제공개응답으로검증했습니다. 같은 배포 반복이나 인증/AI 추가작업을 하지 않습니다. 검증된 도구·문서만 **GitHub 연결 도구를 통한 게시**로 공유합니다.
 
 ## 최신 작업 — Cloudflare 편집기14개 진단·배포 호환성 (실제 배포/모델 호출 없음)
 

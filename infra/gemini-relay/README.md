@@ -1,5 +1,7 @@
 # CARITDA Gemini 최소 중계 — 배포 기본 꺼짐
 
+**2026-11-10 Cloudflare Edit code 진단:** [14개 타입 진단·실제 workerd 검사·최종 배포 파일](../../docs/WORKER_DEPLOYMENT_DIAGNOSTICS.md). 생성된 `.bundle/portable-worker.mjs`에만 `@ts-nocheck`를 넣고 원본 TS 검사는 유지합니다. `duplex`2곳 제거, 보안64/workerd16·원본 Wrangler dry-run 확인. 이 작업에서 실제 배포·원격 미리보기·모델 호출은 하지 않았습니다.
+
 **최신 Portable AI 작업은 [PORTABLE_SETUP.md](PORTABLE_SETUP.md)가 우선합니다.** Firebase Auth·Keystore·실제 SDK SOC 요약 v2 코드를 추가했으며 서버 배포/정식 예산/실모델 시험은 아직 별도 승인 대상입니다. 아래의 합성 v1 최대1회 승인을 v2의 추가 예산이나 실차 정보 전송 승인으로 해석하지 않습니다. 새 진입점은 `portable-worker.ts`이고 기존 v1 원장/Secret/DO는 보존합니다. GitHub 소스 게시가 Cloudflare 배포를 실행하지 않는 것도 사용자에게 확인했습니다.
 
 대상 Worker: `caritda-ai-relay-dev`, 모델: `gemini-3.5-flash-lite`. 기존 `GEMINI_API_KEY` Secret은 유지하며 값을 조회하거나 GitHub/APK에 넣지 않습니다. 이 폴더의 소스 게시가 배포·계정 설정·유료 호출 승인을 뜻하지 않습니다.

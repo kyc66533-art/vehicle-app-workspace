@@ -7,7 +7,8 @@ export function keys(value:unknown,names:string[]):asserts value is Record<strin
  reject(value&&typeof value==="object"&&!Array.isArray(value)&&Object.keys(value).sort().join(",")===[...names].sort().join(","));
 }
 export function response(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff","referrer-policy":"no-referrer"}});}
-export async function bodyText(request:Request,limit=4096):Promise<string>{
+// Both Request and Response expose these fields. Do not construct a Node-style duplex Request.
+export async function bodyText(request:Pick<Request,"headers"|"body">,limit=4096):Promise<string>{
  const length=request.headers.get("content-length");reject(!length||/^\d+$/.test(length)&&Number(length)<=limit,"BODY_LIMIT",413);
  reject(request.body,"BODY_REQUIRED");const reader=request.body.getReader();const chunks:Uint8Array[]=[];let size=0;
  try{for(;;){const item=await reader.read();if(item.done)break;size+=item.value.byteLength;if(size>limit){await reader.cancel();throw new ApiError(413,"BODY_LIMIT");}chunks.push(item.value);}}

@@ -1,6 +1,16 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-10 00:06 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-10 00:36 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Cloudflare 편집기14개 진단·배포 호환성 (실제 배포/모델 호출 없음)
+
+- 기준 main `afd4678ba7cb2ad11937d79fc65069d08270d2da`를 연결 도구로 다시 확인했습니다. 이번은 Worker 진단에 한정하며 Android 기능/설정/DB/AVD를 수정하거나 과거 앱 검사를 반복하지 않았습니다. 사용자의 최신 지시에 따라 실제 Cloudflare 배포·원격 미리보기·Gemini 호출·Secret/운영 DO/사용량 변경을 하지 않았습니다. 아래 이전 모델OFF 배포 승인을 이번 실제 배포 허가로 사용하지 않았습니다.
+- 사용자가 제공한 index.js 행82/323/723의 TextDecoder 옵션,432/1511 duplex,749/750 fromBase64,767/777/787 super 및 captureStackTrace,1364/1365 JWT 객체/Spread 진단을 원본·jose 선언·번들과 대조했습니다. 13개 목록 중767행 두 진단을 나누면14개입니다. 구형 번들은 실제 workerd에서도 실행됐고, 생성 JS를 재타입추론하는 편집기 진단과 실제 배포/런타임 오류를 구분했습니다. 표준 TS5.9.3 프로필9/12개 재현은 Cloudflare 편집기와 동일한 선언 환경이라고 주장하지 않습니다.
+- 최소 수정: bodyText가 Request/Response 공통 headers/body만 받고 인증서/모델 Response를 직접 읽도록 하여 Node식 duplex2곳·강제 cast를 제거했습니다. UTF8 fatal/크기 제한·인증·판정·budget/기존 원장 코드는 유지했습니다. 생성 번들에만 @ts-nocheck/generated 표시를 넣었으며 원본 TS tsc 검사는 계속 유지합니다. 표시 적용0개 자체를 실행 검증으로 대체하지 않습니다.
+- Codex Wrangler 원본 dry-run과 사전번들 no-bundle dry-run은 동일한 esbuild `Cannot read directory "../../..": Access is denied`/entry resolve 오류로 종료1이었습니다. `.tools/worker-diagnostics/wrangler-dry-run.log`의 초기화 기록과 실제 stderr를 확인했습니다. .env 부재나 API 인증/모델 오류가 아니며 권한·보안 정책을 바꾸지 않았습니다. 사용자 일반 PowerShell에서 **새 원본 번들 생성과 Wrangler dry-run 모두 성공**한 답변을 받았고 새 산출물도 직접 검사했습니다. Codex sandbox 자체의 실패를 성공으로 고쳐 적지 않습니다.
+- 검사: 원본 TS 통과, 원본·최종mjs·Wrangler JS 각각 보안64 통과(동일 검사 중복 합산 안 함). 새 workerd16개로 실제 RSA JWT 성공/만료·잘못된 aud/서명 거부, fromBase64/captureStackTrace 미제공 대체경로, UTF8/BOM/크기 제한, 실제 로컬 SQLite DO challenge/alarm·P1363 등록을 통과했습니다. 외부 요청0을 검사했고 별도 로컬 fixture 저장소만 사용했습니다. Google 실제 인증서 네트워크·실제 계정·모델 결과는 미검증입니다.
+- 최종 Edit code 파일은 `infra/gemini-relay/.bundle/portable-worker.mjs`, SHA256 `24FAC496B41181FA7295E3A0AFFE1AB2BE7B2F9D6281C0BF2664D2E6DB3FD09A`입니다. Wrangler dry-run의 `portable-worker.js`도64/16 검사 통과했지만 편집기용 표시가 없는 별도 산출물입니다. 구형 `.bundle/index.js`를 쓰지 않도록 안내했습니다. 안전한 후속 경로는 검증된 원본+기존설정 보존 config로 dry-run 후 별도 승인된 Wrangler 배포입니다. 이번에 배포하지 않았습니다.
+- 변경: `portable-common.ts`, `firebase-token.ts`, `portable-analysis.ts`, `test/bundle-portable.mjs`, 신규 editor/workerd 검사2개, README/PORTABLE_SETUP, 이 기록, [WORKER_DEPLOYMENT_DIAGNOSTICS.md](WORKER_DEPLOYMENT_DIAGNOSTICS.md). 앱·기존 budget gate/legacy index/두 Wrangler 설정/package/lock/연구 문서는 그대로입니다. 실제 편집기 재붙여넣기·Cloudflare 업로드 수락은 미실행입니다. 검증된 원본/검사/문서만 **GitHub 연결 도구를 통한 게시**로 공유하고 번들·로그·개인 설정은 제외합니다. 최종 SHA는 완료 응답에 기록합니다.
 
 ## 최신 작업 — Portable AI / Firebase 실제 호환·정식 인증 구현 (모델 OFF 배포 승인·사용자 실행 대기)
 

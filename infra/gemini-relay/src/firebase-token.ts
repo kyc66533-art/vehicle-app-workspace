@@ -9,7 +9,7 @@ async function certificates(now:number,fetcher=fetch,force=false):Promise<Cached
  reject(now>=cooldown,"AUTH_KEYS_UNAVAILABLE",503);cooldown=now+10000;
  pending=(async()=>{try{
   const r=await fetcher(CERT_URL,{redirect:"error",signal:AbortSignal.timeout(5000)});reject(r.ok,"AUTH_KEYS_UNAVAILABLE",503);
-  const text=await bodyText(new Request("https://certificates.internal",{method:"POST",body:r.body,duplex:"half"} as RequestInit),65536);const certs=JSON.parse(text);
+  const text=await bodyText(r,65536);const certs=JSON.parse(text);
   reject(certs&&typeof certs==="object"&&!Array.isArray(certs)&&Object.keys(certs).length>=1&&Object.keys(certs).length<=8,"AUTH_KEYS_UNAVAILABLE",503);
   for(const [kid,pem] of Object.entries(certs))reject(/^[A-Za-z0-9_-]{1,128}$/.test(kid)&&typeof pem==="string"&&pem.length<=8192&&pem.startsWith("-----BEGIN CERTIFICATE-----"),"AUTH_KEYS_UNAVAILABLE",503);
   const age=Number(/(?:^|,)\s*max-age=(\d+)/i.exec(r.headers.get("cache-control")||"")?.[1]||"60");

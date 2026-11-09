@@ -12,7 +12,7 @@ data class ExplanationInput(val requestId:String,val kind:String,val raw:String,
         .put("purpose","short_korean_information_only_no_diagnosis_no_safety_decision").toString()
     companion object {fun from(n:SocNotice)=ExplanationInput(java.util.UUID.randomUUID().toString(),"EV_SOC",n.value,n.unit,n.last,n.source,n.threshold,"user-soc-v1:${n.version}",if(n.phase=="LOW")"USER_LOW_SOC"else"CONDITION_EXIT")}
 }
-data class Explanation(val text:String,val model:String,val requestId:String,val origin:String,val latencyMs:Long)
+data class Explanation(val text:String,val model:String,val requestId:String,val origin:String,val latencyMs:Long,val diagnostic:String="")
 object ExplanationContract {
     fun parse(body:String,input:ExplanationInput,latencyMs:Long,allowMock:Boolean=false):Explanation {
         require(body.length<=16384)
@@ -37,18 +37,20 @@ class AiRelayClient(private val approvedEndpoint:URL,private val transientAppTok
         val token=transientAppToken()?.takeIf{Regex("[A-Za-z0-9_-]{43}").matches(it)}?:error("유효한 임시 앱 인증이 필요해요.")
         val start=android.os.SystemClock.elapsedRealtime()
         val body=JSONObject().put("request_id",requestId).put("analysis_payload",payload).toString().toByteArray(Charsets.UTF_8)
-        val preflight=JSONObject(postAnalysis(URL("https://caritda-ai-relay-dev.kyc66533.workers.dev/v1/preflight"),token,body))
-        require(preflight.getString("contract")=="caritda-gemini-synthetic-v1"&&preflight.getBoolean("authenticated")&&preflight.getBoolean("synthetic_only")&&!preflight.getBoolean("provider_calls")&&preflight.getBoolean("binding_ok"))
-        if(preflightOnly)return Explanation("앱 인증과 호출 제한 저장소를 확인했어요. 남은 모델 요청 ${preflight.getInt("remaining_attempts")}회 · 모델 활성화 ${preflight.getBoolean("enabled")} · 모델 호출 없음","MODEL_NOT_CALLED",requestId,"PREFLIGHT",android.os.SystemClock.elapsedRealtime()-start)
+        val preflight=try{JSONObject(postAnalysis(URL("https://caritda-ai-relay-dev.kyc66533.workers.dev/v1/preflight"),token,body))}catch(e:RelayFailure){throw e}catch(_:Exception){throw RelayFailure(502,"APP_PREFLIGHT")}
+        if(preflight.optString("contract")!="caritda-gemini-synthetic-v1"||!preflight.optBoolean("authenticated")||!preflight.optBoolean("synthetic_only")||preflight.optBoolean("provider_calls",true)||!preflight.optBoolean("binding_ok"))throw RelayFailure(502,"APP_PREFLIGHT")
+        if(preflight.optInt("remaining_attempts",-1) !in 0..5)throw RelayFailure(502,"APP_PREFLIGHT")
+        if(preflightOnly)return Explanation("앱 인증과 호출 제한 저장소를 확인했어요. 남은 모델 요청 ${preflight.getInt("remaining_attempts")}회 · 모델 활성화 ${preflight.getBoolean("enabled")} · 모델 호출 없음","MODEL_NOT_CALLED",requestId,"PREFLIGHT",android.os.SystemClock.elapsedRealtime()-start,RelayDiagnostics.read(preflight))
+        if(!RelayDiagnostics.readyForModel(preflight))throw RelayFailure(502,"APP_RELAY_VERSION")
         if(!preflight.getBoolean("enabled"))throw RelayFailure(503,"POC_DISABLED")
         if(preflight.getInt("remaining_attempts") !in 1..5)throw RelayFailure(429,"TOTAL_LIMIT")
         check(consent.permits(payload)&&!cancelled){"동의가 취소돼 요청하지 않아요."}
         val response=postAnalysis(approvedEndpoint,token,body)
         check(consent.permits(payload)&&!cancelled){"동의가 취소돼 응답을 표시하지 않아요."}
-        val json=JSONObject(response)
-        require(json.getString("contract")=="caritda-gemini-synthetic-v1"&&json.getString("request_id")==requestId&&json.getString("model")=="gemini-3.5-flash-lite"&&json.getBoolean("informational_only"))
+        val json=try{JSONObject(response)}catch(_:Exception){throw RelayFailure(502,"APP_RESPONSE_JSON")}
+        if(json.optString("contract")!="caritda-gemini-synthetic-v1"||json.optString("request_id")!=requestId||json.optString("model")!="gemini-3.5-flash-lite"||!json.optBoolean("informational_only"))throw RelayFailure(502,"APP_ENVELOPE")
         val text=AnalysisExplanation.validate(response,consent,payload)
-        return Explanation(text,json.getString("model"),requestId,"MODEL",android.os.SystemClock.elapsedRealtime()-start)
+        return Explanation(text,json.getString("model"),requestId,"MODEL",android.os.SystemClock.elapsedRealtime()-start,RelayDiagnostics.read(json.optJSONObject("diagnostic")))
     }
     private fun postAnalysis(endpoint:URL,token:String,body:ByteArray):String {
         check(!cancelled)
@@ -61,10 +63,11 @@ class AiRelayClient(private val approvedEndpoint:URL,private val transientAppTok
             c.outputStream.use{it.write(body)}
             val status=c.responseCode
             val stream=if(status==200)c.inputStream else c.errorStream
-            val response=stream?.use{s->val out=java.io.ByteArrayOutputStream();val chunk=ByteArray(2048);while(true){val n=s.read(chunk);if(n<0)break;require(out.size()+n<=16384);out.write(chunk,0,n)};String(out.toByteArray(),Charsets.UTF_8)}?:"{}"
-            if(status!=200){val code=runCatching{JSONObject(response).getJSONObject("error").getString("code")}.getOrDefault("HTTP_ERROR");throw RelayFailure(status,code)}
+            val response=stream?.use{s->val out=java.io.ByteArrayOutputStream();val chunk=ByteArray(2048);while(true){val n=s.read(chunk);if(n<0)break;if(out.size()+n>16384)throw RelayFailure(502,"APP_RESPONSE_LIMIT");out.write(chunk,0,n)};String(out.toByteArray(),Charsets.UTF_8)}?:"{}"
+            if(status!=200){val error=runCatching{JSONObject(response).getJSONObject("error")}.getOrNull();throw RelayFailure(status,error?.optString("code")?:"HTTP_ERROR",RelayDiagnostics.read(error?.optJSONObject("diagnostic")))}
             return response
-        }catch(e:java.net.SocketTimeoutException){throw RelayFailure(504,"MODEL_TIMEOUT")}
+        }catch(e:java.net.SocketTimeoutException){throw RelayFailure(504,"APP_TIMEOUT")}
+        catch(e:java.io.IOException){throw RelayFailure(502,"APP_NETWORK")}
         finally{c.disconnect();if(active===c)active=null}
     }
     fun explain(input:ExplanationInput):Explanation {
@@ -86,13 +89,18 @@ class AiRelayClient(private val approvedEndpoint:URL,private val transientAppTok
         }finally{c.disconnect()}
     }
 }
-class RelayFailure(val status:Int,val code:String):IllegalStateException(when{
+class RelayFailure(val status:Int,rawCode:String,val diagnostic:String=""):IllegalStateException(when{
     status==401->"앱 인증이 거부됐어요. 임시 시험 토큰을 확인해 주세요."
-    code=="TOKEN_EXPIRED"->"앱 인증 시간이 끝났어요. 새 만료 설정을 확인해 주세요."
+    rawCode=="TOKEN_EXPIRED"->"앱 인증 시간이 끝났어요. 새 만료 설정을 확인해 주세요."
     status==429->"요청 한도에 도달했어요. 자동으로 다시 요청하지 않아요."
-    code=="PROVIDER_AUTH"->"Worker의 모델 인증 설정을 확인해 주세요."
+    rawCode=="PROVIDER_AUTH"->"Worker의 모델 인증 설정을 확인해 주세요."
+    rawCode=="APP_RELAY_VERSION"->"먼저 Worker 수정본 v2를 배포해 주세요. 모델은 요청하지 않았어요."
     status==504->"모델 응답이 늦어 요청을 종료했어요."
     status==503->"중계의 보안 설정이나 활성화 상태를 확인해 주세요."
-    code.startsWith("MODEL_")->"모델 응답을 검증하지 못했어요. 분석값은 그대로 유지돼요."
+    rawCode=="MODEL_REQUEST_REJECTED"->"모델이 요청 형식을 거부했어요. 진단 코드와 Worker 버전을 확인해 주세요."
+    rawCode=="MODEL_OUTPUT_LIMIT"->"모델 답변이 길이 제한으로 끝났어요. 자동으로 다시 요청하지 않아요."
+    rawCode=="MODEL_SAFETY_BLOCKED"->"모델의 안전 필터가 답변을 제한했어요. 분석값은 그대로 유지돼요."
+    RelayDiagnostics.code(rawCode).startsWith("APP_")->"앱의 응답 검사를 통과하지 못했어요. 진단 코드를 확인해 주세요."
+    RelayDiagnostics.code(rawCode).startsWith("MODEL_")->"모델 응답을 검증하지 못했어요. 분석값은 그대로 유지돼요."
     else->"AI 요청을 완료하지 못했어요. 연결과 배포 버전을 확인해 주세요."
-})
+}) {val code=RelayDiagnostics.code(rawCode)}

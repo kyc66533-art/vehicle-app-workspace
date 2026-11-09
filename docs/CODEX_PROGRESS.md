@@ -1,5 +1,24 @@
 # Codex 개발 진행 기록
 
+마지막 업데이트: 2026-11-09 20:30 +09:00 (Asia/Seoul).
+
+## 최신 작업 — Gemini 응답 진단·TEST 인증 기억 (실모델 재시험은 사용자 배포 후)
+
+- 기준 main `99547db7a2e2c73c0146685134849c430b82859a`, 원격128개 blob/로컬 공유111개 SHA 일치. 새 HINT D6를 포함한 원격 연구17개를 보존합니다. 사용자는 초기 Worker/Secret/DO/무인증401/preflight 성공과 일반PowerShell 모델 응답을 보고했습니다. 이번 실패의 공급자 코드/원문은 조회하지 않았고 키·토큰을 요청하지 않았습니다.
+- 확인된 원인: 서버의 서로 다른 MODEL_* 오류가 동일한 앱 안내로 합쳐졌고, 토큰은 요청 시작·onStop에서 매번 지워졌습니다. 당시 upstream HTTP/finishReason은 보존되지 않아 실제 공급자 실패 원인은 미확정입니다. temperature0 제거는 공식 Gemini 3.x 기본 샘플링 권장에 따른 수정이며 ‘400 원인 확정’이 아닙니다. 출력256→512의 제한된 여유, thought 분리, HTTP/안전/MAX_TOKENS/JSON/스키마/문구/앱 facts 코드 구분을 구현했습니다.
+- Worker `gemini-response-fix-v2`는 허용된 코드·HTTP·종료 이유·처리ms만 진단하며 공급자 오류 메시지/finishMessage/모델 원문/키/토큰을 노출하지 않습니다. 구형 Worker는 preflight release 검사(APP_RELAY_VERSION)로 모델 호출 전에 차단합니다. 실제 provider STOP·응답 검사를 통과한 결과만 MODEL이며 앱에서 계약/ID/hash/facts/동의·문구를 다시 확인합니다. 기존 BudgetGate 본문/전역 ID/저장 key/namespace/migration/분당2·누적5는 그대로입니다. 오류도 예산을 소비하며 재시도/초기화하지 않습니다.
+- TEST 개발자 진단에 버튼 비활성 이유, 안전한 진단 코드, 선택형10분 메모리 인증을 추가했습니다. 동의는 별도로 취소하고 토큰을 파일/Bundle/로그에 저장하지 않습니다. preflight/화면 재생성으로 인증 유효기간을 자동 연장하지 않으며 인증 거부/만료/명시 지우기/취소/주행 제한 시 지웁니다. 최종 일반 앱 인증은 서버 발급 단기 세션 설계만 기록했습니다.
+- Debug/validation/validationAndroidTest 모두 offline 빌드 성공. 최종 앱 빌드 gemini-fix-build-6.txt는1m36s/93작업13실행·80up-to-date. validation/test만 install-r, 일반 APK는 교체하지 않았습니다. 최종 **CARITDA_GEMINI_LOCAL_PASS checks=86**(native/계약/수명주기27 + Worker Mock59), 기존 분석·AI 계약 회귀24 통과로 총110개입니다. 이전46개 포함·신규40개이며 과거369 전체를 재실행했다고 보고하지 않습니다. 실제 공급자를 호출한 검사가 아닙니다.
+- Node26.13.0/npm11.20.0/기설치Wrangler4.158.0 확인 후 tsc --noEmit도 성공했습니다. Node의 같은 Worker Mock59개와 기존 Worker 재배포 설정 검사를 추가 통과했으며59는 중복 합산하지 않습니다. wrangler.existing.jsonc는 vars 없이 keep_vars=true, 동일 Worker/BUDGET/migration으로 실제 대시보드 설정·Secret을 보존합니다. 초기 wrangler.jsonc의 꺼짐 기본값은 보존합니다.
+- Wrangler bundle dry-run은 `Cannot read directory "../../..": Access is denied.` / src/index.ts resolve 오류로 실패했습니다. CLI도 정상 인증을 확인하지 못했습니다(`Not logged in`). 인증 없는 health 조회도 EACCES로 막혔습니다. 권한 우회/자동 로그인/실제 배포는 하지 않았습니다. 기존 PowerShell 정책에 따른 .ps1 로드 거부 뒤 정책 변경 없이 직접 명령으로 백업했습니다. [사용자 일반PowerShell 최소 배포 명령](../infra/gemini-relay/README.md).
+- `.tools/gemini-fix-backup/20261109-195913/`에 일반/TEST 전체tar·일반5DB를 보존했습니다. 두 앱의 기존5DB씩 총10개 전후 SHA256이 모두 같고 문제·운전자·이벤트·초안·원관측·스냅샷·안내·분석 이력이 바이트 동일합니다. TEST 검사는 default DB 초기화 전 분기이며 합성자료를 일반 DB에 넣지 않았습니다. 일반 manifest에 Gemini 화면이 없고 validation에만 exported=false입니다. AVD/연구/개인백업/SDK/기존 UI는 보존합니다.
+- 사용자가 **main 자동 배포 연결 없음**을 확인했고 **Worker 교체와 실제 최대1회 시험을 승인**했습니다. 승인을 다시 요구하지 않습니다. 다만 현재 Codex 환경의 Wrangler 권한/인증 문제로 사용자 일반PowerShell에서 배포가 필요합니다. 이번 실제 모델 호출0회, 원격 새401/preflight/실응답/TEST 실제 응답 표시·Cloudflare 실제 DO 검증은 아직 미완료입니다. 남은 예산0이면 중단하며 실패 후 다시 호출하지 않습니다.
+- 검증된15개 소스/설정/문서를 최신main 이력을 잇는 **GitHub 연결 도구를 통한 게시**로 공유하고 부모·파일 SHA/나머지 원격 파일 보존을 확인합니다. 최종 커밋은 완료 응답에 보고하며 자기 SHA를 넣기 위한 반복 커밋은 만들지 않습니다. [원인·변경 파일·검사·미검증·사용자 순서](GEMINI_RESPONSE_FIX.md). 배포 이후에는 TEST에서 인증1회입력/선택적기억→모델 없는 preflight→남은 횟수 확인→승인된 실제1회→안전한 진단 코드 확인 순서입니다.
+
+아래는 과거 기록으로 보존합니다.
+
+---
+
 마지막 업데이트: 2026-11-09 01:32 +09:00 (Asia/Seoul).
 
 ## 최신 작업 — Gemini 최소 중계·TEST 전용 요청 (배포/실응답 대기)

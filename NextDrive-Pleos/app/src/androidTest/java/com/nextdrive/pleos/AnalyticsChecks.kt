@@ -50,7 +50,7 @@ class AnalyticsChecks(private val inst:Instrumentation){
             verify(after.rawQuery("PRAGMA integrity_check",null).use{it.moveToFirst();it.getString(0)=="ok"}&&after.rawQuery("PRAGMA foreign_key_check",null).use{!it.moveToFirst()},"PRESERVE $kind integrity and FK")
         }};return lines
     }
-    fun run():List<String>{ValidationEnvironment.requireIsolated(c)
+    fun run(contractsOnly:Boolean=false):List<String>{ValidationEnvironment.requireIsolated(c)
         val now=System.currentTimeMillis();var row=0L
         fun point(n:Double,at:Long=now-60000,session:String="SYNTHETIC_VALIDATION_ONLY")=ObservationRef("fixture-analytics-${c.packageName}",++row,VehicleObservation("EV_SOC",n.toString(),"%",at,ObservationSource.PLEOS_EMULATOR_SDK,true,true,session,ObservationStatus.RECEIVED,"SYNTHETIC validation fixture",now))
         val refs=listOf(point(80.0,now-50000),point(60.0,now-40000),point(18.0,now-30000),point(18.0,now-20000),point(45.0,now-10000))
@@ -90,6 +90,7 @@ class AnalyticsChecks(private val inst:Instrumentation){
         consent.revoke();verify(!consent.permits(payload)&&!consent.permits(payload+" "),"AI cancellation revokes frozen-payload approval")
         verify(listOf("VIN","driver","latitude","store_id","row_id","situation").none{payload.contains(it)},"AI preview excludes personal and local database identifiers")
         for(dark in listOf(false,true)){val p=CaritdaPalette.of(dark);verify(contrast(p.text,p.background)>=4.5&&contrast(p.text,p.inset)>=4.5&&contrast(p.border,p.background)>=3&&contrast(p.border,p.inset)>=3,"UI ${if(dark)"dark"else"light"} normal text and button boundary contrast targets")}
+        if(contractsOnly)return lines // independent fixture DB only; no default DB reset or SDK/UI entry
         val raw=ObservationStore(c);var activity=launch();await("parked UI"){main{tag(activity,"driver_A")?.isEnabled==true}};click(activity,"driver_A");click(activity,"start_driving");await("entry complete"){raw.latest(3).size==3}
         click(activity,"nav_VEHICLE");val count=raw.refs().size;click(activity,"soc_notices")
         verify(text(activity).contains("최근 충전량")&&main{tag(activity,"soc_current_value")!=null&&tag(activity,"soc_history")!=null},"UI latest actual SOC separate from collapsed historical episodes")

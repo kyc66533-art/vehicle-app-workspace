@@ -6,7 +6,7 @@ import org.json.JSONObject
 /** No networking or keys here. Consent binds to an immutable minimized analysis payload. */
 class AnalysisConsent(val payload:String){
     val digest=VehicleAnalytics.id(payload)
-    private var accepted=false
+    @Volatile private var accepted=false
     fun accept(){accepted=true}
     fun revoke(){accepted=false}
     fun permits(candidate:String)=accepted&&VehicleAnalytics.id(candidate)==digest
@@ -20,18 +20,22 @@ object AnalysisExplanation {
         .put("limitations","app_receipts_not_ecu_time;session_not_trip;emulator_is_simulated;no_diagnosis_no_safety_decision;observation_mean_not_time_average").toString()
     /** Echoed structured facts and evidence hash must match. Regex is only an additional gate. */
     fun validate(body:String,consent:AnalysisConsent,payload:String):String {
-        check(consent.permits(payload)){"전송 내용 확인과 동의가 필요해요."}
-        require(body.length<=16384)
-        val j=JSONObject(body);require(j.getString("origin")=="MODEL"&&j.getString("evidence_digest")==consent.digest)
-        val facts=j.getJSONObject("facts");val expected=JSONObject(payload)
-        require(facts.keys().asSequence().toSet()==expected.keys().asSequence().toSet())
-        expected.keys().forEach{k->require(facts.get(k).toString()==expected.get(k).toString()){"분석 근거와 다른 수치·조건이 있어요."}}
-        val text=j.getString("explanation");require(text.length in 1..600&&Regex("[가-힣]").containsMatchIn(text))
+        fun guard(ok:Boolean,code:String){if(!ok)throw AnalysisValidationFailure(code)}
+        guard(consent.permits(payload),"APP_CONSENT")
+        guard(body.length<=16384,"APP_RESPONSE_JSON")
+        val j=try{JSONObject(body)}catch(_:Exception){throw AnalysisValidationFailure("APP_RESPONSE_JSON")}
+        guard(j.optString("origin")=="MODEL","APP_ORIGIN")
+        guard(j.optString("evidence_digest")==consent.digest,"APP_EVIDENCE")
+        val facts=j.optJSONObject("facts")?:throw AnalysisValidationFailure("APP_FACTS");val expected=JSONObject(payload)
+        guard(facts.keys().asSequence().toSet()==expected.keys().asSequence().toSet(),"APP_FACTS")
+        expected.keys().forEach{k->guard(facts.get(k).toString()==expected.get(k).toString(),"APP_FACTS")}
+        val text=j.opt("explanation") as? String?:throw AnalysisValidationFailure("APP_TEXT")
+        guard(text.length in 1..600&&Regex("[가-힣]").containsMatchIn(text),"APP_TEXT")
         // Numeric facts are rendered locally from the exact facts object. Free prose cannot
         // swap two otherwise allowed numbers (e.g. latest SOC and a user threshold).
-        require(!Regex("\\d").containsMatchIn(text)){"수치·시각은 검증된 근거에서만 표시해요."}
-        require(!Regex("고장|수리|안전|운행 가능|브레이크|타이어|교체|정비 완료").containsMatchIn(text)){"근거 없는 진단·안전 설명은 표시하지 않아요."}
-        require(j.getString("action") in setOf("CHECK_VEHICLE_DISPLAY","CHECK_CHARGING_PLAN","RETRY_RECEIPT","INSUFFICIENT_DATA"))
+        guard(!Regex("\\d").containsMatchIn(text),"APP_NUMERIC_PROSE")
+        guard(!Regex("고장|수리|안전|운행 가능|브레이크|타이어|교체|정비 완료").containsMatchIn(text),"APP_UNSAFE_PROSE")
+        guard(j.optString("action") in setOf("CHECK_VEHICLE_DISPLAY","CHECK_CHARGING_PLAN","RETRY_RECEIPT","INSUFFICIENT_DATA"),"APP_ACTION")
         return text
     }
 }

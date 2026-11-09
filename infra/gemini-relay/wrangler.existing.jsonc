@@ -1,0 +1,13 @@
+// Existing deployed Worker only: preserve dashboard text vars and all Secrets.
+// Initial installation uses wrangler.jsonc (disabled defaults), not this config.
+{
+  "name":"caritda-ai-relay-dev",
+  "main":"src/index.ts",
+  "compatibility_date":"2026-11-09",
+  "workers_dev":true,
+  "keep_vars":true,
+  "send_metrics":false,
+  "durable_objects":{"bindings":[{"name":"BUDGET","class_name":"BudgetGate"}]},
+  "migrations":[{"tag":"caritda-budget-v1","new_sqlite_classes":["BudgetGate"]}],
+  "observability":{"enabled":false}
+}

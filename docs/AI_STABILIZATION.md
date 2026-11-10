@@ -1,5 +1,7 @@
 # Gemini AI 안정화 — 로컬 검증 결과
 
+**후속 구현(2026-11-10):** 전송 요약·0회 차단·일일 운영 준비는 [AI_OPERATIONS_READY.md](AI_OPERATIONS_READY.md)가 최신입니다. 기존 Secret을 수정하지 않는 RECURRING_POLICY overlay를 사용하며 아래는 당시 검증·계획으로 보존합니다.
+
 2026-11-10 20:05 +09:00. 시작 main `f690679dd50a1081d6b3b7d463f49ab6e37d5d33`. 이번 서버 배포·Secret/정책 변경·실제 Gemini 호출은 모두 0회입니다.
 
 ## 실제 사용자 검수와 확인 한계

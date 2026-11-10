@@ -19,3 +19,8 @@
 UI팀 동시 수정 주의: PortableAiActivity.kt/PortableAiClient.kt/IssueAiChecks.kt가 이번 변경 대상입니다. MainActivity·Repository·Vehicle SDK·SQLite 스키마는 이번에 재설계하지 않습니다. 새 화면은 CarSafetyGate ALLOWED를 매 동작 재검사하고, 화면 재생성으로 모델/SDK를 재호출하지 않습니다. 앱의 일반·validation applicationId를 유지합니다.
 
 자동 검사 결과는 사용자 사용성 시험이나 실차 검증을 대신하지 않습니다. 60대 이상 사용자, TalkBack/rotary, 전체 화면 변형은 별도 공동 검수 대상입니다.
+
+
+## AI 운영 준비 후속 변경
+
+전송 요약은 AiRequestUi의 한국어 안내를 접고 펼칩니다. PortableAiActivity의 알려진 잔여0/모델OFF/UNKNOWN 차단·진입당 오래된 status 갱신을 유지하세요. 캐시 보기에 status나 모델 호출을 연결하지 마세요. 새 생성과 기존 결과 읽기는 별개입니다. MvpScenarioInstrumentation의 issueAiColdOnly는 prepare 이전 validation 고유 fixture 경로이며 기본 DB 초기화 경로와 합치지 않습니다. 월간 반복 정책은 배포 승인 전 로컬 코드이며 UI에서 이미 활성화된 것으로 표시하지 마세요. 이번 변경 MainActivity/Repository/SDK/DB/전체 디자인은 그대로입니다. 상세는 AI_OPERATIONS_READY.md입니다.

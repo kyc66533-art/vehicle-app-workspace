@@ -14,6 +14,13 @@ export function policyOf(raw:string,now:number):Policy {
  for(const [uid,u]of Object.entries(p.users) as [string,any][]){reject(uid.length>=1&&uid.length<=128,'POLICY_INVALID',503);keys(u,['enabled','after','total','daily','devices','device_total']);reject(typeof u.enabled==='boolean'&&Number.isSafeInteger(u.after)&&u.after>=0&&['total','daily','device_total'].every(k=>Number.isInteger(u[k])&&u[k]>=0&&u[k]<=100)&&Number.isInteger(u.devices)&&u.devices>=0&&u.devices<=5,'POLICY_INVALID',503);}
  return p as unknown as Policy;
 }
+/** Non-secret opt-in overlay: never reads/replaces the existing PORTABLE_POLICY Secret or UID roster. */
+export function runtimePolicy(raw:string,recurringRaw:string|undefined,now:number):Policy{
+ if(!recurringRaw)return policyOf(raw,now);
+ let p:any,r:any;try{p=JSON.parse(raw);r=JSON.parse(recurringRaw);}catch{throw new ApiError(503,'POLICY_INVALID');}
+ validateRecurring(r);p.recurring=r;p.expires_at=0;p.per_minute=1;
+ return policyOf(JSON.stringify(p),now);
+}
 interface Device {id:string;uid:string;thumb:string;jwk:JsonWebKey;active:boolean;version:number;consent:string;consents?:string[]}
 interface Challenge {id:string;uid:string;device:string;thumb:string;purpose:string;operation:string;nonce:string;expires:number;used:boolean;jwk?:JsonWebKey;intent?:string}
 interface Operation {id:string;uid:string;device:string;intent:string;hash?:string;state:string;created:number;owner?:string;lease?:number;payload?:string;result?:any;code?:string;attempts:number;day?:string;consent?:string}
@@ -44,7 +51,7 @@ export class BudgetGate extends LegacyGate {
   }
   try{
    reject(this.env.PORTABLE_ENABLED==='true','PORTABLE_DISABLED',503);
-   const input=await bodyJson(request,8192);const now=Date.now();const policy=policyOf(this.env.PORTABLE_POLICY||'',now);
+   const input=await bodyJson(request,8192);const now=Date.now();const policy=runtimePolicy(this.env.PORTABLE_POLICY||'',this.env.RECURRING_POLICY,now);
    const principal=input.principal as Principal;const u=policy.users[principal?.uid];reject(u?.enabled&&principal.authTime>=u.after,'UID_NOT_APPROVED',403);
    const result=await this.ctx.storage.transaction(async(tx:any)=>{
     let s:State=await tx.get(STATE);

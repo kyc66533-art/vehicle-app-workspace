@@ -45,7 +45,7 @@ class PortableAiClient(private val store:PortableAiStore,private val key:DeviceK
         if(issueRecord!=null)job.put("record",issueRecord)
         var pending=job.optJSONObject("pending")
         var checked=false
-        fun checkIssuePermit(){if(issueJob!=null){val permit=status();if(!permit.getBoolean("model_enabled"))throw PortableFailure("MODEL_DISABLED");if(permit.optBoolean("uncertain_block"))throw PortableFailure("MODEL_OUTCOME_UNKNOWN");if(permit.getInt("remaining")<=0)throw PortableFailure("TOTAL_LIMIT");checked=true}}
+        fun checkIssuePermit(){if(issueJob!=null){val permit=status();if(!permit.getBoolean("model_enabled"))throw PortableFailure("MODEL_DISABLED");if(permit.optBoolean("uncertain_block"))throw PortableFailure("MODEL_OUTCOME_UNKNOWN");s.put("usage_status",permit);if(permit.getInt("remaining")<=0)throw PortableFailure("TOTAL_LIMIT");checked=true}}
         // Authenticate/check model permission without sending any symptom body first.
         if(pending==null)checkIssuePermit()
         if(pending==null){pending=JSONObject().put("intent",UUID.randomUUID().toString()).put("payload",payload).put("created",System.currentTimeMillis()).put("state","NEW");job.put("pending",pending);store.write(s)}
@@ -58,6 +58,7 @@ class PortableAiClient(private val store:PortableAiStore,private val key:DeviceK
         val frozenAge=if(issueJob==null)JSONObject(frozen).getJSONObject("window").getLong("latest_age_ms")+System.currentTimeMillis()-pending.getLong("created")else 0L
         if(frozenAge !in 0 until 600000){job(s).remove("pending");store.write(s);throw PortableFailure("STALE_RECEIPT")}
         val c=challenge("EXPLAIN",device,pending.getString("intent"));pending.put("operation",c.getString("operation_id"));store.write(s)
+        s.optJSONObject("usage_status")?.put("needs_refresh",true);store.write(s)
         val result=post(endpoint,signed(c,"EXPLAIN",endpoint,frozen).put("analysis_payload",frozen),device,version)
         pending.put("state",result.optString("state"));store.write(s)
         return read(s,pending,device,version)
@@ -70,13 +71,13 @@ class PortableAiClient(private val store:PortableAiStore,private val key:DeviceK
         if(status=="SUCCEEDED"){
             val answer=result.getJSONObject("result");if(issueJob==null)PortableAnalysis.validate(answer,pending.getString("payload"),operation)else IssueExplanation.validate(answer,pending.getString("payload"),operation)
             val previous=job(s).optJSONObject("last");if(previous!=null){val history=job(s).optJSONArray("history")?:org.json.JSONArray();history.put(previous);job(s).put("history",history)}
-            job(s).put("last",JSONObject().put("answer",answer).put("payload",pending.getString("payload")).put("saved_at",System.currentTimeMillis()));job(s).remove("pending");if(!allowed())throw PortableFailure("AUTH_CANCELLED");store.write(s);return answer
+            job(s).put("last",JSONObject().put("answer",answer).put("payload",pending.getString("payload")).put("saved_at",System.currentTimeMillis()));job(s).remove("pending");if(!allowed())throw PortableFailure("AUTH_CANCELLED");store.write(s);if(issueJob!=null)runCatching{status()};return answer
         }
-        if(status=="FAILED"){job(s).put("last_failure",JSONObject().put("at",System.currentTimeMillis()).put("code",PortableFailure(result.optString("code","MODEL_FAILED")).code));job(s).remove("pending");store.write(s);throw PortableFailure(result.optString("code","MODEL_FAILED"))}
+        if(status=="FAILED"){job(s).put("last_failure",JSONObject().put("at",System.currentTimeMillis()).put("code",PortableFailure(result.optString("code","MODEL_FAILED")).code));job(s).remove("pending");store.write(s);if(issueJob!=null)runCatching{status()};throw PortableFailure(result.optString("code","MODEL_FAILED"))}
         store.write(s);throw PortableFailure(if(status=="UNKNOWN")"MODEL_OUTCOME_UNKNOWN"else"REQUEST_PENDING")
     }
     fun revoke(){val s=state();val device=s.getString("device");val c=challenge("REVOKE",device);val path=if(issueJob==null)"/v2/devices/revoke"else"/v2/issues/consent/revoke";post(path,signed(c,"REVOKE",path).put("operation_id","-"),device,s.getInt("version"));store.withdraw()}
     fun withdrawLocal(){store.withdraw()}
-    fun status():JSONObject{val s=state();val device=s.getString("device");val c=challenge("READ",device);return post("/v2/account/status",signed(c,"READ","/v2/account/status").put("operation_id","-"),device,s.getInt("version"))}
+    fun status():JSONObject{val s=state();val device=s.getString("device");val c=challenge("READ",device);val result=post("/v2/account/status",signed(c,"READ","/v2/account/status").put("operation_id","-"),device,s.getInt("version"));result.put("checked_at",System.currentTimeMillis());if(!allowed())throw PortableFailure("AUTH_CANCELLED");val latest=state();latest.put("usage_status",result);store.write(latest);return result;}
     companion object {const val ORIGIN="https://caritda-ai-relay-dev.kyc66533.workers.dev"}
 }

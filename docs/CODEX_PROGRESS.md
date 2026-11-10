@@ -1,6 +1,18 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-10 20:05 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-10 21:00 +09:00 (Asia/Seoul).
+
+## 현재 단계 — AI 최종 UI·일일 갱신 운영 준비 완료, 배포 승인 대기
+
+- 전송 요약 접기/펼치기와 한국어 설명을 구현했습니다. JSON/내부 계약은 기본 UI에 보이지 않으며 동의·전송 범위·원문은 그대로입니다. 알려진 잔여0/모델OFF/UNKNOWN은 신규 생성 차단, 저장 설명은 API 없이 조회합니다. 오래된 이용량은 진입당 한 번 인증된 status로 갱신하며 Gemini/본문 전송을 하지 않습니다. 누적 정책과 일일·월간 정책 문구를 구분했습니다.
+- 기존 Secret을 다시 입력할 필요 없이 RECURRING_POLICY(비밀 아닌 값)만 더하는 runtime overlay를 구현했습니다. 기존 UID/after/devices·Firebase·Keystore·BUDGET/portable:v2는 유지합니다. 기기 월간 카운터를 비파괴 추가하고 기존 이월·원장·UNKNOWN·원자 중복 방지를 보존했습니다. 제안은 일5/계정·기기 월100/서비스 월300·예약USD3/회0.01/분1, 승인 전 미적용입니다.
+- 공식 Gemini Developer API 요금 조회의 더 높은0.30/2.50 USD/백만 토큰으로 보수적 계획을 계산했습니다. 고정 요청8192바이트/출력1024토큰 이내·도구없음을 호출 전에 검사합니다. 월3달러는 예약 상한이며 계정 전체 실제 청구/세금/Cloudflare 비용 보장은 아닙니다. 설정 생성기는 비밀·UID 입력/배포 없이 기존 binding/migration을 보존합니다.
+- 최종 Debug/validation/계측 APK·Lint BUILD SUCCESSFUL 2m2s, 오류0/경고50. Android56+프로세스cold4+관련26+UI4=90 PASS. 서버64+42+4+5+18+12+10+16+5=176 PASS. 사용자 최종 번들·dry-run 성공, 새 번들 workerd/native 검사를 별도로 통과했습니다. 변경 영향 없는 전체 UI/SDK/분석 suite는 반복하지 않았습니다.
+- 일반 앱 install-r/user10/MainActivity 실행 성공. 변경 전후186 DB의 모든 기존 행/스키마/버전/integrity/FK 보존(일반1075행·validation8928행, 기존DB 추가행0). 일반 현재 문제24/이벤트95/운전자10/초안0, Firebase·AI캐시 파일4개 바이트 동일. 새 fixture DB2개는 validation에만 있습니다. 앱/AVD/사용자 DB/원장/백업을 초기화하지 않았습니다.
+- 실제 Gemini 성공은 기존 사용자 검수 사실이며 이번 유료 호출·배포·Secret/정책 변경은0입니다. 일반 사용자 성공 결과의 cold restart는 직접 검수 대기이고 validation 고유 fixture의 프로세스 복원은 통과했습니다. 구버전 opaque 귀속/전체 결과 회차 UI·Release·PC B·실차·장시간/실청구는 미완료/미검증입니다.
+- 일반 APK D81D9BD5F24218E9E02FAE2548BCF655267F730CC157FDDA20D3ED7FAA5CE744, 최종 Worker8A3349D1F5135E520583C6200FD26E7E9C9B93FC8D6284DEE026AAE4E9ECF123. 로컬 main과 동일한 기준f30d8a7에서 시작했고 연구/홈/UI전면개편은 수정하지 않았습니다. 검증된 파일만 GitHub 연결 도구로 게시하며 배포 승인과 구분합니다.
+- 다음 사용자 작업: 기존 AI 설명 재조회/종료·재실행 확인, 월간 반복 예산·모델OFF/ON 교체·선택 기록 최대1회 묶음 승인. Cloudflare 관리 도구가 없어 승인 후 일반 PowerShell의 준비 블록이 필요합니다. Secret·Firebase 재설정은 없습니다. [최종 결과](AI_OPERATIONS_READY.md), [관리자 승인·복구 절차](../infra/gemini-relay/OPERATIONS_SETUP.md). 최종 커밋은 완료 보고에서 확인합니다.
+
 
 ## 현재 단계 — 실제 Gemini 사용자 성공 확인·AI 안정화 로컬 검증
 

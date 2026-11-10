@@ -1,10 +1,10 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — Gemini 안정화·등화장치 가능성
+## 현재 작업 — AI 최종 안정화·운영 준비
 - 사용자 실제 Gemini 성공을 확인했다. 마지막 보고 TEST1/정식1/잔여0/불확실없음/modelON은 현재 원장 재조회가 아니다. 과거1회 승인은 소진됐고 새 호출·배포·Secret/정책은 별도 승인 전 금지다. 과거 MODEL_HTTP_ERROR 원인은 미확정이며 TOTAL_LIMIT/UNKNOWN을 환불·초기화로 우회하지 않는다.
 - 선택 한 건 category/situation만 전송한다. 이름·메모·ID·시각·이력·차량값·다른 기록은 제외하고 AI 사본은 원문과 분리한다. Auth24.2.0/Keystore/Worker v2/Secret/BUDGET/portable:v2와 원문/네 상태/관측/초안을 보존한다.
 - 캐시 보기는 로컬 암호화 결과만 읽는다. fresh=true 명시 생성·기존 결과 확인·영속 pending을 유지하며 수정 전 설명은 과거 표시한다. 불명 job을 추측 귀속하지 않는다. 실제 공급자 응답의 스키마·인용/hash/조건부 표현만 MODEL로 검증하며 필터의 완전성을 주장하지 않는다.
-- recurring은 KST 일5/월 계정·기기·서비스/비용 예약의 선택형 로컬 코드다. 기존 누적·첫월 보수적 이월을 유지하고 운영 예산·단가·배포 승인 전 활성화하지 않는다. 실측 청구 보장은 아니다. docs/AI_STABILIZATION.md의 부분·미검증을 따른다.
+- 한국어 전송 요약은 접고 펼치며 JSON을 일반 화면에 보이지 않는다. 캐시 조회는 호출0, 잔여0은 새 생성 차단이다. RECURRING_POLICY 비밀 아닌 overlay로 일5/계정·기기 월100/서비스 월300·USD3 예약을 준비했다. 기존 Secret·원장·첫월 이월을 보존하며 승인 전 배포/활성화/모델 호출 금지다. 실청구 보장은 아니며 docs/AI_OPERATIONS_READY.md를 따른다.
 - 등화 ON/OFF·페달·Console은 전구 고장 증거가 아니다. 유럽 Vehicle Data API와 SDK를 구분하고 추가 권한/기능은 승인 후 진행한다. UI 전면 개편은 Claude팀 범위다. validation 고유 fixture만 쓰며 기존 DB/연구/백업/AVD를 초기화하지 않는다. 아래 연결 도구 게시 규칙을 지킨다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분

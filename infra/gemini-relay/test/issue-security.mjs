@@ -41,3 +41,10 @@ console.log('ISSUE_WORKER_SECURITY_PASS checks='+checks+' provider_fixture_calls
 // Additive recurring policy checkpoint and renewal, same original storage/device/signatures.
 env.PORTABLE_POLICY=JSON.stringify({...policy,expires_at:0,recurring:{user_daily:5,user_monthly:10,device_daily:5,service_monthly:20,monthly_micros:200000,reserve_micros:1000}});
 const oldClock=Date.now;try{let c=await challenge('READ',device),r=await req('/v2/account/status',await signed(c,'READ','/v2/account/status'),device);assert.equal(r.body.quota_mode,'recurring');assert.equal(r.body.remaining,4);Date.now=()=>oldClock()+40*86400000;c=await challenge('READ',device);r=await req('/v2/account/status',await signed(c,'READ','/v2/account/status'),device);assert.equal(r.body.remaining,5);assert.equal((await storage.get('portable:v2')).used,1);console.log('RECURRING_GATE_PASS checks=4 real_model_calls=0');}finally{Date.now=oldClock;}
+
+// Existing Secret stays byte-identical; only the non-secret overlay activates recurring limits.
+const priorSecret=JSON.stringify({...policy,expires_at:1});env.PORTABLE_POLICY=priorSecret;
+env.RECURRING_POLICY=JSON.stringify({user_daily:5,user_monthly:100,device_daily:5,device_monthly:100,service_monthly:300,monthly_micros:3000000,reserve_micros:10000});
+const oc=await challenge('READ',device),or=await req('/v2/account/status',await signed(oc,'READ','/v2/account/status'),device);
+assert.equal(or.body.quota_mode,'recurring');assert.equal(env.PORTABLE_POLICY,priorSecret);assert.equal((await storage.get('budget')).total,3);assert.equal((await storage.get('portable:v2')).used,1);assert.equal(calls,1);
+console.log('RECURRING_OVERLAY_PASS checks=5 real_model_calls=0');

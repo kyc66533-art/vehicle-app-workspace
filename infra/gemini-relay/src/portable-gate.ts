@@ -4,11 +4,12 @@ import {validateAnalysis,explain} from './portable-analysis.ts';
 import {validateIssue,explainIssue,ISSUE_CONSENT} from './portable-issue.ts';
 const SOC_CONSENT='soc-explanation-v1';
 const granted=(d:Device,scope:string)=>d.consent===scope||!!d.consents?.includes(scope);
+import {validateRecurring,recurringRemaining,reserveRecurring,type Recurring} from './recurring-quota.ts';
 import type {Principal} from './firebase-token.ts';
-export interface Policy {global_total:number;per_minute:number;expires_at:number;users:Record<string,{enabled:boolean;after:number;total:number;daily:number;devices:number;device_total:number}>}
+export interface Policy {recurring?:Recurring;global_total:number;per_minute:number;expires_at:number;users:Record<string,{enabled:boolean;after:number;total:number;daily:number;devices:number;device_total:number}>}
 export function policyOf(raw:string,now:number):Policy {
  let p:any;try{p=JSON.parse(raw);}catch{throw new ApiError(503,'POLICY_REQUIRED');}
- keys(p,['global_total','per_minute','expires_at','users']);reject(Number.isInteger(p.global_total)&&p.global_total>=0&&p.global_total<=100&&Number.isInteger(p.per_minute)&&p.per_minute>=0&&p.per_minute<=2&&Number.isSafeInteger(p.expires_at)&&p.expires_at>now/1000&&p.expires_at<=now/1000+31*86400,'POLICY_INVALID',503);
+ keys(p,p.recurring?['global_total','per_minute','expires_at','users','recurring']:['global_total','per_minute','expires_at','users']);if(p.recurring)validateRecurring(p.recurring);reject(Number.isInteger(p.global_total)&&p.global_total>=0&&p.global_total<=100&&Number.isInteger(p.per_minute)&&p.per_minute>=0&&p.per_minute<=2&&Number.isSafeInteger(p.expires_at)&&(p.recurring?p.expires_at===0:p.expires_at>now/1000&&p.expires_at<=now/1000+31*86400),'POLICY_INVALID',503);
  reject(p.users&&typeof p.users==='object'&&!Array.isArray(p.users)&&Object.keys(p.users).length<=20,'POLICY_INVALID',503);
  for(const [uid,u]of Object.entries(p.users) as [string,any][]){reject(uid.length>=1&&uid.length<=128,'POLICY_INVALID',503);keys(u,['enabled','after','total','daily','devices','device_total']);reject(typeof u.enabled==='boolean'&&Number.isSafeInteger(u.after)&&u.after>=0&&['total','daily','device_total'].every(k=>Number.isInteger(u[k])&&u[k]>=0&&u[k]<=100)&&Number.isInteger(u.devices)&&u.devices>=0&&u.devices<=5,'POLICY_INVALID',503);}
  return p as unknown as Policy;
@@ -16,7 +17,7 @@ export function policyOf(raw:string,now:number):Policy {
 interface Device {id:string;uid:string;thumb:string;jwk:JsonWebKey;active:boolean;version:number;consent:string;consents?:string[]}
 interface Challenge {id:string;uid:string;device:string;thumb:string;purpose:string;operation:string;nonce:string;expires:number;used:boolean;jwk?:JsonWebKey;intent?:string}
 interface Operation {id:string;uid:string;device:string;intent:string;hash?:string;state:string;created:number;owner?:string;lease?:number;payload?:string;result?:any;code?:string;attempts:number;day?:string;consent?:string}
-interface State {version:2;legacyCheckpoint:number;used:number;minute:number;minuteCount:number;devices:Device[];challenges:Challenge[];operations:Operation[];counts:Record<string,number>;rate:Record<string,{minute:number,count:number}>}
+interface State {version:2;legacyCheckpoint:number;used:number;minute:number;minuteCount:number;devices:Device[];challenges:Challenge[];operations:Operation[];counts:Record<string,number>;rate:Record<string,{minute:number,count:number}>;recurring?:any}
 const STATE='portable:v2',GLOBAL='caritda-gemini-poc-global-v1';
 export {GLOBAL};
 const counter=(s:State,k:string)=>s.counts[k]||0;
@@ -25,7 +26,7 @@ function prune(s:State,now:number){
  s.challenges=s.challenges.filter(c=>c.expires*1000+60000>now);
  s.operations=s.operations.filter(o=>o.created+30*86400000>now||['DISPATCHING','UNKNOWN'].includes(o.state));
  s.operations.forEach(o=>{if(o.created+86400000<=now)delete o.result;});
- for(const k of Object.keys(s.counts))if(k.startsWith('day:')&&k.slice(-10)<new Date(now-30*86400000).toISOString().slice(0,10))delete s.counts[k];
+ for(const k of Object.keys(s.counts))if((k.startsWith('day:')||k.startsWith('device-day:'))&&k.slice(-10)<new Date(now-30*86400000).toISOString().slice(0,10))delete s.counts[k];
 }
 async function schedule(tx:any,s:State,now:number){
  const times=[...s.challenges.map(c=>c.expires*1000+60000),...s.operations.flatMap(o=>[...(o.state==='DISPATCHING'?[o.lease!]:[]),...(o.result?[o.created+86400000]:[]),...(!['DISPATCHING','UNKNOWN'].includes(o.state)?[o.created+30*86400000]:[])])].filter(t=>t>now);
@@ -111,21 +112,21 @@ export class BudgetGate extends LegacyGate {
   if(purpose==='REVOKE'){const removed=issueRevoke?ISSUE_CONSENT:SOC_CONSENT;d!.consents=[...new Set([d!.consent,...(d!.consents||[])])].filter(x=>x&&x!==removed);if(d!.consent===removed)d!.consent='';c.used=true;return {revoked:true};}
   if(path==='/portable/status'){
    reject(b.operation_id==='-'&&c.operation==='-','OPERATION_MISMATCH');c.used=true;
-   return {legacy_total:s.legacyCheckpoint,portable_attempts:s.used,combined_total:s.legacyCheckpoint+s.used,global_total:p.global_total,remaining:Math.max(0,Math.min(p.global_total-s.legacyCheckpoint-s.used,u.total-counter(s,'uid:'+uid),u.daily-counter(s,'day:'+uid+':'+new Date(now+9*3600000).toISOString().slice(0,10)),u.device_total-counter(s,'device:'+d!.id))),model_enabled:this.env.MODEL_ENABLED==='true',uncertain_block:s.operations.some(o=>o.state==='UNKNOWN')};
+   return {legacy_total:s.legacyCheckpoint,portable_attempts:s.used,combined_total:s.legacyCheckpoint+s.used,quota_mode:p.recurring?'recurring':'legacy',global_total:p.recurring?.service_monthly??p.global_total,remaining:p.recurring?recurringRemaining(s,p.recurring,uid,d!.id,now):Math.max(0,Math.min(p.global_total-s.legacyCheckpoint-s.used,u.total-counter(s,'uid:'+uid),u.daily-counter(s,'day:'+uid+':'+new Date(now+9*3600000).toISOString().slice(0,10)),u.device_total-counter(s,'device:'+d!.id))),model_enabled:this.env.MODEL_ENABLED==='true',uncertain_block:s.operations.some(o=>o.state==='UNKNOWN')};
   }
   reject(o&&o.created>=now-86400000,'OPERATION_EXPIRED',410);
   if(purpose==='READ'){reject(granted(d!,o.consent||SOC_CONSENT),'CONSENT_REQUIRED',403);c.used=true;if(o.state==='RESERVED')return {dispatch:true,operation_id:o.id};return {operation_id:o.id,state:o.state,result:o.result||null,code:o.code||null};}
   let facts:any;try{facts=JSON.parse(payload);}catch{throw new ApiError(400,'INVALID_JSON');}if(issueRequest)validateIssue(facts);else{validateAnalysis(facts);reject(facts.source==='PLEOS_EMULATOR_SDK','REAL_VEHICLE_NOT_APPROVED',403);}reject(this.env.MODEL_ENABLED==='true'&&typeof this.env.GEMINI_API_KEY==='string'&&this.env.GEMINI_API_KEY.length>0,'MODEL_DISABLED',503);
   reject(!s.operations.some(o=>['DISPATCHING','UNKNOWN','RESERVED'].includes(o.state)),'CONCURRENCY_LIMIT',429);
   const day=new Date(now+9*3600000).toISOString().slice(0,10),global=s.legacyCheckpoint+s.used;
-  reject(global<p.global_total&&counter(s,'uid:'+uid)<u.total&&counter(s,'day:'+uid+':'+day)<u.daily&&counter(s,'device:'+d!.id)<u.device_total,'TOTAL_LIMIT',429);
+  if(p.recurring)reserveRecurring(s,p.recurring,uid,d!.id,now);else reject(global<p.global_total&&counter(s,'uid:'+uid)<u.total&&counter(s,'day:'+uid+':'+day)<u.daily&&counter(s,'device:'+d!.id)<u.device_total,'TOTAL_LIMIT',429);
   const minute=Math.floor(now/60000);reject(s.minute!==minute||s.minuteCount<p.per_minute,'RATE_LIMIT',429);reject(p.per_minute>0,'RATE_LIMIT',429);
   c.used=true;s.used++;s.minuteCount=s.minute===minute?s.minuteCount+1:1;s.minute=minute;
   for(const k of ['uid:'+uid,'day:'+uid+':'+day,'device:'+d!.id])s.counts[k]=counter(s,k)+1;
   Object.assign(o,{hash,state:'RESERVED',payload,day,consent:scope});return {dispatch:true,operation_id:o!.id};
  }
  private async dispatch(id:string,p:Policy):Promise<Response>{
-  reject(this.env.MODEL_ENABLED==='true'&&!!this.env.GEMINI_API_KEY&&p.expires_at>Date.now()/1000,'MODEL_DISABLED',503);
+  reject(this.env.MODEL_ENABLED==='true'&&!!this.env.GEMINI_API_KEY&&(p.recurring||p.expires_at>Date.now()/1000),'MODEL_DISABLED',503);
   const owner=crypto.randomUUID();const selected=await this.ctx.storage.transaction(async(tx:any)=>{
    const s:State=await tx.get(STATE),o=s.operations.find(o=>o.id===id);if(o?.state!=='RESERVED')return null;
    const u=p.users[o.uid],d=s.devices.find(d=>d.id===o.device);reject(u?.enabled&&d?.active&&granted(d,o.consent||SOC_CONSENT),'DISPATCH_CANCELLED',403);

@@ -111,7 +111,7 @@ class PortableAiActivity:Activity(){
             body.addView(ui.action("동의하지 않고 돌아가기","portable_consent_cancel",ActionStyle.SECONDARY,!busy,HmiIcon.BACK){finish()})
         }else{
             body.addView(ui.text("AI 이용 동의가 유지돼요. 같은 범위의 설명에는 로그인·체크박스를 반복하지 않아요.",20))
-            body.addView(ui.action(if(jobState().has("pending"))"이전 요청 결과 확인"else"AI로 쉽게 설명","portable_explain",ActionStyle.PRIMARY,allowed()&&!busy&&ready(),HmiIcon.RECORD){requestExplanation()})
+            body.addView(ui.action(if(jobState().has("pending"))"진행 중 요청 결과 확인"else"새로 설명 생성","portable_explain",ActionStyle.PRIMARY,allowed()&&!busy&&ready(),HmiIcon.RECORD){if(jobState().has("last")&&!jobState().has("pending"))android.app.AlertDialog.Builder(this).setTitle("새 설명을 생성할까요?").setMessage("새 API 요청으로 이용 한도가 차감될 수 있어요. 기존 설명은 보존해요.").setNegativeButton("취소",null).setPositiveButton("새로 생성"){_,_->requestExplanation(true)}.show()else requestExplanation(true)})
             body.addView(ui.action("AI 이용 동의 철회","portable_withdraw",ActionStyle.SECONDARY,allowed()&&!busy,HmiIcon.BACK){
                 sessionTask {api->
                     val revoked=runCatching{api.revoke()}.isSuccess
@@ -123,16 +123,19 @@ class PortableAiActivity:Activity(){
         }
         body.addView(ui.action("전송 요약 확인","portable_preview",ActionStyle.QUIET,allowed()&&!busy&&ready(),HmiIcon.RECORD){previewText=runCatching{if(issueMode)IssueExplanation.payload(issue!!,excerptInput?.text?.toString()?:excerpt?:issue!!.situation)else PortableAnalysis.payload(a!!)}.getOrElse{(it as? PortableFailure)?.displayMessage()?:"최근 수신값을 확인해 주세요."};render()})
         if(previewText.isNotBlank())body.addView(ui.state("전송할 내용 · 원래 기록은 바뀌지 않아요",previewText).apply{tag="portable_payload_preview"})
-        if(consentReady())body.addView(ui.action("AI 이용 가능 횟수 확인 · 모델 호출 없음","portable_status_check",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.CHECK){sessionTask {api->val s=api.status();"기존 TEST 사용 ${s.getInt("legacy_total")}회 · 정식 요청 시도 ${s.getInt("portable_attempts")}회\n누적 승인 상한 ${s.getInt("global_total")}회 · 현재 승인 잔여 ${s.getInt("remaining")}회\n모델 ${if(s.getBoolean("model_enabled"))"켜짐"else"꺼짐"} · 불확실한 이전 요청 ${if(s.optBoolean("uncertain_block"))"있음"else"없음"}\n모델 호출 없이 확인했어요."}})
+        if(consentReady())body.addView(ui.action("AI 이용 가능 횟수 확인 · 모델 호출 없음","portable_status_check",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.CHECK){sessionTask {api->val s=api.status();"기존 TEST 사용 ${s.getInt("legacy_total")}회 · 정식 요청 시도 ${s.getInt("portable_attempts")}회\n${if(s.optString("quota_mode")=="recurring")"월간 서비스 상한"else"누적 승인 상한"} ${s.getInt("global_total")}회 · 현재 승인 잔여 ${s.getInt("remaining")}회\n모델 ${if(s.getBoolean("model_enabled"))"켜짐"else"꺼짐"} · 불확실한 이전 요청 ${if(s.optBoolean("uncertain_block"))"있음"else"없음"}\n모델 호출 없이 확인했어요."}})
         if(resultText.isNotBlank())body.addView(ui.state("Gemini가 작성한 설명",resultText).apply{tag="portable_model_result"})
         val cached=runCatching{jobState().optJSONObject("last")}.getOrNull()
+        jobState().optJSONObject("last_failure")?.takeIf{it.optLong("at")>(cached?.optLong("saved_at")?:0)}?.let{body.addView(ui.state("최근 새 요청은 실패했어요 · 기존 성공 설명은 보존돼요",PortableFailure(it.optString("code")).displayMessage(),true))}
+        if(issueMode){val jobs=runCatching{state().optJSONObject("jobs")}.getOrNull();jobs?.keys()?.asSequence()?.filter{it!=issueJob()}?.mapNotNull{jobs.optJSONObject(it)}?.filter{it.optString("record")==issueId}?.mapNotNull{it.optJSONObject("last")}?.forEach{old->val a=old.getJSONObject("answer");val text=runCatching{IssueExplanation.validate(a,old.getString("payload"),a.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("수정 전 기록의 AI 설명 · 현재 내용과 다를 수 있어요",text))}}
+        if(cached!=null)body.addView(ui.action("기존 AI 설명 보기 · API 호출 없음","portable_view_saved",ActionStyle.SECONDARY,allowed()&&!busy,HmiIcon.RECORD){val a=cached.getJSONObject("answer");resultText=if(issueMode)IssueExplanation.validate(a,cached.getString("payload"),a.getString("operation_id"))else PortableAnalysis.validate(a,cached.getString("payload"),a.getString("operation_id"));message="저장된 설명이에요. 새 요청은 하지 않았어요.";render()})
         if(resultText.isBlank()&&cached!=null){val answer=cached.getJSONObject("answer");val text=runCatching{if(issueMode)IssueExplanation.validate(answer,cached.getString("payload"),answer.getString("operation_id"))else PortableAnalysis.validate(answer,cached.getString("payload"),answer.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("이전에 받은 AI 설명 · 현재 상태 판정 아님",text).apply{tag="portable_cached_result"})}
         body.addView(ui.action("로그아웃","portable_logout",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.BACK){cancelWork();FirebaseSessionProvider.subject()?.let{PortableAiStore(this,storeName(it)).withdraw()};FirebaseSessionProvider.signOut();resultText="";message="로그아웃했어요. 차량 기록은 그대로예요.";render()})
-        if(!autoConsumed&&(issueMode||intent.getBooleanExtra("request_from_analysis",false))&&allowed()&&!busy&&ready()&&consentReady()){
+        if(!autoConsumed&&(!issueMode&&intent.getBooleanExtra("request_from_analysis",false))&&allowed()&&!busy&&ready()&&consentReady()){
             autoConsumed=true;body.post{if(visible&&allowed()&&!busy)requestExplanation()}
         }
     }
-    private fun requestExplanation(){
+    private fun requestExplanation(fresh:Boolean=false){
         if(!allowed()||busy||!consentReady())return
         excerptInput?.let{excerpt=it.text.toString()}
         sessionTask(work={api->
@@ -142,7 +145,7 @@ class PortableAiActivity:Activity(){
                 if(selected==null||IssueExplanation.jobKey(selected)!=IssueExplanation.jobKey(current))throw PortableFailure("ISSUE_CHANGED")
                 if(api.hasPending())""else IssueExplanation.payload(current,excerpt?:current.situation)
             }else if(api.hasPending())""else PortableAnalysis.payload(analysis?:throw PortableFailure("NO_VALID_SOC"))
-            val answer=api.explain(payload)
+            val answer=api.explain(payload,fresh)
             if(issueMode)return@sessionTask IssueExplanation.validate(answer,api.jobState().getJSONObject("last").getString("payload"),answer.getString("operation_id"))
             val explanation=answer.getString("explanation")
             val source=answer.getJSONObject("facts").getJSONObject("facts")
@@ -159,14 +162,14 @@ class PortableAiActivity:Activity(){
             if(!visible||run!=generation||!allowed())return@withSession
             if(error!=null||uid==null||token==null){busy=false;message=PortableFailure(error?:"AUTH_SIGN_IN_REQUIRED").displayMessage();render();return@withSession}
             val s=PortableAiStore(this,storeName(VehicleAnalytics.id(uid)));activeStore=s
-            val api=PortableAiClient(s,DeviceKeyStore("caritda.portable.${packageName}"),uid,token,allowed={visible&&run==generation&&gate.state==EditingState.ALLOWED&&FirebaseSessionProvider.matches(uid)},issueJob=if(issueMode)issueJob()?:throw PortableFailure("ISSUE_UNAVAILABLE")else null);client=api
+            val api=PortableAiClient(s,DeviceKeyStore("caritda.portable.${packageName}"),uid,token,allowed={visible&&run==generation&&gate.state==EditingState.ALLOWED&&FirebaseSessionProvider.matches(uid)},issueJob=if(issueMode)issueJob()?:throw PortableFailure("ISSUE_UNAVAILABLE")else null,issueRecord=if(issueMode)issueId else null);client=api
             worker.execute {val result=runCatching{work(api)};runOnUiThread {
                 if(visible&&run==generation){busy=false;client=null;activeStore=null;result.onSuccess{if(modelResult){resultText=it;message="AI 설명을 받았어요. 아래에서 확인해 주세요."}else message=it}.onFailure{message=((it as? PortableFailure)?:PortableFailure("AI_REQUEST_FAILED")).displayMessage()};render()}
             }}
         }
     }
     private fun loadAnalysis(){val run=++loadGeneration;worker.execute {
-        if(issueMode){val selected=runCatching{selectedRecord()}.getOrNull();runOnUiThread{if(visible&&run==loadGeneration){issue=selected;message=if(selected==null)"기록을 찾을 수 없어요. 이전 화면에서 다시 선택해 주세요."else"선택한 증상만 설명해요. 원래 기록은 바뀌지 않아요.";render()}};return@execute}
+        if(issueMode){val selected=runCatching{selectedRecord()}.getOrNull();runOnUiThread{if(visible&&run==loadGeneration){issue=selected;if(selected!=null)runCatching{FirebaseSessionProvider.subject()?.let{val st=PortableAiStore(this,storeName(it));val root=st.read();root.optJSONObject("jobs")?.optJSONObject(IssueExplanation.jobKey(selected))?.let{job->job.put("record",issueId);st.write(root)}}};message=if(selected==null)"기록을 찾을 수 없어요. 이전 화면에서 다시 선택해 주세요."else"선택한 증상만 설명해요. 원래 기록은 바뀌지 않아요.";render()}};return@execute}
         val r=runCatching{val now=System.currentTimeMillis();ObservationStore(this).use{val refs=it.analysisRefs("EV_SOC",now-86400000);VehicleAnalytics.analyze("EV_SOC",refs.takeLast(2000),now-86400000,now,truncated=refs.size>2000)}}
         runOnUiThread{if(visible&&run==loadGeneration){analysis=r.getOrNull();message=if(analysis?.latest!=null)"설명할 최근 충전량이 있어요."else"차량 정보 화면에서 최근 값을 먼저 불러와 주세요.";render()}}
     }}

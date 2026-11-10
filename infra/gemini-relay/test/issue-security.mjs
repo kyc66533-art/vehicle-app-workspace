@@ -37,3 +37,7 @@ ledger=await storage.get('portable:v2');ck(ledger.devices[0].consents.includes('
 const rc=await challenge('READ',device,c.operation_id);ck((await req('/v2/operations/'+c.operation_id,await signed(rc,'READ','/v2/operations/'+c.operation_id),device)).status===403,'withdrawn scope cannot retrieve old issue result');
 ck((await req('/v2/issues/explanations',body,device)).status===403&&calls===1,'withdrawal prevents replays without deleting ledger');
 console.log('ISSUE_WORKER_SECURITY_PASS checks='+checks+' provider_fixture_calls='+calls+' real_model_calls=0');
+
+// Additive recurring policy checkpoint and renewal, same original storage/device/signatures.
+env.PORTABLE_POLICY=JSON.stringify({...policy,expires_at:0,recurring:{user_daily:5,user_monthly:10,device_daily:5,service_monthly:20,monthly_micros:200000,reserve_micros:1000}});
+const oldClock=Date.now;try{let c=await challenge('READ',device),r=await req('/v2/account/status',await signed(c,'READ','/v2/account/status'),device);assert.equal(r.body.quota_mode,'recurring');assert.equal(r.body.remaining,4);Date.now=()=>oldClock()+40*86400000;c=await challenge('READ',device);r=await req('/v2/account/status',await signed(c,'READ','/v2/account/status'),device);assert.equal(r.body.remaining,5);assert.equal((await storage.get('portable:v2')).used,1);console.log('RECURRING_GATE_PASS checks=4 real_model_calls=0');}finally{Date.now=oldClock;}

@@ -29,7 +29,7 @@ export async function explainIssue(payload:string,operationId:string,secret:stri
    contents:[{role:'user',parts:[{text:JSON.stringify({untrusted_selected_symptom:facts})}]}],generationConfig:{maxOutputTokens:1024,responseMimeType:'application/json',responseJsonSchema:{type:'object',properties:Object.fromEntries(['evidence_quote','possible_causes','checks','inspection'].map(k=>[k,{type:'string'}])),required:['evidence_quote','possible_causes','checks','inspection'],additionalProperties:false}}
   })});
   reject(r.status<300||r.status>=400,'MODEL_REDIRECT_BLOCKED',502);
-  if(!r.ok)throw new ApiError(r.status===429?429:502,r.status===429?'MODEL_QUOTA':[401,403].includes(r.status)?'PROVIDER_AUTH':r.status===400?'MODEL_REQUEST_REJECTED':'MODEL_HTTP_ERROR');
+  if(!r.ok)throw new ApiError(r.status===429?429:502,r.status===429?'MODEL_QUOTA':[401,403].includes(r.status)?'PROVIDER_AUTH':r.status===400?'MODEL_REQUEST_REJECTED':'MODEL_HTTP_'+r.status);
   let v:any;try{v=JSON.parse(await bodyText(r,16384));}catch{throw new ApiError(502,'MODEL_BODY_INVALID');}
   const candidate=v?.candidates?.[0];reject((!v?.promptFeedback?.blockReason||v.promptFeedback.blockReason==='BLOCK_REASON_UNSPECIFIED')&&candidate?.finishReason==='STOP'&&!candidate.safetyRatings?.some((s:any)=>s.blocked),'MODEL_FINISH_REJECTED',502);
   const text=candidate.content?.parts?.filter((p:any)=>p.thought!==true&&typeof p.text==='string').map((p:any)=>p.text).join('');let a:any;try{a=JSON.parse(text);}catch{throw new ApiError(502,'MODEL_JSON_INVALID');}

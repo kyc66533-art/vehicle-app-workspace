@@ -1,6 +1,20 @@
 # Codex 개발 진행 기록
 
-마지막 업데이트: 2026-11-10 02:57 +09:00 (Asia/Seoul).
+마지막 업데이트: 2026-11-10 20:05 +09:00 (Asia/Seoul).
+
+## 현재 단계 — 실제 Gemini 사용자 성공 확인·AI 안정화 로컬 검증
+
+- 사용자는 실제 선택 기록 Gemini 설명/이후 MODEL_HTTP_ERROR·TOTAL_LIMIT/오류 후 기존 설명 유지를 확인했습니다. 마지막 TEST1·정식1·잔여0·불확실없음·modelON은 사용자 보고이며 새 원장 조회가 아닙니다. 과거 아래 ‘미연결/모델0/승인시험 대기’는 당시 기록으로 보존합니다. 이번 실제 모델·배포·Secret/정책 변경은0회입니다.
+- 선택 기록 화면 진입과 캐시 보기는 모델을 자동 호출하지 않습니다. 명시 새 생성·기존 결과 재확인·실패/성공 분리·로컬 기록/버전별 암호화 보존을 추가했습니다. 구버전 이미 수정된 opaque job의 자동 귀속·모든 성공 회차 선택 UI는 부분 구현입니다. 원문/네 상태/Repository/SDK/UI 디자인은 유지합니다.
+- 공급자 과거 HTTP 원인은 미확정입니다. 이후 비공개본문 없이 MODEL_HTTP_상태 코드로 구분합니다. 기존 TOTAL_LIMIT는 누적 전역2 등과 마지막 보고가 일치하나 현재 오류시점 원장을 새로 확정하지 않았습니다. 실패도 예약 유지/UNKNOWN 자동 재시도 금지를 보존합니다.
+- 선택형 KST 일5/월 UID·기기·서비스/비용 예약 정책을 추가했으며 기존 budget/portable:v2를 덮지 않고 보수적 첫월 이월합니다. 운영 단가·월 예산·배포 승인 대기이며 활성 서버에는 적용하지 않았습니다. 실제 청구액 보장/대규모 장기 원장 완성으로 주장하지 않습니다.
+- 최종 Debug/validation/계측 APK·Lint BUILD SUCCESSFUL 2m6s(오류0/경고50). Pleos user10 validation41+26+4+86+24=181 PASS(기존관련178+신규3), 새 서버64+42+4+12+16+5+16+10=169 PASS. 원본 번들·Wrangler dry-run은 사용자 일반 PowerShell 성공. 이전 전체320/297 suite는 이번 전부 재실행하지 않았습니다.
+- 일반 앱 install-r·MainActivity foreground 성공. 시작/종료 비공개 백업과184 기존 DB의 스키마·버전·원본 행·FK/integrity 보존 확인. 실제 일반 문제24/이벤트95/운전자10/초안0, 원본1021행 유지와 관측 등6행 추가, validation 원본8915행 유지. 사용자 기록23을 고정하지 않았습니다. 계정/키/관측/개인백업은 게시하지 않습니다.
+- 변경: PortableAiActivity/PortableAiClient/PortableAnalysis/IssueAiChecks, portable-gate/portable-issue/portable-analysis/recurring-quota, issue-security/recurring-quota 검사, AGENTS/SDK표/본 기록, AI_STABILIZATION/LIGHTING_FEASIBILITY/UI_TEAM_HANDOFF. 연구 파일·MainActivity·스키마 변경 없음.
+- 등화 공개 API/권한·공식 Console·유럽 Vehicle Data API를 분리했습니다. Light/TurnSignal/CAR_LIGHTS의 실제 수신/전구 고장 판단은 미검증이며 추가 권한을 선언하지 않았습니다. UI팀에는 기능 유지·보조·TEST 숨김·삭제없음과 캐시/새 요청 계약을 전달합니다.
+- 다음: 추가 Gemini 없이 사용자가 기존 성공 설명 cold restart/운전자 전환을 검수합니다. 새 반복 정책은 운영 월간 예산·단가·배포의 별도 승인 후 확인합니다. GitHub 연결 도구로 검증된 파일만 기존 main 부모로 게시하고 최종 커밋은 완료 보고에서 제공합니다.
+- 상세: [AI 안정화](AI_STABILIZATION.md), [등화 가능성](LIGHTING_FEASIBILITY.md), [Claude UI팀 인계](UI_TEAM_HANDOFF.md). 일반 APK SHA256 A9A3A316915369BAEEF973BFBED5FEB63A0FEA310F2ADE7C4A7B64C6A24396F0, 검토 번들2D6907AE…이며 Release/PC B/실차/장시간/새 유료 호출은 미검증입니다.
+
 
 ## 현재 단계 — 일반 앱 등록 성공·선택 기록 실제1회 승인/시험 대기
 

@@ -44,14 +44,14 @@ object PortableAnalysis {
     }
 }
 class PortableFailure(raw:String):IllegalStateException("AI_REQUEST_FAILED") {
-    val code=raw.takeIf{Regex("[A-Z_]{1,64}|AUTH_KEYS_HTTP_[1-5][0-9]{2}").matches(it)}?:"AI_REQUEST_FAILED"
+    val code=raw.takeIf{Regex("[A-Z_]{1,64}|(?:AUTH_KEYS_HTTP|MODEL_HTTP)_[1-5][0-9]{2}").matches(it)}?:"AI_REQUEST_FAILED"
     fun displayMessage()="${userMessage()}\n확인 코드: $code"
     fun userMessage()=when(code){
         "AUTH_SIGN_IN_REQUIRED","AUTH_CREDENTIALS","AUTH_RELOGIN","RECENT_LOGIN_REQUIRED"->"로그아웃 후 다시 로그인해 주세요. 기존 차량 기록은 그대로예요."
         "AUTH_TOKEN_TIMEOUT","AUTH_NETWORK"->"계정 확인 응답이 늦어지고 있어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요."
         "UID_NOT_APPROVED"->"이 계정의 AI 이용 승인이 필요해요. 관리자에게 문의해 주세요."
         "DEVICE_LIMIT","DEVICE_REVOKED","DEVICE_NOT_REGISTERED","DEVICE_KEY_MISSING"->"이 기기의 AI 등록을 확인해 주세요. 기존 차량 기록은 그대로예요."
-        "TOTAL_LIMIT","RATE_LIMIT","MODEL_QUOTA","CONTROL_RATE_LIMIT"->"요청 한도에 도달했어요. 자동으로 다시 요청하지 않아요."
+        "TOTAL_LIMIT","PERIOD_LIMIT","RATE_LIMIT","MODEL_QUOTA","CONTROL_RATE_LIMIT"->"요청 한도에 도달했어요. 자동으로 다시 요청하지 않아요."
         "PORTABLE_DISABLED","MODEL_DISABLED","POLICY_REQUIRED","POLICY_INVALID"->"AI 서버의 사용 승인이 아직 준비되지 않았어요. 차량 분석은 계속 볼 수 있어요."
         "STALE_RECEIPT","LATEST_RECEIPT_FAILED","NO_VALID_SOC"->"최근 차량 정보를 먼저 불러와 주세요. 이전 분석은 그대로예요."
         "MODEL_OUTCOME_UNKNOWN","APP_TIMEOUT","APP_NETWORK"->"응답을 확인하지 못했어요. 다시 눌러 기존 요청 결과를 확인할 수 있어요. 새 모델 요청은 자동으로 만들지 않아요."

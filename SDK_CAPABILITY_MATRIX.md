@@ -1,5 +1,12 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 최신 등화 후보 검토 — 2026-11-10
+
+Light/TurnSignal 공개 읽기·Capability/Listener API와 CAR_LIGHTS, Brake 페달/CAR_DRIVE, Safety/CAR_SAFETY 경로를 확인했습니다. 일부 javap는 권한 오류로 중단돼 전체 API 부재를 단정하지 않습니다. 이번 추가 Manifest 권한·SDK 신호 호출·Console 조작은0이며 실제 등화 고장 신호 수신은 미검증입니다. ON/OFF·페달·에뮬레이터 actual state는 물리 전구/LED 정상 판정이 아닙니다. Vehicle Data API의 frontHeadLamp/stopLamp 고장 데이터는 별도 유럽 OAuth 경로이며 한국 차량 내부 SDK로 사용할 수 있다고 가정하지 않습니다.
+
+[공식 근거·가능/미검증 구분·승인 후 최소 계획](docs/LIGHTING_FEASIBILITY.md)을 참조하세요. 기존 SOC/거리 연동·권한은 유지했습니다. 사용자는 실제 Gemini 설명 성공을 확인했으며 아래 과거 ‘모델 미연결’은 당시 기록입니다. 이번 AI 안정화 작업의 추가 모델 호출은0회입니다.
+
+
 ## 최신 SOC 구독·Console PoC — 2026-11-08
 
 Vehicle2.3.2 AAR의 registerEvBatteryStateOfCharge/unregisterEvBatteryStateOfCharge와 EvBatteryStateOfChargeListener.onEvBatteryStateOfChargeUpdated(Integer)/onFailed를 확인했습니다. 기존 CAR_ENERGY로 Capability 확인 후 실제 Console80% GET,18%/45% 변화 callback·원본/사용자 low 사건·해제·재실행 복원을 validation에서 검증했습니다. 같은18%는 SDK GET으로도 반복 수신하고 사건1개를 유지했습니다. 등록 반환만의 성공이 아닙니다.

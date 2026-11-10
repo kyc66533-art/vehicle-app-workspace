@@ -43,12 +43,15 @@ class IssueAiChecks(private val inst:Instrumentation){
                 else->error("Unexpected fixture route")
             }
         }
-        fun api(job:String)=PortableAiClient(store,key,"fixture-uid","fixture-bearer",{true},transport,job)
+        fun api(job:String)=PortableAiClient(store,key,"fixture-uid","fixture-bearer",{true},transport,job,id)
         val client=api(IssueExplanation.jobKey(issue));client.register()
         verify(runCatching{client.explain(payload)}.isFailure&&client.hasPending(),"IA10 network error preserves request intent")
         val intent=client.jobState().getJSONObject("pending").getString("intent")
         verify(client.explain(payload).getString("origin")=="MODEL"&&posts==2,"IA11 ISSUED recovers same request (no real provider)")
+        verify(client.explain(payload).getString("origin")=="MODEL"&&posts==2,"ST01 cached success never calls relay again")
+        verify(PortableAiClient(PortableAiStore(c,"issue-ai-fixture-$id"),key,"fixture-uid","unused",{true},{_,_,_,_->error("Network forbidden for cache")},IssueExplanation.jobKey(issue)).explain(payload).getString("origin")=="MODEL","ST02 encrypted success survives client/store recreation offline")
         verify(!client.hasPending()&&intent.isNotBlank(),"IA12 pending clears only after validated success")
+        verify(api(IssueExplanation.jobKey(issue.copy(revision=2))).previousResults().size==1,"ST03 old content version remains separately addressable")
         val other=api(IssueExplanation.jobKey(issue.copy(id="other")))
         verify(!other.hasPending()&&!other.jobState().has("last"),"IA13 another record cannot inherit response/pending")
         enabled=false;verify((runCatching{other.explain(payload)}.exceptionOrNull() as? PortableFailure)?.code=="MODEL_DISABLED"&&posts==2&&!other.hasPending(),"IA23 model OFF preflight sends no issue body or new intent")

@@ -1,11 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — 선택한 사용자 기록 Gemini 설명
-- 최신 사용자 지시가 아래 SOC/합성 중심 제한보다 우선한다. 일반 앱의 선택한 한 건 category/situation만 설명하며 이름·메모·ID·시각·이력·차량값·다른 기록은 전송하지 않는다. 원문/네 상태/DB/관측/초안/AVD는 보존한다. AI 전송 사본 편집은 원문 수정이 아니다.
-- Firebase Auth24.2.0/세션·Keystore·기존 Worker v2/Secret/BUDGET을 재사용한다. v1/v2 배포 문제는 해결됐으므로 재조사/재설정하지 않는다. issue-explanation-v1 동의/기록별 암호화 결과·pending을 SOC와 분리하며 scope 철회로 다른 동의를 지우지 않는다.
-- 일반 앱 등록은 성공했다. 기존TEST1/정식0/잔여0을 확인했고 개인정보 없는 선택기록 Gemini 최대1회·모델ON·비용을 승인받았다. 불확실요청없음 확인 후 global2·UID/일/기기1·분1로만 시험한다. 소진/실패 후 추가 호출은 재승인 전 금지한다. v1 budget/portable:v2·누적1/UNKNOWN을 삭제·환불·우회하지 않는다. Secret 전용키·manual/3xx차단을 유지한다.
-- 고정 system 지시/격리 증상 JSON/no tools/스키마·원문 인용/hash/수치·조건부 표현을 검증한 실제 공급자 응답만 MODEL이다. 모든 개인정보·의미적 공격·오답을 필터가 완전히 검출한다고 하지 않는다. 실제/fixture/Mock를 구분하고 AI가 원문/점검 상태를 바꿀 경로를 만들지 않는다.
-- docs/ISSUE_GEMINI_ACCEPTANCE.md와 infra/gemini-relay/ISSUE_AI_SETUP.md의 승인·검증 경계를 유지한다. 위험한 계측은 validation의 고유 fixture만 사용하고 기존 validation 기본 DB도 초기화하지 않는다. 모델·PC B·Release는 로컬 검사로 대체하지 않는다. 아래 GitHub 연결 도구 게시/Aside 보호 규칙을 따른다.
+## 현재 작업 — Gemini 안정화·등화장치 가능성
+- 사용자 실제 Gemini 성공을 확인했다. 마지막 보고 TEST1/정식1/잔여0/불확실없음/modelON은 현재 원장 재조회가 아니다. 과거1회 승인은 소진됐고 새 호출·배포·Secret/정책은 별도 승인 전 금지다. 과거 MODEL_HTTP_ERROR 원인은 미확정이며 TOTAL_LIMIT/UNKNOWN을 환불·초기화로 우회하지 않는다.
+- 선택 한 건 category/situation만 전송한다. 이름·메모·ID·시각·이력·차량값·다른 기록은 제외하고 AI 사본은 원문과 분리한다. Auth24.2.0/Keystore/Worker v2/Secret/BUDGET/portable:v2와 원문/네 상태/관측/초안을 보존한다.
+- 캐시 보기는 로컬 암호화 결과만 읽는다. fresh=true 명시 생성·기존 결과 확인·영속 pending을 유지하며 수정 전 설명은 과거 표시한다. 불명 job을 추측 귀속하지 않는다. 실제 공급자 응답의 스키마·인용/hash/조건부 표현만 MODEL로 검증하며 필터의 완전성을 주장하지 않는다.
+- recurring은 KST 일5/월 계정·기기·서비스/비용 예약의 선택형 로컬 코드다. 기존 누적·첫월 보수적 이월을 유지하고 운영 예산·단가·배포 승인 전 활성화하지 않는다. 실측 청구 보장은 아니다. docs/AI_STABILIZATION.md의 부분·미검증을 따른다.
+- 등화 ON/OFF·페달·Console은 전구 고장 증거가 아니다. 유럽 Vehicle Data API와 SDK를 구분하고 추가 권한/기능은 승인 후 진행한다. UI 전면 개편은 Claude팀 범위다. validation 고유 fixture만 쓰며 기존 DB/연구/백업/AVD를 초기화하지 않는다. 아래 연결 도구 게시 규칙을 지킨다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

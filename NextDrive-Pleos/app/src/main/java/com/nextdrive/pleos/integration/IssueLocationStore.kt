@@ -1,0 +1,18 @@
+package com.nextdrive.pleos.integration
+
+import android.content.Context
+import android.content.ContentValues
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import java.util.UUID
+
+data class IssueLocation(val latitude:Double,val longitude:Double,val measuredAt:Long,val receivedAt:Long,val source:String){
+    fun valid()=latitude.isFinite()&&longitude.isFinite()&&latitude in -90.0..90.0&&longitude in -180.0..180.0&&measuredAt>0&&measuredAt<=receivedAt+60000
+}
+/** Optional local association only. Does not migrate or modify issue/observation databases. */
+class IssueLocationStore(context:Context,name:String="caritda-issue-location.db"):SQLiteOpenHelper(context,name,null,1){
+    override fun onCreate(db:SQLiteDatabase){db.execSQL("CREATE TABLE links(id TEXT PRIMARY KEY,issue_id TEXT NOT NULL,latitude REAL NOT NULL,longitude REAL NOT NULL,measured_at INTEGER NOT NULL,received_at INTEGER NOT NULL,source TEXT NOT NULL)")}
+    override fun onUpgrade(db:SQLiteDatabase,old:Int,new:Int){error("Unsupported location migration")}
+    fun save(issueId:String,value:IssueLocation){require(issueId.isNotBlank()&&value.valid());val db=writableDatabase;db.beginTransaction();try{val row=ContentValues().apply{put("id",UUID.randomUUID().toString());put("issue_id",issueId);put("latitude",value.latitude);put("longitude",value.longitude);put("measured_at",value.measuredAt);put("received_at",value.receivedAt);put("source",value.source)};db.insertOrThrow("links",null,row);db.setTransactionSuccessful()}finally{db.endTransaction()}}
+    fun latest(issueId:String):IssueLocation?=readableDatabase.rawQuery("SELECT latitude,longitude,measured_at,received_at,source FROM links WHERE issue_id=? ORDER BY received_at DESC,rowid DESC LIMIT 1",arrayOf(issueId)).use{if(!it.moveToFirst())null else IssueLocation(it.getDouble(0),it.getDouble(1),it.getLong(2),it.getLong(3),it.getString(4))}
+}

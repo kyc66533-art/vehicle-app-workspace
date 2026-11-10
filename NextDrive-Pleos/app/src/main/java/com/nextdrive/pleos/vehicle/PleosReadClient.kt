@@ -4,6 +4,10 @@ import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.capability.AccessType
 import ai.pleos.playground.vehicle.api.model.capability.CapabilityConfig
 import ai.pleos.playground.vehicle.constant.ErrorCode
+import ai.pleos.playground.vehicle.api.model.area.DoorArea
+import ai.pleos.playground.vehicle.api.model.area.WheelArea
+import ai.pleos.playground.vehicle.constant.area.DoorValue
+import ai.pleos.playground.vehicle.constant.area.WheelValue
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -32,7 +36,7 @@ class PleosReadClient(private val context: Context, private val store: Observati
         val run = generation
         val session = ObservationStore.sessionId()
         activeSession=session
-        outstanding = mutableSetOf("EV_SOC", "ODOMETER", "FUEL_PERCENT")
+        outstanding = (setOf("EV_SOC", "ODOMETER", "FUEL_PERCENT")+VehicleHealth.labels.keys).toMutableSet()
         busy = true
         message = "서비스 연결 요청 중 · Capability 응답을 기다리고 있습니다."
         changed()
@@ -92,6 +96,19 @@ class PleosReadClient(private val context: Context, private val store: Observati
                 } }, failed)
             } catch (e: Exception) { failed(e) }
         }
+        fun scalar(kind:String,permission:String,unit:String,
+                   capability:((CapabilityConfig)->Unit,(Exception)->Unit)->Unit,
+                   read:((Any?)->Unit,(Exception)->Unit)->Unit){
+            if(context.checkSelfPermission(permission)!=PackageManager.PERMISSION_GRANTED){finish(kind,ObservationStatus.PERMISSION_DENIED,null,null,null,"필요한 읽기 권한: $permission");return}
+            try{capability({config->dispatch{
+                if(kind !in outstanding)return@dispatch
+                if(config.accessType !in setOf(AccessType.READ,AccessType.READ_WRITE)){finish(kind,ObservationStatus.UNSUPPORTED,null,null,false,"공식 Capability 읽기 미지원");return@dispatch}
+                try{read({value->dispatch{
+                    if(VehicleHealth.valid(kind,value))finish(kind,ObservationStatus.RECEIVED,value.toString(),unit,true,"Vehicle2.3.2 공개 GET · access="+config.accessType+" · hardware="+Build.HARDWARE)
+                    else finish(kind,ObservationStatus.INVALID,null,null,true,"공식 응답이 없거나 유효하지 않아요. $kind")
+                }},{e->dispatch{fail(kind,"읽기",e,true)}})}catch(e:Exception){fail(kind,"읽기",e,true)}
+            }},{e->dispatch{fail(kind,"Capability",e,null)}})}catch(e:Exception){fail(kind,"Capability",e,null)}
+        }
         main.postDelayed({
             if (run == generation) outstanding.toList().forEach {
                 finish(it, ObservationStatus.TIMEOUT, null, null, null, "15초 안에 Capability/읽기 응답이 완료되지 않았습니다.")
@@ -109,6 +126,27 @@ class PleosReadClient(private val context: Context, private val store: Observati
             request("FUEL_PERCENT", "pleos.car.permission.CAR_ENERGY", "%",
                 sdk.getFuel()::checkFuelPercentCapabilities,
                 { ok, bad -> sdk.getFuel().getFuelPercent({ ok(it) }, bad) })
+            val door=sdk.getDoor()
+            for((kind,value)in listOf("DOOR_FL" to DoorValue.ROW_1_LEFT,"DOOR_FR" to DoorValue.ROW_1_RIGHT,"DOOR_RL" to DoorValue.ROW_2_LEFT,"DOOR_RR" to DoorValue.ROW_2_RIGHT)){
+                val area=DoorArea(value)
+                scalar(kind,"pleos.car.permission.CAR_DOORS","position",{ok,bad->door.checkDoorPositionCapabilities({config,areas->if(areas.containsKey(area))ok(config)else dispatch{finish(kind,ObservationStatus.UNSUPPORTED,null,null,false,"해당 도어 영역 미지원")}},bad)},{ok,bad->door.getCurrentDoorPosition(area,{ok(it)},bad)})
+            }
+            val light=sdk.getLight()
+            scalar("LOW_BEAM","pleos.car.permission.CAR_LIGHTS","state",{ok,bad->light.checkLowBeamLightStateCapabilities({config,_->ok(config)},bad)},{ok,bad->light.getCurrentLowBeamLightState({ok(it)},bad)})
+            scalar("HIGH_BEAM","pleos.car.permission.CAR_LIGHTS","state",{ok,bad->light.checkHighBeamLightStateCapabilities({config,_->ok(config)},bad)},{ok,bad->light.getCurrentHighBeamLightState({ok(it)},bad)})
+            scalar("TAIL_LAMP","pleos.car.permission.CAR_LIGHTS","state",{ok,bad->light.checkTailLampLightStateCapabilities({config,_->ok(config)},bad)},{ok,bad->light.getCurrentTailLampLightState({ok(it)},bad)})
+            scalar("TURN_SIGNAL","pleos.car.permission.CAR_LIGHTS","state",sdk.getTurnSignal()::checkTurnSignalStateCapabilities,{ok,bad->sdk.getTurnSignal().getCurrentTurnSignalState({ok(it)},bad)})
+            val safe=sdk.getSafety()
+            scalar("ENGINE_OIL","pleos.car.permission.CAR_SAFETY","state",{ok,bad->safe.checkEngineOilLevelStateCapabilities({config,_->ok(config)},bad)},{ok,bad->safe.getEngineOilLevelState({ok(it)},bad)})
+            scalar("BRAKE_FLUID","pleos.car.permission.CAR_SAFETY","state",{ok,bad->safe.checkBrakeFluidLevelStateCapabilities({config,_->ok(config)},bad)},{ok,bad->safe.getBrakeFluidLevelState({ok(it)},bad)})
+            scalar("WASHER_LOW","pleos.car.permission.CAR_SAFETY","state",safe::checkLowWasherFluidWarningStateCapabilities,{ok,bad->safe.hasLowWasherFluidWarning({ok(it)},bad)})
+            scalar("POWER_DOWN","pleos.car.permission.CAR_SAFETY","state",safe::checkPowerDownWarningIndicatorCapabilities,{ok,bad->safe.hasPowerDownWarningIndicator({ok(it)},bad)})
+            scalar("BRAKE_PEDAL","pleos.car.permission.CAR_DRIVE","state",sdk.getBrake()::checkBrakePedalStatusCapabilities,{ok,bad->sdk.getBrake().getCurrentBrakePedalStatus({ok(it)},bad)})
+            val tire=sdk.getTire()
+            for((kind,value)in listOf("TIRE_LIMIT_FL" to WheelValue.LEFT_FRONT,"TIRE_LIMIT_FR" to WheelValue.RIGHT_FRONT,"TIRE_LIMIT_RL" to WheelValue.LEFT_REAR,"TIRE_LIMIT_RR" to WheelValue.RIGHT_REAR)){
+                val area=WheelArea(value)
+                scalar(kind,"pleos.car.permission.CAR_SAFETY","kPa",{ok,bad->tire.checkLowTirePressureCapabilities({config,areas->if(area in areas)ok(config)else dispatch{finish(kind,ObservationStatus.UNSUPPORTED,null,null,false,"해당 바퀴 영역 미지원")}},bad)},{ok,bad->tire.getLowTirePressure(area,{ok(it)},bad)})
+            }
         } catch (e: Exception) { outstanding.toList().forEach { fail(it, "초기화", e, null) } }
     }
     fun stop() {

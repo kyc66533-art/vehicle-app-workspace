@@ -1,5 +1,12 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 최신 공개 SDK 통합 — 2026-11-11 Asia/Seoul
+
+Vehicle2.3.2의 기존3종+공개17종을 실제 에뮬레이터에서 읽었습니다. SOC100%/거리0km/문4개 위치/등화3개/방향지시/브레이크 페달/출력 저하 안내의12개 값 수신, 연료·오일·브레이크액·워셔액·저압기준4개는 UNSUPPORTED입니다. 새 CAR_DOORS/CAR_LIGHTS/CAR_SAFETY는 읽기만 사용하며 PRIVATE 권한은 선언하지 않았습니다. 타이어 저압 기준은 실압/고장이 아닙니다.
+
+STT/TTS3.3.1/Fused1.1.3/Navi3.0.5를 추가했고 Maven .security 전이 의존성 필터 문제를 수정했습니다. Navi 경로 상태 callback과 Pleos TTS onDone을 실제 수신했습니다. 공식 STT request의 실제 한국어 자동 인식·연속3회 재입력을 확인했고 최종 화면은 자동 종료/취소로 정리했습니다. [통합 결과·API 근거](docs/CARITDA_INTEGRATION_REPORT.md), [STT 안정화](docs/STT_STABILITY.md)를 참조하세요. 아래 과거 미호출·보류 기록은 당시 사실입니다.
+
+
 ## 최신 등화 후보 검토 — 2026-11-10
 
 Light/TurnSignal 공개 읽기·Capability/Listener API와 CAR_LIGHTS, Brake 페달/CAR_DRIVE, Safety/CAR_SAFETY 경로를 확인했습니다. 일부 javap는 권한 오류로 중단돼 전체 API 부재를 단정하지 않습니다. 이번 추가 Manifest 권한·SDK 신호 호출·Console 조작은0이며 실제 등화 고장 신호 수신은 미검증입니다. ON/OFF·페달·에뮬레이터 actual state는 물리 전구/LED 정상 판정이 아닙니다. Vehicle Data API의 frontHeadLamp/stopLamp 고장 데이터는 별도 유럽 OAuth 경로이며 한국 차량 내부 SDK로 사용할 수 있다고 가정하지 않습니다.

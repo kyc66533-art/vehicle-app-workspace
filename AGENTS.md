@@ -1,11 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — AI 최종 안정화·운영 준비
-- 2026-11-10 운영 묶음 최종승인: 기존 Worker8A3349D1… 번들 교체·RECURRING_POLICY/일5·계정월100·서비스월300/USD3예약·실제 Gemini 최대1회·실패시OFF복구. 같은 승인을 반복 요청하지 않는다. test/apply-operations.mjs와 비공개 activation-session.json의 실제 단계/시험발행 여부를 확인해 재실행·추가 모델 요청을 막는다. UNKNOWN/원장은 삭제·환불하지 않는다.
-- 선택 한 건 category/situation만 전송한다. 이름·메모·ID·시각·이력·차량값·다른 기록은 제외하고 AI 사본은 원문과 분리한다. Auth24.2.0/Keystore/Worker v2/Secret/BUDGET/portable:v2와 원문/네 상태/관측/초안을 보존한다.
-- 캐시 보기는 로컬 암호화 결과만 읽는다. fresh=true 명시 생성·기존 결과 확인·영속 pending을 유지하며 수정 전 설명은 과거 표시한다. 불명 job을 추측 귀속하지 않는다. 실제 공급자 응답의 스키마·인용/hash/조건부 표현만 MODEL로 검증하며 필터의 완전성을 주장하지 않는다.
-- 실제 운영 OFF배포·정책·바인딩·공개401 확인. 현재TEST1/정식5/잔여0/불확실없음은 사용자 재확인값이다. 초기 과거사용 이월로 오늘0이며 원장 오류가 아니다. 모델OFF/신규시험0을 유지하고 11-11 KST00후 --approved --resume-quota로 잔여 확인부터 같은 승인으로 재개한다. >0일 때만 첫ON·최대1회, 사용량/일자/UID 우회 금지. docs/AI_ACTIVATION_VERIFICATION.md를 따른다.
-- 등화 ON/OFF·페달·Console은 전구 고장 증거가 아니다. 유럽 Vehicle Data API와 SDK를 구분하고 추가 권한/기능은 승인 후 진행한다. UI 전면 개편은 Claude팀 범위다. validation 고유 fixture만 쓰며 기존 DB/연구/백업/AVD를 초기화하지 않는다. 아래 연결 도구 게시 규칙을 지킨다.
+## 현재 작업 — STT 자동 종료·취소 안정화
+- 최신 지시는 공식 ON_DEVICE/request/Locale.KOREA 자동 종료와 재입력이다. 실제 한국어3회·자동종료는 사용자/SDK로그로 확인했다. 수동 완료 UI/수동EOF 분기는 제거한다. 취소는 별도CANCELLED이며 stop/release·generation 차단으로 늦은 결과와 중복 요청을 막고 원래 작성 내용/DB를 바꾸지 않는다. final과실제ended 모두 있어야 완료다. 타이머·부분문장으로 성공을 만들지 않는다.
+- Windows 캡처는 정상이나 Android전달이 peak2였고 -allow-host-audio 명시로 기존AVD를 재실행해 복구했다. 기존AVD/설정파일/데이터/백업을 초기화하지 않는다. passive meter0은 입력실패 증거가 아니다. PCM/RMS/SDK/실제발화/합성을 구분하며 음성·문장·키를 진단로그나외부에 남기지 않는다. docs/STT_STABILITY.md·STT_RUN_GUIDE.md를 따른다.
+- Vehicle2.3.2/기록/운전자ID/초안/원관측/AI캐시/View홈을 보존한다. Navi3.0.5/Fused1.1.3/STT·TTS3.3.1 공개API와 Maven.security 필터를 유지한다. 타이어기준은 실압이 아니며 등화ON은 고장 증거가 아니다. Gleo승인/외부호출·실제경로·실차는 미검증을 유지한다.
+- 계측은 validation 고유fixture/조기분기만 쓰며 기존validation DB도 초기화하지 않는다. 일반앱 UI자동화 금지. 313 assertion과 실제발화3회/공개PCM3회는 별도다. 위험한 기본prepare는 실행하지 않는다. 원본 DB현재수를 다시 확인하고 과거23건으로 고정하지 않는다.
+- Gemini기존성공·Firebase/Keystore·BUDGET/portable:v2/UNKNOWN·OFF/잔여0을 보존한다. 이번 모델/배포0이며 운영재개파일을 STT시험에 쓰지 않는다. 동의한 선택 category/situation만 전송하고 이름/메모/ID/시각/위치/차량값/다른기록은 제외한다. 연구·타작업·아래GitHub 연결도구 게시규칙을 유지한다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

@@ -75,6 +75,14 @@ dependencies {
     // Official 24.2.0 (also mapped by BoM 34.19.0) is the compatibility candidate to verify.
     implementation("com.google.firebase:firebase-auth:24.2.0")
     implementation("ai.pleos.playground:Vehicle:2.3.2")
+    // Official 2026-10 SDK family; each service is checked at runtime before use.
+    implementation("ai.pleos.playground:NaviHelper:3.0.5")
+    implementation("ai.pleos.playground:FusedLocation:1.1.3")
+    implementation("ai.pleos.playground:TextToSpeech:3.3.1")
+    implementation("ai.pleos.playground:SpeechToText:3.3.1")
+    // Align instrumentation compile APIs with the versions already selected by the app.
+    androidTestImplementation("androidx.annotation:annotation-experimental:1.3.1")
+    androidTestImplementation("androidx.lifecycle:lifecycle-common:2.6.1")
     // Public ErrorCode is published as runtime-only by Vehicle.
     // Vehicle already packages this at runtime; expose only its public constants to the compiler.
     compileOnly("ai.pleos.playground:vehicle-data:1.1.11") { isTransitive = false }

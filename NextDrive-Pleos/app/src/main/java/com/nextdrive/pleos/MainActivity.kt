@@ -22,6 +22,7 @@ import com.nextdrive.pleos.vehicle.*
 import com.nextdrive.pleos.ui.*
 import com.nextdrive.pleos.analytics.*
 import com.nextdrive.pleos.ai.*
+import com.nextdrive.pleos.integration.*
 import java.time.ZoneId
 import java.util.Calendar
 
@@ -65,6 +66,70 @@ class MainActivity : Activity() {
     private var helpTopic=0
     private var pausedGuide: Screen?=null
     private var showUnavailable=false
+    private var showHealth=false
+    private var speechFormVisible=false
+    private val speechOutput by lazy{SpeechOutput(this){visible&&canEdit()}}
+    private val speechInput by lazy{SpeechInput(this){visible&&canWrite()}}
+    private val locationReader by lazy{OneShotLocation(this){visible&&canWrite()}}
+    private val navigation by lazy{InspectionNavigation(this){visible&&canEdit()}}
+    private var permissionAction:(()->Unit)?=null
+    private fun stopAssistance(){speechOutput.stop();speechInput.stop();locationReader.stop();navigation.stop();permissionAction=null}
+    private fun permission(name:String,action:()->Unit){
+        if(!canEdit())return
+        if(checkSelfPermission(name)==android.content.pm.PackageManager.PERMISSION_GRANTED)action()
+        else{permissionAction=action;requestPermissions(arrayOf(name),701)}
+    }
+    override fun onRequestPermissionsResult(code:Int,names:Array<out String>,results:IntArray){
+        super.onRequestPermissionsResult(code,names,results)
+        if(code==701){val action=permissionAction;permissionAction=null;if(results.isNotEmpty()&&results.all{it==android.content.pm.PackageManager.PERMISSION_GRANTED}&&canEdit())action?.invoke()else toast("권한을 허용하지 않았어요. 기존 기록은 그대로예요.")}
+    }
+    private fun readAloud(text:String){if(!canEdit())return;speechOutput.speak(text.take(600)){message->notice=message;feedback?.apply{setText(message);visibility=View.VISIBLE}}}
+    private fun voiceDraft(){
+        if(!canWrite()||!captureDraft())return
+        speechOutput.stop()
+        val draftId=journal?.id?:return
+        permission(android.Manifest.permission.RECORD_AUDIO){
+            notice="기기에서 음성 입력을 준비하고 있어요. 자동으로 저장하지 않아요.";feedback?.apply{text=notice;visibility=View.VISIBLE}
+            speechInput.listen({message->notice=message;feedback?.apply{text=message;visibility=View.VISIBLE}},{text->
+                if(canWrite()&&journal?.id==draftId){
+                    val field=input("인식된 내용을 확인해 주세요.",800).apply{setText(text)}
+                    val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle("음성 입력 확인").setView(field).setNegativeButton("취소",null).setPositiveButton("입력에 반영"){_,_->
+                        if(canWrite()&&journal?.id==draftId){situationInput?.setText(field.text.toString());captureDraft();notice="입력에 반영했어요. 내용을 확인한 뒤 저장해 주세요.";draw()}
+                    }.create();activeDialog=dialog;dialog.show()
+                }
+            })
+        }
+    }
+    private fun attachLocation(id:String){
+        if(!canWrite()||!service.canManage(service.issue(id)))return
+        confirm("현재 위치를 확인할까요?","기기에서 마지막으로 확인한 위치를 가져와요. 증상 발생 당시 위치와 다를 수 있어요. 이 앱에만 저장하며 AI에는 보내지 않아요."){
+            permission("pleos.car.permission.FUSED_LOCATION"){
+                notice="위치를 확인하고 있어요.";feedback?.apply{text=notice;visibility=View.VISIBLE}
+                locationReader.read{value,code->
+                    if(value==null){notice="위치를 받지 못했어요. 기록은 유지돼요. 확인 코드: "+code;draw()}
+                    else if(canWrite()&&service.canManage(service.issue(id))){
+                        val at=VehicleUi.shortTime(value.measuredAt)
+                        confirm("이 위치를 함께 저장할까요?","위도 "+value.latitude+" · 경도 "+value.longitude+"\n위치 확인 "+at+"\n오래된 위치일 수 있어요. 증상 당시 위치로 확정하지 않아요."){
+                            check(service.canManage(service.issue(id)))
+                            IssueLocationStore(this).use{it.save(id,value)};notice="위치를 이 기록과 함께 저장했어요.";draw()
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private fun destination(){
+        if(!canEdit())return
+        val fields=column();val name=input("정비 장소 이름",80);val lat=input("위도 (-90~90)",24);val lon=input("경도 (-180~180)",24)
+        fields.addView(label("직접 확인한 정비 장소의 좌표를 입력해 주세요. 예약 기능은 아니에요.",22));listOf(name,lat,lon).forEach{fields.addView(it)}
+        val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle("정비 장소 길찾기").setView(ScrollView(this).apply{addView(fields)}).setNegativeButton("취소",null).setPositiveButton("경로 요청",null).create()
+        activeDialog=dialog;dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+            val latitude=lat.text.toString().toDoubleOrNull();val longitude=lon.text.toString().toDoubleOrNull();val title=name.text.toString().trim()
+            if(latitude==null||longitude==null||!latitude.isFinite()||!longitude.isFinite()||latitude !in -90.0..90.0||longitude !in -180.0..180.0||title.isBlank()){lat.error="장소 이름과 유효한 좌표를 확인해 주세요.";return@setOnClickListener}
+            if(!canEdit())return@setOnClickListener
+            dialog.dismiss();navigation.request(latitude,longitude,title){code->notice=when(code){"NAVI_ROUTING_COMPLETED"->"내비게이션이 경로 검색 완료를 알려 왔어요.";"NAVI_REQUEST_SENT"->"경로를 요청했어요. 내비게이션 응답을 기다려 주세요.";"NAVI_EXISTING_ROUTE"->"진행 중인 경로가 있어 변경하지 않았어요.";"NAVI_TERMS_REQUIRED"->"내비게이션에서 이용 약관을 먼저 확인해 주세요.";else->"길찾기를 완료하지 못했어요. 확인 코드: "+code};feedback?.apply{text=notice;visibility=View.VISIBLE}}
+        }
+    }
     private val freshnessHandler=android.os.Handler(android.os.Looper.getMainLooper())
     private var freshnessKey=""
     private val freshnessTick=object:Runnable{
@@ -149,7 +214,7 @@ class MainActivity : Activity() {
                 }
                 draw()
             }
-            if(state!=EditingState.ALLOWED){pleos.stop();stopSocWatch("안전 상태 변경으로 자동 확인을 멈췄어요.")} else {maybeAutomaticRead();maybeSocWatch()}
+            if(state!=EditingState.ALLOWED){stopAssistance();pleos.stop();stopSocWatch("안전 상태 변경으로 자동 확인을 멈췄어요.")} else {maybeAutomaticRead();maybeSocWatch()}
         }
         service = CaritdaService(repository, { safety.state == EditingState.ALLOWED })
         service.restoreConfiguration((lastNonConfigurationInstance as? RetainedSession)?.driverId)
@@ -198,7 +263,7 @@ class MainActivity : Activity() {
         reconcileSnapshots()
         freshnessHandler.removeCallbacks(freshnessTick);freshnessHandler.post(freshnessTick)
     }
-    override fun onStop() { visible=false;if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop();stopSocWatch("앱이 보이지 않아 자동 확인을 멈췄어요. 관측 공백이 있어요."); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
+    override fun onStop() { visible=false;stopAssistance();if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop();stopSocWatch("앱이 보이지 않아 자동 확인을 멈췄어요. 관측 공백이 있어요."); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
     override fun onDestroy() { aiConsent?.revoke();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
@@ -347,6 +412,7 @@ class MainActivity : Activity() {
         body.addView(menu)
     }
     private fun draw() {
+        if(screen!=Screen.RECORD&&speechFormVisible){speechInput.stop();speechFormVisible=false}
         if (!::service.isInitialized || isDestroyed || isFinishing) return
         socThresholdDraft=socThresholdInput?.text?.toString()?:socThresholdDraft;socThresholdInput=null
         captureDraft()
@@ -625,9 +691,22 @@ class MainActivity : Activity() {
         }
         body.addView(label(source,20).apply{tag="vehicle_source"})
     }
+    private fun healthSummary(body:LinearLayout){
+        body.addView(ui.expandable("문·등화·차량 안내 확인","health_expand",showHealth,canEdit()){edit{showHealth=!showHealth;draw()}})
+        if(!showHealth)return
+        body.addView(label("받은 항목만 표시해요. 등화 켜짐은 전구·LED의 정상 작동을 보증하지 않아요.",20))
+        val cards=VehicleHealth.labels.map{(kind,title)->
+            val last=observations.mostRecent(kind,true)
+            val text=VehicleHealth.text(kind,observations.mostRecent(kind),last)
+            ui.state(title,text+(last?.receivedAt?.let{"\n마지막 수신 "+vehicleDisplay.time(it)}?:""))
+        }
+        body.addView(ui.grid(cards,columns()))
+        body.addView(label("타이어 항목은 차량이 제공한 저압 안내 기준이에요. 실제 타이어 압력·TPMS 경고 전체·등화 고장은 일반 앱 지원을 확인하지 못했어요.",20))
+    }
     private fun vehicleScreen(body:LinearLayout){
         body.addView(ui.loading(if(pleos.busy)"차량 정보를 불러오는 중이에요."else"앱을 열 때 지원되는 값을 한 번 확인해요.").apply{tag="load_status"})
         metricGroup(body)
+        healthSummary(body)
         val refresh=ui.action("차량값 불러오기","read_vehicle",ActionStyle.PRIMARY,canEdit()&&!pleos.busy,HmiIcon.VEHICLE){edit{entry.markRequested();pleos.readOnce()}}
         val history=ui.action("조회 기록 보기","auto_snapshots",ActionStyle.SECONDARY,canEdit(),HmiIcon.CLOCK){edit{openScreen(Screen.SNAPSHOTS)}}
         body.addView(ui.grid(listOf(refresh,history),columns()))
@@ -841,6 +920,7 @@ class MainActivity : Activity() {
         body.addView(button("사용법 목록","help_contents",enabled=canEdit()){onBackPressed()})
     }
     private fun recordForm(body:LinearLayout){
+        speechFormVisible=true
         val active=journal?:run{
             body.addView(ui.state("작성 중인 내용이 없어요.","새 증상을 남기거나 저장된 기록을 확인해 주세요."))
             body.addView(button("전체 기록 보기","recover_record_route",enabled=canEdit()){openRecords(RecordFilter.ALL)});return
@@ -855,7 +935,10 @@ class MainActivity : Activity() {
         body.addView(label("어떤 상황이었나요?",24,true))
         situationInput=input("예: 가속할 때 핸들이 떨려요.",1000).apply{tag="situation";setText(draft.situation)};body.addView(situationInput)
         situationInput!!.addTextChangedListener(watcher{captureDraft()})
-        body.addView(button(if(editing)"수정 내용 저장"else"이 차량 앱에 저장","save_issue",primary=true,enabled=canWrite()&&!recordSaving){saveRecord()})
+        body.addView(SpeechControls(this,ui,speechInput,{canWrite()},{voiceDraft()}))
+        val speechObserver=speechInput.observer
+        speechInput.observer={state->speechObserver(state);root.findViewWithTag<Button>("save_issue")?.isEnabled=canWrite()&&!recordSaving&&!state.busy}
+        body.addView(button(if(editing)"수정 내용 저장"else"이 차량 앱에 저장","save_issue",primary=true,enabled=canWrite()&&!recordSaving&&!speechInput.busy){saveRecord()})
         body.addView(ui.expandable("차량 정보·메모·발견 시각 (선택)","record_extras",recordExtras,canEdit()){
             edit{if(captureDraft()){recordExtras=!recordExtras;draw()}}
         })
@@ -877,10 +960,19 @@ class MainActivity : Activity() {
             memoInput!!.addTextChangedListener(watcher{captureDraft()})
             extras.addView(label("기기 시간대: ${ZoneId.systemDefault().id}",20));body.addView(extras)
         }
+        intent.getStringExtra("voice_draft")?.takeIf{it.length<=800&&it.isNotBlank()}?.let{candidate->
+            body.addView(button("음성 명령의 내용 확인","adopt_voice_action",enabled=canWrite()){
+                if(draft.situation.isNotBlank())toast("작성 중인 내용을 자동으로 덮어쓰지 않아요. 먼저 확인해 주세요.")
+                else if(canWrite()){
+                    situationInput?.setText(CaritdaActions.draft(candidate));captureDraft();intent.removeExtra("voice_draft")
+                    notice="입력 내용을 확인한 뒤 저장해 주세요.";draw()
+                }
+            })
+        }
         cancelDraftButton(body)
     }
     private fun saveRecord(){
-        if(recordSaving)return
+        if(recordSaving||speechInput.busy)return
         if(!canWrite()){toast("정차 상태와 기록할 이름을 확인한 뒤 다시 저장해 주세요.");return}
         val active=journal ?: run{
             if(screen==Screen.DETAIL&&selectedIssue!=null){notice="저장되었습니다. 기록 목록에서도 확인하실 수 있어요.";feedback?.apply{text=notice;visibility=View.VISIBLE};return}
@@ -931,6 +1023,9 @@ class MainActivity : Activity() {
         body.addView(ui.action("AI로 쉽게 설명","issue_ai_explain",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){
             if(canEdit())startActivity(android.content.Intent(this,PortableAiActivity::class.java).putExtra("issue_id",id))
         })
+        body.addView(ui.action("이 기록 음성으로 듣기","speak_issue",ActionStyle.QUIET,canEdit()){readAloud(issue.type.label+". "+issue.situation+". 현재 상태는 "+statusText(issue.status)+"입니다.")})
+        IssueLocationStore(this).use{it.latest(id)}?.let{location->body.addView(label("함께 저장한 위치 · 위도 "+location.latitude+" · 경도 "+location.longitude+"\n위치 확인 "+VehicleUi.shortTime(location.measuredAt)+" · 증상 발생 위치로 확정하지 않아요.",20))}
+        if(service.canManage(issue))body.addView(ui.action("현재 위치 함께 저장 (선택)","attach_location",ActionStyle.QUIET,canWrite()){attachLocation(id)})
         snapshots.linked(id)?.let{linkedVehicle(body,it)}
         if(service.canManage(issue)&&snapshots.linked(id)==null){
             body.addView(ui.action(if(snapshots.pending(id))"차량 정보 연결 다시 시도"else"차량 정보 함께 저장","link_snapshot",ActionStyle.QUIET,canWrite(),HmiIcon.VEHICLE){
@@ -975,10 +1070,12 @@ class MainActivity : Activity() {
         body.addView(label("시간대: ${ZoneId.systemDefault().id}\n외부 정비소에는 전송되지 않았습니다.", 18))
         val issues = selectedIssue?.let { listOf(service.issue(it)) } ?: service.issues()
         body.addView(label("범위: ${if(selectedIssue==null) "전체 기록" else "선택한 문제"} ${issues.size}건 · 사용자 직접 기록",24,true))
+        if(issues.isNotEmpty())body.addView(ui.action("정비 장소 길찾기 (좌표 입력)","inspection_navigation",ActionStyle.QUIET,canEdit()){destination()})
         issues.forEach { issue ->
             val card = panel()
             card.addView(label(ConsultationSummary.build(issue, service.events(issue.id),::statusText), 24).apply { tag = "consultation_summary" })
             snapshots.linked(issue.id)?.let{linkedVehicle(card,it)}
+            card.addView(ui.action("이 상담 기록 듣기","speak_consultation_"+issue.id,ActionStyle.QUIET,canEdit()){readAloud(ConsultationSummary.build(issue,service.events(issue.id),::statusText))})
             val question="‘${issue.situation.take(300)}’ 증상에 어떤 점검이 필요할까요?"
             card.addView(label("정비사에게 물어볼 질문\n$question",22).apply{tag="consultation_question"})
             card.addView(ui.action("질문 복사","copy_question_${issue.id}",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{

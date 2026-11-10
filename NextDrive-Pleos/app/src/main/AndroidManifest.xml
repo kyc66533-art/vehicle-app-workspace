@@ -3,6 +3,22 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
     <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />
+    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <uses-permission android:name="pleos.car.permission.FUSED_LOCATION" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <queries>
+        <package android:name="ai.pleos.playground.service.location.fused" />
+        <package android:name="ai.pleos.playground.service.navi" />
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+    </queries>
     <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
@@ -17,6 +33,13 @@
         android:theme="@android:style/Theme.Material.NoActionBar">
         <uses-library android:name="android.car" android:required="false" />
         <!-- No distractionOptimized declaration. AAOS restrictions and CarSafetyGate remain in force. -->
+        <activity android:name=".CaritdaActionActivity" android:exported="true" android:resizeableActivity="true">
+            <intent-filter>
+                <action android:name="QUERY_CARITDA_CONTEXT" />
+                <action android:name="DRAFT_CARITDA_ISSUE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <activity android:name=".PortableAiActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" android:resizeableActivity="true" />
         <activity

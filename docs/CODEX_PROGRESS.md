@@ -1,5 +1,17 @@
 # Codex 개발 진행 기록
 
+마지막 작업 갱신: 2026-11-11 02:26:21 +09:00 (Asia/Seoul)
+
+## STT 자동 종료·취소 최종 정리 / SDK 통합 기반
+
+- 기준 main e0517f3972b8043c6f13b448c412d23f2217682e와 원격 대상 SHA를 확인했습니다. Aside·UI 타 작업·원장·기존 설치를 보존합니다.
+- Windows actual PCM은 정상(기본252800bytes/peak17058), Android는 read 정상·silenced=false지만 peak2였습니다. passive Windows meter0 추론은 철회했습니다. 기존 AVD에 -allow-host-audio를 명시해 정상 재실행한 뒤 Android peak167/62와 실제 한국어3회·자동 종료/재입력 성공을 사용자/SDK로그로 확인했습니다. netsimd/qemu/emulator 각1개, 초기화·SDK재설치·권한 우회 없음입니다.
+- 사용자 최종 방향에 따라 수동 완료 버튼·수동 EOF 호환 경로를 제거했습니다. 공식 ON_DEVICE/request/Locale.KOREA 자동 인식과 SDK final/ended 확인을 유지하며, 취소는 별도 CANCELLED/stop·release·generation 차단으로 결과/초안을 바꾸지 않습니다. 종료 누락은 여전히 실패/복구로 구분하고 성공으로 만들지 않습니다.
+- 최종 Debug/validation/AndroidTest/Lint 빌드 성공, UnitTest NO-SOURCE. 합성 상태40개와 실제 SDK 준비→취소→재초기화2회 View6개 통과. UiAutomator idle 대기는 RMS갱신으로 실패해 main-thread View 계측으로 대체했습니다. 기존219 + 이번94 =313 assertion이며 반복 시험은 중복 집계하지 않았습니다. 실제 발화3회·공개 영어PCM3회는 별도입니다. 최종 UI 수정 후 추가 발화는 요청하지 않았습니다.
+- 공개 Vehicle2.3.2 읽기20종/실제12종·Navi 상태/TTS onDone 등 통합 결과는 별도 상태표에 기록했습니다. 추가 SDK의 .security Maven 그룹 필터를 수정해 universal-access0.6.0 문제를 해결했습니다. 외부 Gleo/실제 Navi 경로/물리청취/PC B/Release/실차는 미검증을 유지합니다.
+- 최종 일반41DB/validation163DB 백업·시작188개DB 원본 보존. 일반24문제/96이벤트/10운전자/0초안·원본1106행 불변, validation 원본8938행 보존. 일반 files/prefs15개·Firebase 인증·AI 캐시 바이트 동일입니다. 일반 기존 APK 유지, validation만 교체. Worker/Secret/BUDGET/모델OFF 변경·실제 모델 호출·서버 배포0회입니다.
+- 수정 파일·전체 상태는 [통합 보고서](CARITDA_INTEGRATION_REPORT.md), [STT 결과](STT_STABILITY.md), [다른PC 실행](STT_RUN_GUIDE.md)에 기록했습니다. 다음 단계는 실제 문제 저장/인계·Gleo 승인된 Action 통합이며 이번에 사용자 DB에 시험 기록은 추가하지 않았습니다. GitHub 연결 도구 게시 시 이번 명시 파일만 현재 main의 부모/기대HEAD로 연결하고 원격 나머지 SHA를 확인합니다.
+
 마지막 업데이트: 2026-11-10 21:40 +09:00 (Asia/Seoul).
 
 ## 실제 운영 적용 결과 — OFF 배포·원장 보존, 잔여0으로 신규시험 대기

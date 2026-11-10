@@ -45,6 +45,7 @@ class PortableAiActivity:Activity(){
     private var loadedSubject:String?=null
     private var message="저장된 충전량을 확인하고 있어요."
     private var resultText=""
+    private val spoken by lazy{com.nextdrive.pleos.integration.SpeechOutput(this){allowed()}}
     private var previewOpen=false
     private var usageRefreshAttempted=false
     override fun onCreate(saved:Bundle?){super.onCreate(saved)
@@ -61,7 +62,7 @@ class PortableAiActivity:Activity(){
         status=ui.text("",22).apply{tag="portable_status";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
         root.addView(status)
         body=ui.column();root.addView(ScrollView(this).apply{addView(body)},LinearLayout.LayoutParams(-1,0,1f))
-        gate=CarSafetyGate(this){if(it!=EditingState.ALLOWED){cancelWork();if(::password.isInitialized)password.text.clear()};render()}
+        gate=CarSafetyGate(this){if(it!=EditingState.ALLOWED){spoken.stop();cancelWork();if(::password.isInitialized)password.text.clear()};render()}
         FirebaseSessionProvider.prepare(this);message="저장된 충전량을 확인하고 있어요.";render()
     }
     private fun allowed()=visible&&::gate.isInitialized&&gate.state==EditingState.ALLOWED
@@ -132,7 +133,10 @@ class PortableAiActivity:Activity(){
             })
         }
         if(consentReady())body.addView(ui.action("AI 이용 가능 횟수 확인 · 모델 호출 없음","portable_status_check",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.CHECK){sessionTask {api->val s=api.status();AiRequestUi.quotaText(s)}})
-        if(resultText.isNotBlank())body.addView(ui.state("Gemini가 작성한 설명",resultText).apply{tag="portable_model_result"})
+        if(resultText.isNotBlank()){
+            body.addView(ui.state("Gemini가 작성한 설명",resultText).apply{tag="portable_model_result"})
+            body.addView(ui.action("이 설명 음성으로 듣기 · 새 AI 요청 없음","portable_speak",ActionStyle.QUIET,allowed()&&!busy&&!spoken.busy){spoken.speak(resultText.take(600)){text->message=text;status.text=text}})
+        }
         val cached=runCatching{jobState().optJSONObject("last")}.getOrNull()
         jobState().optJSONObject("last_failure")?.takeIf{it.optLong("at")>(cached?.optLong("saved_at")?:0)}?.let{body.addView(ui.state("최근 새 요청은 실패했어요 · 기존 성공 설명은 보존돼요",PortableFailure(it.optString("code")).displayMessage(),true))}
         if(issueMode){val jobs=runCatching{state().optJSONObject("jobs")}.getOrNull();jobs?.keys()?.asSequence()?.filter{it!=issueJob()}?.mapNotNull{jobs.optJSONObject(it)}?.filter{it.optString("record")==issueId}?.mapNotNull{it.optJSONObject("last")}?.forEach{old->val a=old.getJSONObject("answer");val text=runCatching{IssueExplanation.validate(a,old.getString("payload"),a.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("수정 전 기록의 AI 설명 · 현재 내용과 다를 수 있어요",text))}}
@@ -186,7 +190,7 @@ class PortableAiActivity:Activity(){
         runOnUiThread{if(visible&&run==loadGeneration){analysis=r.getOrNull();message=if(analysis?.latest!=null)"설명할 최근 충전량이 있어요."else"차량 정보 화면에서 최근 값을 먼저 불러와 주세요.";render()}}
     }}
     override fun onStart(){super.onStart();visible=true;loadedSubject=FirebaseSessionProvider.subject();stopObserving=FirebaseSessionProvider.observe {val next=FirebaseSessionProvider.subject();if(next!=loadedSubject){cancelWork();resultText="";usageRefreshAttempted=false;loadedSubject=next;message=if(next==null)"계정으로 로그인해 주세요."else"로그인됐어요. AI 이용 안내를 확인해 주세요."};if(visible)render()};gate.start();loadAnalysis()}
-    override fun onStop(){visible=false;loadGeneration++;cancelWork();resultText="";if(::password.isInitialized)password.text.clear();if(::email.isInitialized)email.text.clear();stopObserving?.invoke();stopObserving=null;gate.stop();super.onStop()}
+    override fun onStop(){visible=false;spoken.stop();loadGeneration++;cancelWork();resultText="";if(::password.isInitialized)password.text.clear();if(::email.isInitialized)email.text.clear();stopObserving?.invoke();stopObserving=null;gate.stop();super.onStop()}
     override fun onDestroy(){worker.shutdownNow();super.onDestroy()}
     override fun onSaveInstanceState(out:Bundle){out.putBoolean("auto_consumed",autoConsumed);out.putBoolean("preview_open",previewOpen);out.putBoolean("usage_refreshed",usageRefreshAttempted);out.putString("issue_excerpt",excerptInput?.text?.toString()?:excerpt);super.onSaveInstanceState(out)}
 }

@@ -34,6 +34,16 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("sttAutomaticUiOnly")=="true"){val lines=SpeechAutomaticUiChecks(this).run();result.putString("stream","CARITDA_STT_AUTOMATIC_UI_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("sttStopOnly")=="true"){val lines=SpeechFixtureChecks(this).run(true);result.putString("stream","CARITDA_STT_STOP_DIAGNOSTIC checks=0\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("sttRequestOnly")=="true"){val lines=SpeechRequestChecks(this).run();result.putString("stream","CARITDA_STT_REQUEST_DIAGNOSTIC checks=0\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("sttFixtureOnly")=="true"){val lines=SpeechFixtureChecks(this).run();result.putString("stream","CARITDA_STT_FIXTURE_DIAGNOSTIC checks=0\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("sttInputPathOnly")=="true"){val lines=SpeechInputPathChecks(this).run();result.putString("stream","CARITDA_STT_INPUT_PATH_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("sttSessionOnly")=="true"){val lines=SpeechSessionChecks(this).run();result.putString("stream","CARITDA_STT_SESSION_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("coreDatabaseOnly")=="true"){databaseScenario();observationScenario(false);result.putString("stream","CARITDA_CORE_DATABASE_PASS checks=$checks\n$output");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("driveExperimentOnly")=="true"){val lines=DriveExperimentChecks(this).run();result.putString("stream","CARITDA_DRIVE_EXPERIMENT_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("integrationOnly")=="true"){val lines=IntegrationChecks(this).run();result.putString("stream","CARITDA_INTEGRATION_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("integrationLiveOnly")=="true"){val lines=IntegrationChecks(this).live();result.putString("stream","CARITDA_INTEGRATION_LIVE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("issueAiColdOnly")=="true"){val lines=IssueAiChecks(this).cold();result.putString("stream","CARITDA_ISSUE_AI_COLD_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("issueAiOnly")=="true"){val lines=IssueAiChecks(this).run();result.putString("stream","CARITDA_ISSUE_AI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("portableAiOnly")=="true"){val lines=PortableAiChecks(this).run();result.putString("stream","CARITDA_PORTABLE_AI_LOCAL_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
@@ -209,7 +219,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         probe.close()
         main { activity.finish() }; waitForIdleSync()
     }
-    private fun observationScenario() {
+    private fun observationScenario(includeRuntime:Boolean=true) {
         val name = "observation-test-${UUID.randomUUID()}.db"
         var store = ObservationStore(targetContext, name)
         val session = ObservationStore.sessionId()
@@ -230,6 +240,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val rejected = runCatching { store.append(value.copy(source = ObservationSource.NONE)) }.isFailure
         verify(rejected && store.latest().size == count, "invalid received observation rejected without insert")
         store.close()
+        if(!includeRuntime)return
         val activity = launch()
         await("parked UX before connection screen") { main { tagged(activity, "driver_B")?.isEnabled == true } }
         click(activity,"driver_B");click(activity,"start_driving")
@@ -239,8 +250,9 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val before = System.currentTimeMillis()
         await("entry automatic read finishes before explicit refresh") { main { tagged(activity,"read_vehicle")?.isEnabled==true } }
         click(activity, "read_vehicle")
-        await("three actual SDK outcomes") { production.latest().count { it.recordedAt >= before } >= 3 }
-        val responses = production.latest().filter { it.recordedAt >= before }.take(3)
+        val coreKinds=setOf("EV_SOC","ODOMETER","FUEL_PERCENT")
+        await("three actual SDK outcomes") { production.latest(100).filter{it.kind in coreKinds}.count { it.recordedAt >= before } >= 3 }
+        val responses = production.latest(100).filter { it.recordedAt >= before&&it.kind in coreKinds }.distinctBy{it.kind}.take(3)
         responses.forEach { output.appendLine("SDK_RESULT=$it") }
         verify(responses.map { it.kind }.toSet() == setOf("EV_SOC", "ODOMETER", "FUEL_PERCENT") &&
             responses.all { it.source == ObservationSource.PLEOS_EMULATOR_SDK && it.status != ObservationStatus.SDK_UNAVAILABLE },

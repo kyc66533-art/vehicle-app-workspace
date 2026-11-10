@@ -1,5 +1,10 @@
 # Pleos / AAOS 공통 기반 검증 현황
 
+## 최신 통합 검사 — 2026-11-11 Asia/Seoul
+
+기존 emulator-5554 / Android user10 / Pleos Connect2.1.0에서 validation APK와 테스트 APK를 교체 설치했습니다. 현재 원본 일반 DB는 시작 백업 기준 문제24/이벤트96/운전자10/초안0이며 과거23건으로 고정하지 않습니다. SDK20종 종결 응답/실수신12종, Navi 경로 상태 callback, TTS onDone과 별도 fixture 회귀를 실행했습니다. STT 호스트 오디오 전달을 복구해 실제 한국어3회·자동 종료를 확인했고 실제 SDK 취소/재연결 검사6개도 통과했습니다. 자동 callback 검사는 실제 음성·스피커·실차 시험을 대체하지 않습니다. 최신 상세와 최종 상태는 [통합 보고서](docs/CARITDA_INTEGRATION_REPORT.md), [STT 보고서](docs/STT_STABILITY.md)에 기록합니다.
+
+
 ## 최신 검증 기록 — 사용자 확인: 기본 Debug APK 실행 성공 (2026-11-07)
 
 검증 주체는 사용자이며, 일반 Windows Android Studio와 ADB를 사용한 직접 확인 결과입니다. 아래 성공은 Codex가 이 세션에서 재실행한 결과가 아닙니다. 정확한 실행 시각은 별도로 전달받지 않았으며 기록 시각은 `docs/CODEX_PROGRESS.md`를 참조합니다.

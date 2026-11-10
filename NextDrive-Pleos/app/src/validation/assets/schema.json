@@ -1,0 +1,52 @@
+{
+  "packageName": "com.nextdrive.pleos.validation",
+  "appDescription": "A local vehicle observation and driver concern journal with explicit handover and inspection records.",
+  "invokeWord": "카잇다",
+  "version": "0.2",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "component": "activity",
+        "name": "QUERY_CARITDA_CONTEXT",
+        "description": "Opens a local preview of recorded concerns, handover notes, received vehicle values or tire data availability. User confirmation is required before reading stored content.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "topic": {
+              "type": "string",
+              "enum": [
+                "recent_issues",
+                "handover",
+                "vehicle",
+                "tires"
+              ],
+              "description": "The requested kind of local vehicle context."
+            }
+          },
+          "required": [
+            "topic"
+          ]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "activity",
+        "name": "DRAFT_CARITDA_ISSUE",
+        "description": "Prepares text for a driver concern. The user must choose the recording person, review the draft and explicitly save. Does not diagnose or request an AI explanation.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "situation": {
+              "type": "string",
+              "description": "The symptoms stated by the user without invented details."
+            }
+          },
+          "required": []
+        }
+      }
+    }
+  ]
+}

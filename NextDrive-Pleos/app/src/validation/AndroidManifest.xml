@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Validation-only telemetry experiment. No driving score/monitoring in the ordinary app. -->
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
     <application>
+        <activity android:name=".IntegrationDiagnosticActivity" android:exported="true" />
         <activity android:name=".GeminiPocActivity" android:exported="false" />
         <activity android:name=".AuthCompatibilityActivity" android:exported="false" />
     </application>

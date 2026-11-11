@@ -951,8 +951,12 @@ class MainActivity : Activity() {
         situationInput!!.addTextChangedListener(watcher{captureDraft()})
         body.addView(SpeechControls(this,ui,speechInput,{canWrite()},{voiceDraft()}))
         val speechObserver=speechInput.observer
-        speechInput.observer={state->speechObserver(state);root.findViewWithTag<Button>("save_issue")?.isEnabled=canWrite()&&!recordSaving&&!state.busy}
+        speechInput.observer={state->speechObserver(state);listOf("save_issue","save_issue_ai").forEach{tag->root.findViewWithTag<Button>(tag)?.isEnabled=canWrite()&&!recordSaving&&!state.busy}}
         body.addView(button(if(editing)"수정 내용 저장"else"이 차량 앱에 저장","save_issue",primary=true,enabled=canWrite()&&!recordSaving&&!speechInput.busy){saveRecord()})
+        body.addView(ui.action(if(editing)"수정 저장하고 AI 설명"else"저장하고 AI 설명","save_issue_ai",ActionStyle.SECONDARY,canWrite()&&!recordSaving&&!speechInput.busy,HmiIcon.RECORD){
+            if(canWrite()&&!speechInput.busy)saveRecord(openAi=true)
+        })
+        body.addView(label("AI 설명을 선택해도 먼저 이 기록을 저장해요. 다음 화면에서 전송할 증상을 확인하고 요청해 주세요.",20))
         body.addView(ui.expandable("차량 정보·메모·발견 시각 (선택)","record_extras",recordExtras,canEdit()){
             edit{if(captureDraft()){recordExtras=!recordExtras;draw()}}
         })
@@ -985,14 +989,22 @@ class MainActivity : Activity() {
         }
         cancelDraftButton(body)
     }
-    private fun saveRecord(){
+    private fun openIssueAi(id:String,afterSave:Boolean=false){
+        if(!canEdit())return
+        val request=android.content.Intent(this,PortableAiActivity::class.java).putExtra("issue_id",id).putExtra("issue_after_save",afterSave)
+        // Same unique validation family across both Activities. Ordinary extras are ignored.
+        fixturePrefix?.let{request.putExtra("validation_fixture",it)}
+        startActivity(request)
+    }
+    private fun saveRecord(openAi:Boolean=false){
         if(recordSaving||speechInput.busy)return
         if(!canWrite()){toast("정차 상태와 기록할 이름을 확인한 뒤 다시 저장해 주세요.");return}
         val active=journal ?: run{
             if(screen==Screen.DETAIL&&selectedIssue!=null){notice="저장되었습니다. 기록 목록에서도 확인하실 수 있어요.";feedback?.apply{text=notice;visibility=View.VISIBLE};return}
             notice="저장된 기록을 확인해 주세요.";recordFilter=RecordFilter.ALL;screen=Screen.ISSUES;history.clear();draw();return
         }
-        captureDraft();recordSaving=true
+        if(!captureDraft())return
+        recordSaving=true
         val save=root.findViewWithTag<Button>("save_issue");save?.isEnabled=false
         try {
             val selection=runCatching{if(active.kind=="RECORD")snapshots.selected(active.id)else null}
@@ -1015,6 +1027,11 @@ class MainActivity : Activity() {
             if(linkFailed)notice+=" 증상은 저장됐지만 차량 정보 연결에 실패했어요. 이 기록에서 다시 연결해 주세요."
             if(active.kind=="EDIT"&&service.issues(recordFilter,recordQuery).none{it.id==issue.id})notice+=" 현재 검색·필터 조건과 달라 목록에서 보이지 않을 수 있어요. 전체 기록에서 확인해 주세요."
             draw()
+            // Only a verified SQLite commit reaches this point. Opening AI never dispatches a model.
+            if(openAi)runCatching{openIssueAi(issue.id,afterSave=true)}.onFailure{
+                notice="기록은 저장됐어요. AI 화면을 열지 못했어요. 아래 AI 설명에서 다시 열어 주세요."
+                feedback?.apply{text=notice;visibility=View.VISIBLE}
+            }
         }catch(e:Exception){
             android.util.Log.e("Caritda","record_commit_failed draft=${active.id}",e)
             val reason=when(e){is IllegalArgumentException->e.message?:"입력 내용을 확인해 주세요.";is EditingBlockedException->"정차 상태와 기록할 이름을 확인해 주세요.";else->"저장 중 문제가 생겼어요. 입력 내용은 이 화면에 남아 있어요."}
@@ -1035,7 +1052,7 @@ class MainActivity : Activity() {
         if(service.events(id).any{it.kind==EventKind.EDITED})content.addView(label("내용이 수정됐어요. 이전 내용은 아래 이력에 남아 있어요.",20))
         body.addView(content)
         body.addView(ui.action("AI로 쉽게 설명","issue_ai_explain",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){
-            if(canEdit())startActivity(android.content.Intent(this,PortableAiActivity::class.java).putExtra("issue_id",id))
+            openIssueAi(id)
         })
         body.addView(ui.action("이 기록 음성으로 듣기","speak_issue",ActionStyle.QUIET,canEdit()){readAloud(issue.type.label+". "+issue.situation+". 현재 상태는 "+statusText(issue.status)+"입니다.")})
         IssueLocationStore(this).use{it.latest(id)}?.let{location->body.addView(label("함께 저장한 위치 · 위도 "+location.latitude+" · 경도 "+location.longitude+"\n위치 확인 "+VehicleUi.shortTime(location.measuredAt)+" · 증상 발생 위치로 확정하지 않아요.",20))}

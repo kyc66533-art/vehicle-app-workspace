@@ -1,5 +1,19 @@
 # Codex 개발 진행 기록
 
+## 2026-11-11 17:31 +09:00 — STT·AI 설명·TTS·다음 운전자 인계 연결
+
+- 기준 main `f59abc15bcfb26f4d784b696bd2c97cc683eee2f`/tree `2c069eda…f0b4ec`; 시작 시 원격222 blob과 존재하는 로컬204개가 일치했습니다. 로컬에 없는 Aside 연구18개는 원격 그대로 보존합니다. 로컬 Git/clone/push·AVD/사용자 DB 초기화·운영 재개 실행기는 사용하지 않았습니다.
+- 일반 작성의 **저장하고 AI 설명**으로 기존 STT 자동 반영/직접 편집→명시적 commit/읽기 확인→같은 issue의 기존 Portable AI 화면을 연결했습니다. 전송 요약·실제 새 요청 버튼을 유지하며 저장 실패·초안 보존 실패에는 화면과 원 작성자를 유지합니다. 계약 source=USER_SELECTED_RECORD/issue ID·revision의 캐시/pending을 보존하기 위해 미저장 분석은 추가하지 않았고 가짜 issue/ID 재사용/AI에 따른 자동 저장은 없습니다.
+- `IssueAnalysisService`를 UI/Gleo에서 공유해 현재 버전·frozen request·검증·동시 진입을 관리합니다. 새 결과/저장 캐시/진행 요청 회수를 구분하고 AI 전송 사본 편집은 계정별 암호화 job에 보존합니다. 기존 Firebase/PortableAiClient/Keystore/Worker/한도·동의를 그대로 재사용합니다. 실제 차량 snapshot을 AI 화면에 로컬 참고로 표시하며 category/situation 외 전송은 없습니다.
+- TTS는 기존 SpeechOutput을 통해 표시된 결과 전체를 짧은 구절로 읽습니다. 완료/실패·취소·늦은 callback/안전 제한을 관리하며 AI 재호출은 없습니다. Gleo Action3/Schema/신뢰 gate·callback·외부 승인 대기는 유지합니다.
+- 수정 Kotlin9개: MainActivity, PortableAiActivity, 신규 ai/IssueAnalysisService, 신규 ai/auth/PortableSession, 신규 integration/ExplanationPlayback, integration/SpeechOutput, integration/GleoIssueAnalysis, 신규 IntegratedFlowChecks, MvpScenarioInstrumentation. SDK/Manifest/빌드 설정/DB 스키마/Worker 소스/Secret/정책은 변경하지 않았습니다. 문서는 새 STT_AI_HANDOVER_ACCEPTANCE·통합/Gleo/STT 안내·AGENTS·본 기록입니다.
+- Debug/validation/validationAndroidTest/Lint exit0(최종 앱2m34s/107 tasks), 추가 실제 차량 문맥 계측 APK1m14s/44 tasks exit0. Lint 오류0/경고56, Unit NO-SOURCE. 읽기 전용 기존 캐시/offline/in-process 컴파일을 사용합니다. 최초 플러그인 캐시 경로 누락·daemon 접근 오류와 fixture 주입/updatedAt 비교의 초기 검사 실패는 보존하고 수정 후 재검증했습니다.
+- **신규45+관련 회귀253=298 assertion PASS**. 실제 View/SQLite에서 A음성 callback→편집/초안→명시적 저장→AI View/fixture 모델→전체 TTS 전달→B 읽음·점검 메모→재진입을 검사했습니다. validation force-stop 후 암호화 결과/전송 사본/사용량·인계 이력4개 복원, 실제 Pleos ON_DEVICE TTS2개, 실제 SDK SOC/거리 commit→AI 화면 동시 표시/차량값 미전송4개를 구분했습니다. 실제 Gemini나 실제 신규 발화로 꾸미지 않습니다. 기존 관련 STT/issue AI/Gleo/DB/Portable/Vehicle 검사도 통과했고 destructive prepare/일반 UI 자동화0입니다.
+- 서명 일치/기존 APK 보존 후 일반 install-r/user10 성공, 설치 APK가 새 Debug SHA256 `f33044d156269f219c689efa0bd46ff826bdc06b3183b9554955872cc5966f40`과 일치했습니다. MainActivity COLD `Status:ok`/실제 resumed 확인. 일반 앱 새 버튼 실조작/발화·새 Gemini 왕복은 별도 사용자 확인이며 자동 조작하지 않았습니다. 최종 비공개 백업 검사 때 앱을 종료했습니다.
+- 기존226DB(일반42/validation184)의 전체 원본1206+9380행/스키마/user_version/integrity/FK 보존. 일반24문제/96이벤트/10운전자/1초안 불변. 정상 진입의 원관측300→320/스냅샷77→78/인사이트152→154의23행만 추가. 설치 직후 files/prefs16개 동일, 실행 후 Firebase/동의/AI 캐시·사용량 등15개 동일·profileInstalled1개만 변경. validation 기존 DB 추가/변경0, 새 고유 fixture28DB·기존 시험 pointer/heartbeat/profile marker만 갱신했습니다. 일반 시험 문제 추가0입니다.
+- 이번 신규 실모델·Cloudflare 배포/모델 상태·한도/원장 변경0회. 마지막 사용자 확인의 모델ON·TEST1/정식6/잔여4·기존 성공과 캐시를 보존했으며 이번 새 서버 사용량 조회 값으로 쓰지 않습니다. 공개health의 웹 도구 접근은 불가했으며 인증 운영 조회나 재개 실행기를 실행하지 않았습니다. 새 흐름의 실제 신규 Gemini/사용자 청취·외부 Gleo 왕복·실차/PC B/Release 서명은 여전히 미검증입니다.
+- [상세 구현·298개·데이터·사용자 최종 확인](STT_AI_HANDOVER_ACCEPTANCE.md). 검증된 명시15개 파일만 기존 main 트리/부모/기대HEAD를 지켜 **GitHub 연결 도구를 통한 게시**를 진행하며, 원격 파일 SHA·나머지 파일/Aside 보존과 최종 커밋은 완료 응답에 기록합니다. 로컬 Git push와 구분합니다.
+
 ## 2026-11-11 16:45 +09:00 — 일반 CARITDA Gemini 신규 분석·앱 TTS 실제 성공
 
 - 기준 main `ad004608f4617b21f284d669b6c0c81e6bb421a7`; 최초 로컬 tracked 변경 없음. Gleo 승인과 독립된 PortableAiActivity/Client·Firebase/Keystore·기존 Worker·암호화 캐시 경로를 확인했습니다.

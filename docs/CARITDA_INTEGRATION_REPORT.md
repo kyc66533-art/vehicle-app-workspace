@@ -1,5 +1,19 @@
 # CARITDA 통합 구현·실행 검증
 
+## 작성·AI 설명·TTS·인계 연결 — 2026-11-11 17:31 +09:00
+
+일반 작성 화면에 **저장하고 AI 설명**을 추가했습니다. STT final+ended→직접 편집→명시적 SQLite 저장/읽기 확인→그 issue ID의 기존 AI 화면으로 이어집니다. 전송 요약을 확인하고 새 설명을 명시적으로 요청해야 모델을 호출합니다. 현재 `USER_SELECTED_RECORD`/issue별 revision 캐시 계약을 유지하기 위해 미저장 분석은 추가하지 않았습니다. 가짜 문제·ID 재사용·AI 완료 후 자동 저장은 없습니다.
+
+기존 Firebase/PortableAiClient/암호화 store를 재사용하는 `IssueAnalysisService`를 일반 UI와 Gleo에서 공유합니다. 새 결과/기존 캐시/진행 중 요청 회수를 구분하고 동시 진입·UNKNOWN/pending을 지킵니다. 별도 AI 전송 사본을 암호화 보존하며 원문을 바꾸지 않습니다. TTS는 실제 표시 결과 전체를 기존 기기 내 음성으로 나누어 읽고 새 Gemini 호출을 하지 않습니다. 연결된 실제 차량 snapshot과 최근 참고 snapshot은 로컬 표시만 하며 AI body에 추가하지 않습니다.
+
+Debug/validation/AndroidTest/Lint 빌드 성공, Lint0오류/56경고·Unit NO-SOURCE. **신규45+관련 회귀253=298 assertion** 통과. 실제 MainActivity→AI View→fixture 모델→TTS 전달→B 읽음·점검 메모/재시작을 검사했고 실제 Pleos 한국어 TTS 완료, 실제 SDK SOC·거리와 fixture AI의 같은 화면 표시/차량값 미전송을 별도 검증했습니다. 합성 STT/모델과 실제 SDK를 구분합니다. 이번 실모델·배포0회이며 아래 기존 실모델 성공을 새 UI의 실모델 성공으로 재사용하지 않습니다.
+
+서명 일치 확인 후 일반 APK 교체·설치 산출물 해시 대조, MainActivity COLD/resumed 성공. 일반 앱 UI 자동화0이며 새 흐름 실조작은 validation입니다. 기존226DB의 전체 원본1206+9380행/스키마·무결성을 보존했습니다. 일반24문제/96이벤트/10운전자/1초안 불변, 정상 SDK 진입 조회/파생23행만 추가. Firebase·동의·AI 캐시/사용량 등15파일 동일, 설치 실행 표시파일1개만 갱신됐습니다. 기존 모델ON/정책·인증·Worker/원장을 수정하지 않았습니다.
+
+[채택 이유·9개 Kotlin 파일·298개 검사·실행·보존·사용자 최종 확인](STT_AI_HANDOVER_ACCEPTANCE.md)이 이번 최신 기준입니다. 아래281개/신규 실모델1회는 각각 직전 작업의 근거로 보존합니다.
+
+---
+
 ## Gemini 독립 신규 분석 성공 — 2026-11-11 16:45 +09:00
 
 Gleo와 독립적으로 **일반 CARITDA 선택 증상 → 기존 Worker/Gemini 신규 설명 → 화면 표시 → 앱 한국어 TTS**를 사용자가 실제 확인했습니다. 승인된 실제 시험은1회입니다. 활성 Worker `200edeff-41b1-4454-9d40-b0d2809014e8`, 모델ON·무인증401·기존 BUDGET namespace/정책 보존을 실행기가 검증했고 COMPLETE로 종료했습니다.

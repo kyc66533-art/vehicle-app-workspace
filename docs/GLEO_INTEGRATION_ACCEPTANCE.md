@@ -1,5 +1,11 @@
 # CARITDA Gleo·증상 음성 초안 통합 검증
 
+## 2026-11-11 17:31 +09:00 — 일반 작성 흐름과 분석 서비스 공유
+
+일반 작성→저장→AI 화면의 `IssueAnalysisService`를 기존 Gleo 새 분석 경로에서도 재사용합니다. 선택 기록 버전/frozen pending/결과 검증·동시 요청 차단을 공유하며 Gleo의 신뢰 확인·응답 예산·callback·3개 Action/Schema는 유지합니다. 외부 승인이나 Gleo 호출 성공을 새로 주장하지 않습니다. Gleo37개 회귀 통과, 일반 작성/인계·실제 SDK/TTS를 포함한 이번 전체298개는 [새 통합 검증](STT_AI_HANDOVER_ACCEPTANCE.md)을 따릅니다. 신규 Gemini 요청/Cloudflare 재배포는0입니다.
+
+---
+
 작업 기준: 2026-11-11 Asia/Seoul, main `d946720bb5598982ded7d56027b4eb788188740e`. 기존 사용자·Aside 변경과 실제 DB를 보존합니다. 최종 게시 커밋은 완료 응답과 GitHub 이력으로 확인합니다.
 
 ## 실제 확인한 공식 근거

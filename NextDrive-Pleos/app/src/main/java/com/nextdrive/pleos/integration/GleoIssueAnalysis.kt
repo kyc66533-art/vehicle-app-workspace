@@ -42,7 +42,7 @@ class GleoIssueAnalysis(private val context:Context,private val allowed:()->Bool
                 done(answer(last.getJSONObject("answer"),last.getString("payload"),false,SystemClock.elapsedRealtime()-started));return
             }
             preflight(root,job)?.let{done(failure(it));return}
-            val payload=IssueExplanation.payload(issue) // category/situation only, never observations.
+            IssueExplanation.payload(issue) // category/situation only, never observations.
             if(!lease.compareAndSet(false,true)){done(failure("REQUEST_PENDING"));return}
             ownsLease=true;active=true;val run=++generation
             val timer=Runnable{if(run==generation&&active){cancel();done(failure("ACTION_TIMEOUT"))}}
@@ -59,7 +59,9 @@ class GleoIssueAnalysis(private val context:Context,private val allowed:()->Bool
                         val latest=current()?:throw PortableFailure("ISSUE_UNAVAILABLE")
                         if(IssueExplanation.jobKey(latest)!=IssueExplanation.jobKey(issue))throw PortableFailure("ISSUE_CHANGED")
                         if(client.hasPending())throw PortableFailure("REQUEST_PENDING")
-                        answer(client.explain(payload,fresh=true),payload,true,SystemClock.elapsedRealtime()-started)
+                        IssueAnalysisService.explain(client,issue,issue.situation,fresh=true,current=current)
+                        val last=client.jobState().getJSONObject("last")
+                        answer(last.getJSONObject("answer"),last.getString("payload"),true,SystemClock.elapsedRealtime()-started)
                     }
                     main.post {
                         if(run==generation&&active&&allowed()){

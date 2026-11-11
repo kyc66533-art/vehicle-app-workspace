@@ -22,13 +22,15 @@ class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
     var source="";private set
     var started=false;private set
     private var report:(String)->Unit={}
-    fun speak(text:String,changed:(String)->Unit){
+    fun speak(text:String,changed:(String)->Unit)=speak(text,{},changed)
+    fun speak(text:String,completed:(Boolean)->Unit,changed:(String)->Unit){
         if(busy||!allowed())return
         require(text.isNotBlank()&&text.length<=600)
         stop();busy=true;started=false;report=changed
         val run=generation;val phrase=text
         fun post(action:()->Unit){main.post{if(run==generation&&allowed())action()}}
-        fun complete(message:String){busy=false;report(message)}
+        var finished=false
+        fun complete(message:String,success:Boolean=false){if(finished)return;finished=true;busy=false;report(message);completed(success)}
         fun androidFallback(){
             runCatching{sdk?.release()};sdk=null;source="ANDROID_ON_DEVICE"
             try{android=AndroidTts(context.applicationContext){status->post{
@@ -38,7 +40,7 @@ class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
                 engine.voice=voice
                 engine.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
                     override fun onStart(id:String?){post{started=true;report("음성으로 안내하고 있어요.")}}
-                    override fun onDone(id:String?){post{complete("음성 안내를 마쳤어요.")}}
+                    override fun onDone(id:String?){post{complete("음성 안내를 마쳤어요.",true)}}
                     @Deprecated("Platform callback")override fun onError(id:String?){post{complete("음성을 재생하지 못했어요.")}}
                 })
                 if(engine.speak(phrase,AndroidTts.QUEUE_FLUSH,null,"caritda-$run")==AndroidTts.ERROR)complete("음성을 재생하지 못했어요.")
@@ -48,7 +50,7 @@ class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
         val listener=object:EventListener{
             override fun onStart(){post{started=true;report("음성으로 안내하고 있어요.")}}
             override fun onReady(){}
-            override fun onDone(){post{complete("음성 안내를 마쳤어요.")}}
+            override fun onDone(){post{complete("음성 안내를 마쳤어요.",true)}}
             override fun onError(errorType:ErrorType){post{complete("음성 안내를 완료하지 못했어요. 확인 코드: "+errorType.name)}}
             override fun onStop(){post{complete("음성 안내를 멈췄어요.")}}
             override fun onUpdatedRms(value:Double){}
@@ -60,7 +62,7 @@ class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
                 override fun onFailure(errorType:ErrorType){post{androidFallback()}}
             })
         }catch(_:Exception){androidFallback()}catch(_:LinkageError){androidFallback()}
-        main.postDelayed({if(run==generation&&busy){stop();changed("음성 서비스 응답이 늦어 중단했어요.")}},20000)
+        main.postDelayed({if(run==generation&&busy){stop();complete("음성 서비스 응답이 늦어 중단했어요.")}},20000)
     }
     fun stop(){generation++;main.removeCallbacksAndMessages(null);runCatching{sdk?.stop();sdk?.release()};sdk=null;runCatching{android?.stop();android?.shutdown()};android=null;busy=false}
 }

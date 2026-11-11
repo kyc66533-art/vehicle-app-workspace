@@ -5,7 +5,7 @@
 - Windows 캡처는 정상이나 Android전달이 peak2였고 -allow-host-audio 명시로 기존AVD를 재실행해 복구했다. 기존AVD/설정파일/데이터/백업을 초기화하지 않는다. passive meter0은 입력실패 증거가 아니다. PCM/RMS/SDK/실제발화/합성을 구분하며 음성·문장·키를 진단로그나외부에 남기지 않는다. docs/STT_STABILITY.md·STT_RUN_GUIDE.md를 따른다.
 - Vehicle2.3.2/기록/운전자ID/초안/원관측/AI캐시/View홈을 보존한다. Navi3.0.5/Fused1.1.3/STT·TTS3.3.1 공개API와 Maven.security 필터를 유지한다. 타이어기준은 실압이 아니며 등화ON은 고장 증거가 아니다. Gleo승인/외부호출·실제경로·실차는 미검증을 유지한다.
 - 계측은 validation 고유fixture/조기분기만 쓰며 기존validation DB도 초기화하지 않는다. 일반앱 UI자동화 금지. 313 assertion과 실제발화3회/공개PCM3회는 별도다. 위험한 기본prepare는 실행하지 않는다. 원본 DB현재수를 다시 확인하고 과거23건으로 고정하지 않는다.
-- Gemini기존성공·Firebase/Keystore·BUDGET/portable:v2/UNKNOWN·OFF/잔여0을 보존한다. 이번 모델/배포0이며 운영재개파일을 STT시험에 쓰지 않는다. 동의한 선택 category/situation만 전송하고 이름/메모/ID/시각/위치/차량값/다른기록은 제외한다. 연구·타작업·아래GitHub 연결도구 게시규칙을 유지한다.
+- Gemini/Firebase/Keystore·BUDGET/portable:v2/UNKNOWN·모델ON·일5/월100/서비스월300을 보존한다. 이번 실모델/배포0. AI는 명시적 문제 저장 후 기존 화면에서 요청한다. category/situation만 전송하며 이름/메모/ID/시각/위치/차량값/다른기록은 제외한다. 연구·타작업·아래GitHub 게시규칙을 유지한다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

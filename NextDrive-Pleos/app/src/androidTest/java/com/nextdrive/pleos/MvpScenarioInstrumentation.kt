@@ -34,6 +34,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("bLightStageOneOnly")=="true"){val lines=BLightStageOneChecks(this).run();result.putString("stream","CARITDA_B_LIGHT_STAGE_ONE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("driveCheckNavigationUiOnly")=="true"){val lines=DriveCheckP0Checks(this).navigationUi();result.putString("stream","CARITDA_DRIVECHECK_NAV_UI_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("driveCheckMeasurementOnly")=="true"){val lines=DriveCheckMeasurementChecks(this).run();result.putString("stream","CARITDA_DRIVECHECK_MEASUREMENT_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("driveCheckNavigationCleanupOnly")=="true"){val lines=DriveCheckNavigationLiveChecks(this).cleanupOwned();result.putString("stream","CARITDA_DRIVECHECK_NAV_CLEANUP_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

@@ -28,7 +28,7 @@ import java.util.Calendar
 
 /** Manual journal and explicit one-shot vehicle reads. No diagnosis or remote transmission. */
 class MainActivity : Activity() {
-    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS, SOC_NOTICES, ANALYTICS, AI_PREVIEW }
+    private enum class Screen { HOME, ISSUES, DRIVERS, DRIVER_MANAGE, DRIVER_EDIT, RECORD, DETAIL, SUMMARY, VEHICLE, LOAD_DETAIL, ACTION, WELCOME, HELP, HELP_TOPIC, SNAPSHOTS, SNAPSHOT_DETAIL, HISTORY, MENU, VEHICLE_SETTINGS, SOC_NOTICES, ANALYTICS, AI_PREVIEW, HANDOVER }
     private lateinit var guide: GuideState
     private var guideReplay=false
     private data class RetainedSession(val driverId:String?,val entry:EntryReadState)
@@ -237,7 +237,7 @@ class MainActivity : Activity() {
         repository = if(fixturePrefix==null)SqliteIssueRepository(this)else SqliteIssueRepository(this,fixturePrefix+".db")
         observations = if(fixturePrefix==null)ObservationStore(this)else ObservationStore(this,fixturePrefix+"-observations.db")
         snapshots=if(fixturePrefix==null)SnapshotStore(this)else SnapshotStore(this,fixturePrefix+"-snapshots.db")
-        vehicleDisplay=VehicleDisplaySettings(getSharedPreferences("caritda_vehicle_display",MODE_PRIVATE))
+        vehicleDisplay=VehicleDisplaySettings(getSharedPreferences(fixturePrefix?.let{it+"-vehicle-display"}?:"caritda_vehicle_display",MODE_PRIVATE))
         lowSoc=if(fixturePrefix==null)LowSocStore(this)else LowSocStore(this,fixturePrefix+"-soc.db")
         socObserver=PleosSocObserver(this,observations,{visible&&canEdit()&&lowSoc.policy().enabled},{
             runCatching{lowSoc.reconcile(observations)}.onFailure{notice="차량 정보는 저장됐지만 안내 갱신에 실패했어요. 자동 안내에서 다시 시도해 주세요."}
@@ -296,7 +296,7 @@ class MainActivity : Activity() {
         }
         // Restored detail/input screens wait for a new platform restriction response.
         if (!service.confirmed()) screen = Screen.DRIVERS
-        guide=GuideState(getSharedPreferences("caritda_help",MODE_PRIVATE))
+        guide=GuideState(getSharedPreferences(fixturePrefix?.let{it+"-help"}?:"caritda_help",MODE_PRIVATE))
         @Suppress("DEPRECATION")
         val info=packageManager.getPackageInfo(packageName,0)
         val existing=info.firstInstallTime<info.lastUpdateTime || repository.drivers(true).isNotEmpty() || repository.issues().isNotEmpty() || journal!=null || observations.latest(1).isNotEmpty()
@@ -385,7 +385,6 @@ class MainActivity : Activity() {
         if(!canEdit()){toast("화면 입력이 가능한 뒤에 이동해 주세요.");return}
         if(!captureDraft())return
         rememberLocation()
-        if(screen==Screen.MENU){screen=menuReturn?:Screen.HOME;menuReturn=null;draw();return}
         if(history.isNotEmpty())screen=history.removeLast() else if(screen!=Screen.HOME)screen=Screen.HOME else {super.onBackPressed();return}
         draw()
     }
@@ -409,37 +408,31 @@ class MainActivity : Activity() {
         openScreen(Screen.ISSUES){recordFilter=filter;recordQuery="";searchText="";positions[Screen.ISSUES]=0}
     }
     private fun navigationBar(available:Float):LinearLayout {
-        val height=if(root.height>0)root.height/resources.displayMetrics.density else resources.configuration.screenHeightDp.toFloat()
-        val expanded=available>=800 && height>=360 && resources.configuration.fontScale<1.5f && screen !in setOf(Screen.RECORD,Screen.ACTION,Screen.DRIVER_EDIT,Screen.WELCOME)
         val actions=mutableListOf<Button>()
-        fun add(title:String,key:String,icon:HmiIcon,selected:Boolean=false,action:()->Unit){
-            actions.add(ui.action(title,key,ActionStyle.QUIET,canEdit(),if(resources.configuration.fontScale>=1.5f)null else icon){edit{action()}}.apply{
-                isSelected=selected;contentDescription=title+if(selected)" · 현재 위치"else""
-            })
+        fun add(title:String,key:String,icon:HmiIcon,action:()->Unit){
+            actions.add(ui.action(title,key,ActionStyle.QUIET,canEdit(),if(available<600||resources.configuration.fontScale>=1.5f)null else icon){edit{action()}})
         }
-        add("홈","nav_HOME",HmiIcon.HOME,screen==Screen.HOME){goHome()}
-        if(expanded){
-            add("기록","nav_ISSUES",HmiIcon.RECORD,screen in setOf(Screen.ISSUES,Screen.DETAIL,Screen.SUMMARY)){openScreen(Screen.ISSUES)}
-            add("차량 정보","nav_VEHICLE",HmiIcon.VEHICLE,screen in setOf(Screen.VEHICLE,Screen.LOAD_DETAIL,Screen.SNAPSHOTS,Screen.SNAPSHOT_DETAIL,Screen.HISTORY)){openScreen(Screen.VEHICLE)}
+        if(screen==Screen.HOME){
+            add("설정·도움말","settings_help",HmiIcon.MENU){openScreen(Screen.MENU)}
+        }else{
+            add("이전","back",HmiIcon.BACK){onBackPressed()}
+            add("홈","nav_HOME",HmiIcon.HOME){goHome()}
         }
-        add("메뉴","menu",HmiIcon.MENU,screen==Screen.MENU){
-            if(screen==Screen.MENU)onBackPressed()
-            else if(canEdit()&&captureDraft()){rememberLocation();menuReturn=screen;screen=Screen.MENU;positions[Screen.MENU]=0;draw()}
-        }
-        return ui.appHeader(actions)
+        return ui.screenHeader(pageTitle(),screen==Screen.HOME,actions,available)
     }
     private fun pageTitle()=when(screen){
-        Screen.HOME->"CARITDA";Screen.ISSUES->"나의 차량 기록";Screen.DRIVERS->"기록할 사람 선택"
+        Screen.HOME->"CARITDA";Screen.ISSUES->"기록·인계";Screen.DRIVERS->"기록 운전자 선택"
         Screen.DRIVER_MANAGE->"이름 관리";Screen.DRIVER_EDIT->if(editingDriver==null)"이름 등록"else"이름 수정"
-        Screen.RECORD->if(journal?.kind=="EDIT")"남긴 내용 수정"else"증상 남기기"
-        Screen.DETAIL->"기록 상세";Screen.SUMMARY->"정비 상담용 기록";Screen.VEHICLE->"최근 차량 정보"
+        Screen.RECORD->if(journal?.kind=="EDIT")"남긴 내용 수정"else"문제 남기기"
+        Screen.DETAIL->"기록 상세";Screen.SUMMARY->"정비 상담용 기록";Screen.VEHICLE->"차량 건강 상태"
         Screen.LOAD_DETAIL->"자세한 수신 기록";Screen.SNAPSHOTS->"차량 조회 기록";Screen.SNAPSHOT_DETAIL->"조회한 차량 정보"
         Screen.HISTORY->"전체 조회 이력";Screen.HELP->"사용법";Screen.HELP_TOPIC->helpTitles[helpTopic]
         Screen.ACTION->if(journal?.kind=="NOTE")"점검·조치 메모"else"다시 발생한 증상";Screen.WELCOME->""
-        Screen.MENU->"메뉴";Screen.VEHICLE_SETTINGS->"차량 정보 표시 설정"
+        Screen.MENU->"설정·도움말";Screen.VEHICLE_SETTINGS->"차량 표시·시각"
         Screen.SOC_NOTICES->"충전량 자동 안내"
         Screen.ANALYTICS->"차량 데이터 분석"
         Screen.AI_PREVIEW->"AI 전송 내용 확인"
+        Screen.HANDOVER->"다음 운전자 인계"
     }
     private fun chooseDriver(){
         if(service.draft()!=null&&service.confirmed()){
@@ -449,22 +442,18 @@ class MainActivity : Activity() {
         else{pendingDriver=service.draft()?.ownerId?:repository.currentDriver()?.id;openScreen(Screen.DRIVERS)}
     }
     private fun moreMenu(body:LinearLayout){
-        val menu=panel().apply{tag="more_menu"}
-        val items=mutableListOf<View>()
-        fun item(title:String,key:String,icon:HmiIcon,action:()->Unit){items.add(ui.action(title,key,ActionStyle.QUIET,canEdit(),icon){edit{action()}})}
-        // Compact navigation replaces missing header tabs; it is separate from the same five menu items.
-        if(root.findViewWithTag<View>("nav_ISSUES")==null){
-            val record=ui.action("기록","nav_ISSUES",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.ISSUES)}}
-            val vehicle=ui.action("차량 정보","nav_VEHICLE",ActionStyle.QUIET,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}}
-            body.addView(ui.grid(listOf(record,vehicle),columns()))
-        }
-        item("기록할 사람 선택·변경","change_driver",HmiIcon.PERSON){chooseDriver()}
-        item("내가 작성한 기록","my_issues",HmiIcon.PERSON){openRecords(RecordFilter.MINE)}
-        item("차량 조회 기록","auto_snapshots",HmiIcon.CLOCK){openScreen(Screen.SNAPSHOTS)}
-        item("사용법 · 화면 설정","help",HmiIcon.RECORD){openScreen(Screen.HELP)}
-        item("차량 동력 방식 · 시각 설정","vehicle_settings",HmiIcon.VEHICLE){openScreen(Screen.VEHICLE_SETTINGS)}
-        menu.addView(ui.grid(items,columns()))
-        body.addView(menu)
+        val left=column();val right=column()
+        val drivers=panel().apply{tag="driver_settings"};drivers.addView(ui.sectionTitle("기록 운전자",HmiIcon.PERSON))
+        drivers.addView(ui.action("운전자 등록·이름 관리","manage_drivers",ActionStyle.SECONDARY,canEdit(),HmiIcon.PERSON){edit{openScreen(Screen.DRIVER_MANAGE)}});left.addView(drivers)
+        val display=panel();display.addView(ui.sectionTitle("보기 편한 화면"));themeSetting(display)
+        display.addView(ui.action("차량 표시·시각 설정","vehicle_settings",ActionStyle.QUIET,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE_SETTINGS)}});left.addView(display)
+        val help=panel();help.addView(ui.sectionTitle("도움이 필요하신가요?",HmiIcon.RECORD))
+        help.addView(ui.action("사용법 보기","help",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HELP)}})
+        help.addView(ui.action("처음 안내 다시 보기","replay_guide",ActionStyle.QUIET,canEdit()){edit{guideReplay=true;openScreen(Screen.WELCOME)}});right.addView(help)
+        val privacy=panel();privacy.addView(ui.sectionTitle("AI·개인정보"));privacy.addView(label("AI는 저장한 문제에서 선택해요. 전송 전에 내용과 동의를 확인하며, 동의 철회도 같은 화면에서 할 수 있어요.",22))
+        privacy.addView(label("기록은 이 기기의 운전자끼리 확인해요. 휴대폰이나 다른 차량으로 자동 전송하지 않아요.",20));right.addView(privacy)
+        val about=panel();about.addView(ui.sectionTitle("앱 정보"));about.addView(label("CARITDA · 카잇다\n차량 기록을 다음 운전자에게 이어요.\n상표 검증 전 잠정 명칭이에요.",20));right.addView(about)
+        body.addView(ui.grid(listOf(left,right),columns(840)))
     }
     private fun draw() {
         if(::service.isInitialized)ActionDriverSession.id=if(service.confirmed())service.driver().id else null
@@ -475,24 +464,21 @@ class MainActivity : Activity() {
         searchText=searchInput?.text?.toString()?:searchText;searchInput=null
         driverNameDraft=driverNameInput?.text?.toString()?:driverNameDraft;driverNameInput=null
         situationInput=null;memoInput=null;actionField=null
-        val preference=getPreferences(MODE_PRIVATE).getString("theme","system")
-        dark=when(preference){"dark"->true;"light"->false;else->resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_YES}
+        dark=CaritdaTheme.dark(this,fixturePrefix)
         palette=CaritdaPalette.of(dark)
         ink=palette.text;muted=palette.secondary;accent=palette.accent;backdrop=palette.background;cardColor=palette.surface;actionColor=palette.onAccent
-        root.setBackgroundColor(backdrop);root.setPadding(dp(24),dp(8),dp(24),dp(8));root.removeAllViews()
+        val width=if(root.width>0)root.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
+        val pageInset=when{width<600->18;width<840->24;else->32}
+        root.setBackgroundColor(backdrop);root.setPadding(dp(pageInset),dp(8),dp(pageInset),dp(8));root.removeAllViews()
         if(packageName.endsWith(".validation"))root.addView(label("검증 전용 · TEST",20,true).apply{tag="test_banner";contentDescription="검증 전용 TEST 앱"})
         val scroll=ScrollView(this).apply{isFillViewport=true;clipToPadding=false;tag="screen_scroll"};scrollView=scroll
         val body=column();scroll.addView(body);root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         try {
             val available=if(root.width>0)root.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
             val helpScreen=screen in setOf(Screen.HELP,Screen.HELP_TOPIC)
-            root.addView(navigationBar(available),0)
-            if(screen!=Screen.WELCOME){
-                val leading=if(screen==Screen.MENU)ui.action("메뉴 닫기","close_menu",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{onBackPressed()}}
-                    else if(helpScreen)ui.action("원래 화면으로","close_help",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{closeHelp()}}
-                    else if(screen !in setOf(Screen.HOME,Screen.ISSUES,Screen.VEHICLE,Screen.DRIVERS))ui.action("이전","back",ActionStyle.QUIET,canEdit(),HmiIcon.BACK){edit{onBackPressed()}}else null
-                body.addView(ui.pageHeading(pageTitle(),leading,available))
-            }
+            val header=navigationBar(available)
+            val shortWindow=resources.configuration.screenHeightDp<480||resources.configuration.fontScale>=1.5f
+            if(shortWindow)body.addView(header)else root.addView(header,0)
             if(displayedSafety!=EditingState.ALLOWED)body.addView(label(if(displayedSafety==EditingState.UNKNOWN)"화면 입력이 가능한지 확인 중이에요." else "지금은 조작할 수 없어요. 안전하게 주차한 뒤 이용해 주세요.",20).apply{tag="safety_status"})
             feedback=label(notice,22,true).apply{
                 tag="feedback";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE
@@ -507,6 +493,7 @@ class MainActivity : Activity() {
                 Screen.ANALYTICS->analyticsScreen(body)
                 Screen.AI_PREVIEW->aiPreviewScreen(body)
                 Screen.HOME->home(body)
+                Screen.HANDOVER->handover(body)
                 Screen.ISSUES->issues(body)
                 Screen.DRIVERS->driverScreen(body)
                 Screen.DRIVER_MANAGE->driverManage(body)
@@ -532,11 +519,12 @@ class MainActivity : Activity() {
         }
     }
     private fun themeSetting(body:LinearLayout){
-        val preference=getPreferences(MODE_PRIVATE).getString("theme","system")
-        body.addView(button("화면 테마: ${when(preference){"dark"->"어둡게";"light"->"밝게";else->"시스템 설정"}}","theme",enabled=canEdit()){
-                check(getPreferences(MODE_PRIVATE).edit().putString("theme",when(preference){"dark"->"light";"light"->"system";else->"dark"}).commit())
-                draw()
-            })
+        val preference=CaritdaTheme.preferences(this,fixturePrefix).getString("theme","light")
+        body.addView(label("화면 테마",22,true))
+        val choices=listOf("light" to "밝게","dark" to "어둡게","system" to "기기 설정")
+        body.addView(ui.grid(choices.map{(value,title)->ui.action((if(value==preference)"✓ "else"")+title,"theme_$value",ActionStyle.SECONDARY,canEdit()){
+            edit{check(CaritdaTheme.preferences(this,fixturePrefix).edit().putString("theme",value).commit());notice="화면 테마를 저장했어요.";draw()}
+        }.apply{isSelected=value==preference}},if(columns()==2)3 else 1))
     }
     private fun vehicleSettings(body:LinearLayout){
         body.addView(label("차량 동력 방식",26,true))
@@ -558,27 +546,48 @@ class MainActivity : Activity() {
     private fun sectionName()=when(screen){Screen.HOME->"홈";Screen.ISSUES->"문제";Screen.VEHICLE->"차량";Screen.DRIVERS,Screen.DRIVER_EDIT->"운전자";else->"기록"}
     private fun columns(minWidth:Int=600)=if((if(root.width>0)root.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat())>=minWidth && resources.configuration.fontScale<1.5f)2 else 1
     private fun home(body:LinearLayout){
-        val all=service.issues();val managed=all.filter{it.status!=IssueStatus.RESOLVED}
-        val unread=if(service.confirmed())managed.count{service.needsAcknowledgement(it)}else 0
-        body.addView(label(if(service.confirmed())"${service.driver().label}님의 차량 기록"else"차량 정보와 느낀 증상을 함께 남겨요.",20))
-        body.addView(label("최근 차량 정보",24,true))
-        metricGroup(body)
-        if(lowSoc.policy().enabled)lowSoc.notices().firstOrNull{it.version==lowSoc.policy().version}?.let{n->
-            val stale=System.currentTimeMillis()-n.last>=600000||n.last>System.currentTimeMillis()+60000
-            body.addView(ui.attention(AttentionContent(if(n.phase=="LOW")"${if(stale)"이전에 받은 "else""}낮은 충전량 안내"else"낮은 충전량 조건 해제 기록","${n.value}${n.unit} · 사용자 기준 ${n.threshold}% 미만\n${vehicleDisplay.time(n.last)}","고장이나 수리 완료를 판단한 결과는 아니에요.")))
+        val all=service.issues();val unread=if(service.confirmed())all.filter{service.needsAcknowledgement(it)}else emptyList()
+        val driver=column();driver.addView(label("기록 운전자",20))
+        driver.addView(label(if(service.confirmed())service.driver().label else"기록할 사람을 확인해 주세요",26,true))
+        val change=ui.action(if(service.confirmed())"운전자 변경"else"운전자 확인","change_driver",ActionStyle.QUIET,canEdit(),HmiIcon.PERSON){edit{chooseDriver()}}
+        body.addView(ui.grid(listOf(driver,change),columns()))
+        val primary=column();val secondary=column()
+        if(unread.isNotEmpty()){
+            val card=ui.attention(AttentionContent("이전 운전자가 전할 내용이 있어요",unread.first().situation.take(100),"미확인 ${unread.size}건 · 읽음과 점검은 별개예요."))
+            card.addView(ui.action("인계 확인하기 · ${unread.size}건","handover",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HANDOVER)}});primary.addView(card)
         }
-        if(pleos.busy)body.addView(label("차량 정보를 불러오는 중이에요.",20).apply{tag="auto_read_status"})
-        val planned=managed.count{it.status==IssueStatus.PLANNED}
-        val title=when{unread>0->"아직 읽지 않은 전달 기록 ${unread}건";planned>0->"점검 예정인 기록 ${planned}건";managed.isNotEmpty()->"관리 중인 기록 ${managed.size}건";all.isNotEmpty()->"완료한 기록 ${all.size}건";else->"아직 남긴 증상이 없어요."}
-        val focus=when{unread>0->managed.firstOrNull{service.needsAcknowledgement(it)};planned>0->managed.firstOrNull{it.status==IssueStatus.PLANNED};else->managed.firstOrNull()}
-        body.addView(ui.attention(AttentionContent(title,focus?.let{"${it.type.label} · ${it.situation.take(80)}"}?:"느낀 증상이 있으면 남겨 주세요.","직접 남긴 기록이에요. 자동 고장 진단 결과가 아니에요.")))
-        val primary=ui.action("기록 확인","all_issues",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openRecords(RecordFilter.ALL)}}
-        val create=ui.action("증상 남기기","new_issue",ActionStyle.SECONDARY,canEdit(),HmiIcon.PLUS){edit{beginRecord()}}
-        body.addView(ui.grid(listOf(primary,create),columns()))
-        if(!service.confirmed())body.addView(label("증상을 남길 때 기록할 사람을 선택해 주세요.",20))
-        draftBanner(body)
-        pausedGuide?.let{paused->body.addView(button("안내 이어보기","resume_help",enabled=canEdit()){pausedGuide=null;screen=paused;draw()})}
+        val checks=vehicleChecks();healthFreshness=VehicleHealth.labels.keys.mapNotNull{observations.mostRecent(it,true)?.receivedAt}
+        if(checks.isNotEmpty()){
+            val first=checks.first();val card=ui.checkCard(first.title,first.reason,first.origin).apply{tag="home_vehicle_attention"}
+            card.addView(label(vehicleDisplay.time(first.reading.receivedAt!!)+(if(checks.size>1)" · 그 밖에 ${checks.size-1}개 항목"else""),20))
+            card.addView(ui.action("차량 안내 확인하기","open_vehicle_check",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}});primary.addView(card)
+        }
+        if(service.draft()!=null)draftBanner(primary)else{
+            val create=panel();create.addView(ui.sectionTitle("어떤 문제가 있었나요?",HmiIcon.PLUS))
+            create.addView(label("말하거나 직접 적은 뒤 저장해 주세요.",22))
+            create.addView(ui.action("문제 남기기","new_issue",if(unread.isEmpty()&&checks.isEmpty())ActionStyle.PRIMARY else ActionStyle.SECONDARY,canEdit(),HmiIcon.PLUS){edit{beginRecord()}});primary.addView(create)
+        }
+        val health=panel();health.addView(ui.sectionTitle("차량 건강 상태",HmiIcon.VEHICLE))
+        health.addView(label(if(pleos.busy)"차량 정보를 확인하고 있어요."else"지원되는 차량 정보와 안내를 확인해요.",22).apply{tag="auto_read_status"})
+        health.addView(ui.action("차량 상태 보기","vehicle_health",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}});secondary.addView(health)
+        val records=panel();records.addView(ui.sectionTitle("기록·인계",HmiIcon.RECORD));records.addView(label("저장한 기록 ${all.size}건",22).apply{tag="home_counts"})
+        records.addView(ui.action("기록 전체 보기","all_issues",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.ISSUES)}});secondary.addView(records)
+        body.addView(ui.twoPane(primary,secondary,columns(840)==2))
+        pausedGuide?.let{paused->body.addView(ui.action("안내 이어보기","resume_help",ActionStyle.QUIET,canEdit()){pausedGuide=null;screen=paused;draw()})}
     }
+    private fun vehicleChecks()=VehicleAttention.list({observations.mostRecent(it)},{observations.mostRecent(it,true)},lowSoc.policy())
+    private fun handover(body:LinearLayout){
+        if(!service.confirmed()){
+            body.addView(ui.state("기록 운전자를 확인해 주세요.","선택한 사람에게 남은 인계 내용을 보여드려요."))
+            body.addView(ui.action("운전자 확인","change_driver",ActionStyle.PRIMARY,canEdit(),HmiIcon.PERSON){edit{chooseDriver()}});return
+        }
+        body.addView(label("${service.driver().label}님이 아직 확인하지 않은 다른 운전자의 기록이에요.",22))
+        val pending=service.issues().filter{service.needsAcknowledgement(it)}
+        body.addView(label("미확인 ${pending.size}건",24,true).apply{tag="handover_count"})
+        if(pending.isEmpty())body.addView(ui.state("미확인 인계가 없어요.","읽음은 차량 정상이나 점검 완료를 뜻하지 않아요."))
+        pending.forEach{issueCard(body,it)}
+    }
+
     private fun issues(body:LinearLayout){
 
         body.addView(button("증상 남기기","new_issue",primary=true,enabled=canWrite()){beginRecord()})
@@ -726,7 +735,7 @@ class MainActivity : Activity() {
         if(screen==Screen.HISTORY)selectedCard?.let{shown.addAll(snapshots.timeline(it,20,historyPage*20))}
         times.addAll(shown.flatMap{it.evidence}.mapNotNull{it.value.receivedAt})
         val now=System.currentTimeMillis()
-        if(screen==Screen.VEHICLE)times.addAll(healthFreshness)
+        if(screen in setOf(Screen.HOME,Screen.VEHICLE))times.addAll(healthFreshness)
         return times.distinct().joinToString{"$it:${now-it>=VehiclePresentation.STALE_AFTER_MS}:${it>now}:${it>now+60_000}"}
     }
     private fun metricGroup(body:LinearLayout,snapshot:Snapshot?=null,fromSnapshot:Boolean=false){
@@ -1217,7 +1226,7 @@ class MainActivity : Activity() {
         if(!captureDraft())return
         rememberLocation()
         searchInput=null
-        val origin=if(screen==Screen.MENU)menuReturn?:Screen.HOME else screen
+        val origin=screen
         if(origin!=target)history.addLast(origin)
         menuReturn=null
         prepare();screen=target;draw()

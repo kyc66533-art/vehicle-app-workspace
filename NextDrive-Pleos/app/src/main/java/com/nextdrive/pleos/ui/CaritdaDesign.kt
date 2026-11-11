@@ -11,33 +11,34 @@ import android.widget.*
 
 /** CARITDA's own palette and dimensions, not Hyundai/Pleos brand assets or certification. */
 data class CaritdaPalette(val background:Int,val surface:Int,val inset:Int,val text:Int,val secondary:Int,
-    val accent:Int,val onAccent:Int,val border:Int,val error:Int) {
+    val accent:Int,val onAccent:Int,val border:Int,val error:Int,val line:Int=border,
+    val warning:Int=secondary,val warningSurface:Int=inset) {
     companion object {
         private fun c(s:String)=Color.parseColor(s)
-        fun of(dark:Boolean)=if(dark)CaritdaPalette(c("#101923"),c("#1B2837"),c("#25364A"),c("#F2F5F9"),c("#BCC9D9"),c("#ADCDEC"),c("#13283E"),c("#7E94AD"),c("#FFBAC4"))
-        else CaritdaPalette(c("#F2F5F8"),c("#FFFFFF"),c("#E5ECF3"),c("#172638"),c("#4C6075"),c("#214F79"),c("#FFFFFF"),c("#60778E"),c("#A42B43"))
+        fun of(dark:Boolean)=if(dark)CaritdaPalette(c("#101D27"),c("#192C39"),c("#203F43"),c("#F1F6F9"),c("#BACBD6"),c("#9BE4D5"),c("#102C2B"),c("#8299A8"),c("#FFB4B4"),c("#506776"),c("#FFDA8C"),c("#44351E"))
+        else CaritdaPalette(c("#F4F7F9"),c("#FFFFFF"),c("#E0EFF0"),c("#142D3D"),c("#4E6473"),c("#12596A"),c("#FFFFFF"),c("#718492"),c("#A72C39"),c("#C0CCD4"),c("#805000"),c("#FFF2D5"))
     }
 }
 
 object CaritdaTokens {
     const val TOUCH=76
-    const val PAGE=24
+    const val PAGE=32
     const val TINY=4
     const val SMALL=8
     const val MEDIUM=12
     const val GAP=16
-    const val CARD_INSET=20
+    const val CARD_INSET=24
     const val ICON=28
     const val METRIC_ICON=28
     const val BORDER=2
     const val CARD_RADIUS=18
     const val BUTTON_RADIUS=12
-    const val TITLE=28
-    const val BODY=22
+    const val TITLE=32
+    const val BODY=24
     const val SUPPORT=20
     const val SUBTITLE=24
     const val EMPHASIS=26
-    const val METRIC=42
+    const val METRIC=40
 }
 enum class ActionStyle { PRIMARY, SECONDARY, QUIET, DANGER }
 enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, FUEL, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK }
@@ -79,15 +80,44 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     fun text(value:String,size:Int=CaritdaTokens.BODY,bold:Boolean=false,secondary:Boolean=false)=TextView(context).apply{
         text=value;textSize=size.toFloat();setTextColor(if(secondary)colors.secondary else colors.text)
         typeface=Typeface.create(if(bold)"sans-serif-medium" else "sans-serif",Typeface.NORMAL)
-        setLineSpacing(dp(3).toFloat(),1.08f);setPadding(0,dp(6),0,dp(6));layoutParams=LinearLayout.LayoutParams(-1,-2)
+        setLineSpacing(dp(3).toFloat(),1.2f);setPadding(0,dp(6),0,dp(6));layoutParams=LinearLayout.LayoutParams(-1,-2)
     }
     fun card()=column().apply{
-        background=shape(colors.surface);setPadding(dp(CaritdaTokens.PAGE),dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.PAGE),dp(CaritdaTokens.CARD_INSET))
+        background=GradientDrawable().apply{setColor(this@CaritdaComponents.colors.surface);cornerRadius=dp(CaritdaTokens.CARD_RADIUS).toFloat();setStroke(dp(1),this@CaritdaComponents.colors.line)}
+        setPadding(dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.CARD_INSET))
         layoutParams=LinearLayout.LayoutParams(-1,-2).apply{setMargins(0,dp(CaritdaTokens.SMALL),0,dp(CaritdaTokens.SMALL))}
     }
     fun appHeader(actions:List<Button>)=LinearLayout(context).apply{
         orientation=LinearLayout.HORIZONTAL;tag="navigation_bar"
         actions.forEach{addView(it,LinearLayout.LayoutParams(0,-2,1f).apply{setMargins(dp(4),0,dp(4),dp(4))})}
+    }
+    /** B navigation: one home action, two child actions. Short windows may scroll this header. */
+    fun screenHeader(title:String,brand:Boolean,actions:List<Button>,available:Float):LinearLayout=column().apply{
+        tag="navigation_bar";setPadding(0,dp(8),0,dp(16))
+        val narrow=available<600||context.resources.configuration.fontScale>=1.5f
+        val heading=column().apply{
+            addView(text(title,CaritdaTokens.TITLE,true).apply{tag=if(brand)"app_brand"else"page_title"})
+            if(brand)addView(text("차량 기록을 잇다",20,secondary=true))
+        }
+        if(narrow){
+            if(brand)addView(heading)
+            addView(appHeader(actions))
+            if(!brand)addView(heading)
+        }else{
+            val row=LinearLayout(context).apply{gravity=android.view.Gravity.CENTER_VERTICAL}
+            if(!brand&&actions.size==2)row.addView(actions.first(),LinearLayout.LayoutParams(-2,-2).apply{setMargins(0,0,dp(24),0)})
+            row.addView(heading,LinearLayout.LayoutParams(0,-2,1f))
+            row.addView(actions.last(),LinearLayout.LayoutParams(-2,-2).apply{setMargins(dp(24),0,0,0)})
+            addView(row)
+        }
+    }
+    fun sectionTitle(value:String,icon:HmiIcon?=null)=text(value,24,true).apply{
+        icon?.let{setCompoundDrawablesRelative(CaritdaIcon(it,colors.accent).apply{setBounds(0,0,dp(28),dp(28))},null,null,null);compoundDrawablePadding=dp(12)}
+    }
+    fun checkCard(title:String,reason:String,origin:String)=card().apply{
+        background=shape(colors.warningSurface,CaritdaTokens.CARD_RADIUS,colors.warning)
+        addView(text(origin,20,true).apply{setTextColor(colors.warning)})
+        addView(text(title,24,true));addView(text(reason,22,secondary=true))
     }
     fun pageHeading(title:String,leading:Button?,available:Float)=LinearLayout(context).apply{
         gravity=android.view.Gravity.CENTER_VERTICAL
@@ -119,14 +149,14 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
         setPadding(dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.GAP),dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.GAP));setLineSpacing(dp(3).toFloat(),1.05f)
         typeface=Typeface.create("sans-serif-medium",Typeface.NORMAL)
         val foreground=when(style){ActionStyle.PRIMARY->colors.onAccent;ActionStyle.DANGER->colors.error;else->colors.text}
-        val fill=when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.SECONDARY->colors.inset;else->colors.background}
+        val fill=when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.SECONDARY->colors.surface;else->colors.background}
         setTextColor(if(enabled)foreground else colors.secondary)
         background=StateListDrawable().apply{
             addState(intArrayOf(-android.R.attr.state_enabled),shape(colors.inset,CaritdaTokens.BUTTON_RADIUS,colors.border))
             addState(intArrayOf(android.R.attr.state_focused),shape(fill,CaritdaTokens.BUTTON_RADIUS,if(style==ActionStyle.PRIMARY)colors.onAccent else colors.accent))
             addState(intArrayOf(android.R.attr.state_selected),shape(fill,CaritdaTokens.BUTTON_RADIUS,colors.accent))
             addState(intArrayOf(android.R.attr.state_pressed),shape(fill,CaritdaTokens.BUTTON_RADIUS,foreground))
-            addState(intArrayOf(),shape(fill,CaritdaTokens.BUTTON_RADIUS,if(style==ActionStyle.PRIMARY)colors.accent else colors.border))
+            addState(intArrayOf(),shape(fill,CaritdaTokens.BUTTON_RADIUS,when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.QUIET->null;else->colors.border}))
         }
         icon?.let{setCompoundDrawablesRelative(CaritdaIcon(it,if(enabled)foreground else colors.secondary).apply{setBounds(0,0,dp(CaritdaTokens.ICON),dp(CaritdaTokens.ICON))},null,null,null);compoundDrawablePadding=dp(CaritdaTokens.MEDIUM)}
         isEnabled=enabled;isFocusable=true
@@ -148,6 +178,13 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     }
     fun history(title:String,subtitle:String,key:String,enabled:Boolean,click:()->Unit)=action("$title\n$subtitle",key,ActionStyle.QUIET,enabled,HmiIcon.CLOCK,click)
     fun expandable(title:String,key:String,expanded:Boolean,enabled:Boolean,onToggle:()->Unit)=action((if(expanded)"− " else "+ ")+title,key,ActionStyle.QUIET,enabled,HmiIcon.CHEVRON,onToggle)
+    fun twoPane(primary:View,secondary:View,wide:Boolean)=column().apply{
+        if(!wide){addView(primary);addView(secondary)}else{
+            val row=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL}
+            row.addView(primary,LinearLayout.LayoutParams(0,-2,1.4f).apply{setMargins(0,0,dp(24),0)})
+            row.addView(secondary,LinearLayout.LayoutParams(0,-2,1f));addView(row)
+        }
+    }
     /** Buttons retain their labels and target height; no shrinking to fit a grid. */
     fun grid(children:List<View>,columns:Int):LinearLayout=column().apply{
         children.chunked(columns.coerceAtLeast(1)).forEach{group->

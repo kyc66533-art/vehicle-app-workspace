@@ -67,7 +67,7 @@ class PortableAiActivity:Activity(){
         usageRefreshAttempted=saved?.getBoolean("usage_refreshed")?:false
         vehicleDetails=saved?.getBoolean("vehicle_details")?:false
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val dark=resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK==Configuration.UI_MODE_NIGHT_YES
+        val dark=CaritdaTheme.dark(this,fixturePrefix)
         ui=CaritdaComponents(this,CaritdaPalette.of(dark))
         val root=ui.column().apply{setBackgroundColor(ui.colors.background);setPadding(ui.dp(24),ui.dp(12),ui.dp(24),ui.dp(12))};setContentView(root)
         if(packageName.endsWith(".validation"))root.addView(ui.text("검증 전용 · TEST",22,true))

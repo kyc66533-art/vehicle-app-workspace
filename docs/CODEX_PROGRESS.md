@@ -1,5 +1,17 @@
 # Codex 개발 진행 기록
 
+## 2026-11-11 20:45 +09:00 — B안 단계1 홈·탐색·현재 확인 항목
+
+- 기준 main c424ec25/tree94e2e389, 로컬221개 일치·원격 연구26개 보존. 승인된 B 연구8개를 SHA 대조 후 읽었다. 전체22화면+AI2모드 개편 지시로 작업하며 이번 게시 범위는 기준/홈/탐색 단계다. 최종 전체 UX 완료가 아니다.
+- B 라이트 기본/다크 선택·76dp/24sp 본문·카드18dp·여백/1.4:1 배치를 공통 View에 구현했다. 실제 Material light 시작 theme/Manifest 적용. 기존 명시 테마 선택은 유지하며 고유 validation fixture prefs로 격리했다.
+- 홈 브랜드/설정1개, 하위 이전/제목/홈2개. 전역 기록/차량/메뉴와 숨은 호환 View 없음. 운전자→실제 미확인 큐→유효한 현재 차량 확인→문제 작성→차량/기록 허브. 정상 metric·지난 SOC 사건 카드를 제거했다. 읽음/상태·원작성자·초안·검색/위치를 유지했다. 설정 하위 이전 복귀를 실제 history에 맞췄다.
+- VehicleAttention은 기존 DriveCheck.assess의 최신/출처/유효/지원/단위·SOC동의 기준을 재사용하며 SDK 안내 우선/사용자 기준 다음, kind 중복 제거만 한다. 위험도 순위·자동 문제/해결·새 센서 AI 전송 없음.
+- Debug/Validation/AndroidTest/Lint exit0(최종2m47s), Lint0오류/56경고·Unit NO-SOURCE. 새29+관련226=255 assertion. 초기 drawable colors 충돌 수정. 새 홈/인계/명시확인/초안·검색·설정 이전, STT/AI캐시·Gleo/DB·실제Vehicle/Fused/Navi상태/TTS를 검증했다. 유료 모델·배포0이다.
+- 이번 최신 백업330DB 전체 원본11,264행·스키마/무결성 보존. 일반24/97/10/0·private16개 불변, 일반 APK 교체 전. validation 기존9919행 불변/새 fixture21DB. 기본 prepare·일반 UI 자동화·데이터/AVD 초기화0.
+- 수정: MainActivity/PortableAiActivity의 테마·CaritdaDesign, 신규 CaritdaTheme/VehicleAttention, Manifest/themes, BLightStageOneChecks/runner, 본 기록·[B안 단계별 검증](B_LIGHT_UI_ACCEPTANCE.md). 연구파일은 미수정.
+- 다음: 차량·기록·AI·위치 등 본문 전체,22화면+AI2 검증표,모든 폭/글자/테마·실제 SDK 홈·캡처·일반 설치. HTML 기준 이미지의 Chrome/Edge headless가0x80000003으로 실패하여 CSS 소스 대조만 된 상태다. 실제 사용자 이해도/실차는 미검증이다.
+- 검증된 명시 파일만 **GitHub 연결 도구를 통한 게시**로 최신 부모/기대HEAD를 잇고 나머지 파일/연구26개 SHA를 보존한다. 최종 게시SHA는 완료 응답/후속 기록에 확인한다.
+
 ## 2026-11-11 19:10 +09:00 — 위치·내비·DriveCheck 보조 실제 통합
 
 - 시작 main `80f76b1bdac9044f649eba01e727ef4cee084b48`, 로컬209개 일치/원격 전용 연구18개. 작업 중 main `d0e7281fea775d306dc2cf7d9f32e30a70d79ce8`의 연구8개 추가만 확인했다. 대상 source/blob는 불변이라 기존 규칙의 Aside-only 예외로 최신 tree/parent를 이어 보존한다. 로컬 Git/연구 수정 없음.

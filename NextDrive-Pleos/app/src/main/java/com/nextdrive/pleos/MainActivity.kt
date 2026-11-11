@@ -72,12 +72,21 @@ class MainActivity : Activity() {
     private val speechInput by lazy{SpeechInput(this){visible&&canWrite()}}
     private val locationReader by lazy{OneShotLocation(this){visible&&canWrite()}}
     private val navigation by lazy{InspectionNavigation(this){visible&&canEdit()}}
+    private var locationHistory=false
+    private var locationHistoryLimit=3
+    private var navigationFields:List<EditText>?=null
+    private var navigationDraft=listOf("","","")
+    private var navigationEvents=emptyList<InspectionNavigation.Event>()
+    private var healthFreshness=emptyList<Long>()
     private var permissionAction:(()->Unit)?=null
     // Instrumentation can use an isolated database family, never either app's existing records.
     private val fixturePrefix by lazy { intent.getStringExtra("validation_fixture")?.takeIf {
         packageName=="com.nextdrive.pleos.validation" && Regex("gleo-ui-[a-f0-9-]{36}").matches(it)
     } }
-    private fun stopAssistance(){speechOutput.stop();speechInput.stop();locationReader.stop();navigation.stop();permissionAction=null}
+    private fun stopAssistance(){speechOutput.stop();speechInput.stop();locationReader.stop()
+        if(navigation.busy)navigationEvents=navigation.events+InspectionNavigation.Event("NAVI_MONITOR_STOPPED",System.currentTimeMillis())
+        navigation.stop();permissionAction=null}
+    private fun locationStore()=IssueLocationStore(this,fixturePrefix?.let{it+"-locations.db"}?:"caritda-issue-location.db")
     private fun permission(name:String,action:()->Unit){
         if(!canEdit())return
         if(checkSelfPermission(name)==android.content.pm.PackageManager.PERMISSION_GRANTED)action()
@@ -116,31 +125,56 @@ class MainActivity : Activity() {
         if(!canWrite()||!service.canManage(service.issue(id)))return
         confirm("현재 위치를 확인할까요?","기기에서 마지막으로 확인한 위치를 가져와요. 증상 발생 당시 위치와 다를 수 있어요. 이 앱에만 저장하며 AI에는 보내지 않아요."){
             permission("pleos.car.permission.FUSED_LOCATION"){
+                if(screen!=Screen.DETAIL||selectedIssue!=id||!service.canManage(service.issue(id)))return@permission
                 notice="위치를 확인하고 있어요.";feedback?.apply{text=notice;visibility=View.VISIBLE}
                 locationReader.read{value,code->
-                    if(value==null){notice="위치를 받지 못했어요. 기록은 유지돼요. 확인 코드: "+code;draw()}
+                    if(screen!=Screen.DETAIL||selectedIssue!=id)return@read
+                    if(value==null){notice=LocationPresentation.failure(code)+" 확인 코드: "+code;draw()}
                     else if(canWrite()&&service.canManage(service.issue(id))){
-                        val at=VehicleUi.shortTime(value.measuredAt)
-                        confirm("이 위치를 함께 저장할까요?","위도 "+value.latitude+" · 경도 "+value.longitude+"\n위치 확인 "+at+"\n오래된 위치일 수 있어요. 증상 당시 위치로 확정하지 않아요. 정확도(m)는 이 SDK 값으로 확인할 수 없어요."){
-                            check(service.canManage(service.issue(id)))
-                            IssueLocationStore(this).use{it.save(id,value)};notice="위치를 이 기록과 함께 저장했어요.";draw()
+                        draw()
+                        confirm("이 위치를 함께 저장할까요?",LocationPresentation.text(value,vehicleDisplay::time)){
+                            check(screen==Screen.DETAIL&&selectedIssue==id&&service.canManage(service.issue(id)))
+                            val added=locationStore().use{val created=it.save(id,value);check(it.contains(id,value));created}
+                            notice=if(added)"위치 연결을 저장했어요. 이전 연결도 그대로 남아 있어요."else"이미 연결한 같은 위치예요. 중복 저장하지 않았어요.";draw()
                         }
                     }
+                }
+                draw()
+            }
+        }
+    }
+    private fun linkedLocations(body:LinearLayout,id:String){
+        locationStore().use{store->
+            val count=store.count(id);val latest=store.latest(id)
+            if(latest!=null){
+                body.addView(ui.state("함께 저장한 마지막 위치",LocationPresentation.text(latest,vehicleDisplay::time)).apply{tag="linked_location"})
+                body.addView(ui.expandable("위치 연결 이력 · ${count}건","location_history",locationHistory,canEdit()){locationHistory=!locationHistory;draw()})
+                if(locationHistory){
+                    store.history(id,locationHistoryLimit).forEach{item->body.addView(ui.state("사용자가 연결한 위치",LocationPresentation.text(item,vehicleDisplay::time)).apply{tag="location_history_item"})}
+                    if(count>locationHistoryLimit&&locationHistoryLimit<200)body.addView(button("위치 이력 더 보기","location_history_more",enabled=canEdit()){locationHistoryLimit=(locationHistoryLimit+20).coerceAtMost(200);draw()})
                 }
             }
         }
     }
     private fun destination(){
-        if(!canEdit())return
+        if(!canEdit()||navigation.busy)return
         val fields=column();val name=input("정비 장소 이름",80);val lat=input("위도 (-90~90)",24);val lon=input("경도 (-180~180)",24)
+        listOf(name,lat,lon).forEachIndexed{i,field->field.setText(navigationDraft[i]);field.tag=listOf("navigation_name","navigation_latitude","navigation_longitude")[i]}
+        navigationFields=listOf(name,lat,lon)
         fields.addView(label("직접 확인한 정비 장소의 좌표를 입력해 주세요. 예약 기능은 아니에요.",22));listOf(name,lat,lon).forEach{fields.addView(it)}
         val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle("정비 장소 길찾기").setView(ScrollView(this).apply{addView(fields)}).setNegativeButton("취소",null).setPositiveButton("경로 요청",null).create()
         activeDialog=dialog;dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
             val latitude=lat.text.toString().toDoubleOrNull();val longitude=lon.text.toString().toDoubleOrNull();val title=name.text.toString().trim()
             if(latitude==null||longitude==null||!latitude.isFinite()||!longitude.isFinite()||latitude !in -90.0..90.0||longitude !in -180.0..180.0||title.isBlank()){lat.error="장소 이름과 유효한 좌표를 확인해 주세요.";return@setOnClickListener}
             if(!canEdit())return@setOnClickListener
-            dialog.dismiss();navigation.request(latitude,longitude,title){code->notice=when(code){"NAVI_ROUTE_STARTED"->"내비게이션이 경로 시작을 알려 왔어요. 목적지는 내비게이션에서 확인해 주세요.";"NAVI_ROUTING_COMPLETED"->"내비게이션이 경로 검색 완료를 알려 왔어요. 경로 시작은 아직 확인 중이에요.";"NAVI_REQUEST_SENT"->"경로를 요청했어요. 내비게이션 응답을 기다려 주세요.";"NAVI_EXISTING_ROUTE"->"진행 중인 경로가 있어 변경하지 않았어요.";"NAVI_TERMS_REQUIRED"->"내비게이션에서 이용 약관을 먼저 확인해 주세요.";else->"길찾기를 완료하지 못했어요. 확인 코드: "+code};feedback?.apply{text=notice;visibility=View.VISIBLE}}
+            navigationDraft=listOf(title,lat.text.toString(),lon.text.toString());navigationFields=null
+            dialog.dismiss();navigation.request(latitude,longitude,title){code->
+                notice=InspectionNavigation.message(code);navigationEvents=navigation.events
+                feedback?.apply{text=notice;visibility=View.VISIBLE}
+                if(screen==Screen.SUMMARY){positions[screen]=scrollView?.scrollY?:0;draw()}
+            }
         }
+        dialog.setOnDismissListener{navigationFields?.takeIf{it.firstOrNull()===name}?.let{navigationDraft=it.map{field->field.text.toString()};navigationFields=null}}
     }
     private val freshnessHandler=android.os.Handler(android.os.Looper.getMainLooper())
     private var freshnessKey=""
@@ -234,6 +268,11 @@ class MainActivity : Activity() {
         lastDraft = journal
         pendingDriver = journal?.ownerId ?: repository.currentDriver()?.id
         savedInstanceState?.let {
+            locationHistory=it.getBoolean("locationHistory");locationHistoryLimit=it.getInt("locationHistoryLimit",3)
+            navigationDraft=it.getStringArrayList("navigationDraft")?.takeIf{list->list.size==3}?:navigationDraft
+            val codes=it.getStringArrayList("navigationCodes").orEmpty();val times=it.getLongArray("navigationTimes")?:longArrayOf()
+            navigationEvents=codes.mapIndexedNotNull{i,code->times.getOrNull(i)?.let{at->InspectionNavigation.Event(code,at)}}
+            if(it.getBoolean("navigationWasBusy"))navigationEvents=navigationEvents+InspectionNavigation.Event("NAVI_MONITOR_STOPPED",System.currentTimeMillis())
             analysisKind=it.getString("analysisKind","EV_SOC");analysisDays=it.getInt("analysisDays",1);socHistory=it.getBoolean("socHistory");analysisDetail=it.getBoolean("analysisDetail");analysisPage=it.getInt("analysisPage")
             socThresholdDraft=it.getString("socThresholdDraft")
             pendingDriver=journal?.ownerId?:it.getString("pendingDriver",pendingDriver)
@@ -279,6 +318,9 @@ class MainActivity : Activity() {
     override fun onDestroy() { aiConsent?.revoke();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
+        navigationFields?.let{navigationDraft=it.map{field->field.text.toString()}}
+        outState.putStringArrayList("navigationDraft",ArrayList(navigationDraft));outState.putStringArrayList("navigationCodes",ArrayList(navigationEvents.map{it.code}));outState.putLongArray("navigationTimes",navigationEvents.map{it.at}.toLongArray());outState.putBoolean("navigationWasBusy",navigation.busy)
+        outState.putBoolean("locationHistory",locationHistory);outState.putInt("locationHistoryLimit",locationHistoryLimit)
         outState.putString("analysisKind",analysisKind);outState.putInt("analysisDays",analysisDays);outState.putBoolean("socHistory",socHistory);outState.putBoolean("analysisDetail",analysisDetail);outState.putInt("analysisPage",analysisPage)
         outState.putString("snapshot",selectedSnapshot);outState.putString("card",selectedCard)
         outState.putInt("historyPage",historyPage);outState.putBoolean("technicalExpanded",technicalExpanded);outState.putBoolean("recordExtras",recordExtras)
@@ -312,7 +354,7 @@ class MainActivity : Activity() {
         analysisWorker.execute{
             val result=runCatching{
                 val now=System.currentTimeMillis();val since=if(days==0)0L else now-days*86400000L
-                ObservationStore(applicationContext).use{raw->LowSocStore(applicationContext).use{soc->AnalysisStore(applicationContext).use{derived->
+                ObservationStore(applicationContext,fixturePrefix?.let{it+"-observations.db"}?:"caritda-observations.db").use{raw->LowSocStore(applicationContext,fixturePrefix?.let{it+"-soc.db"}?:"caritda-soc-notices.db").use{soc->AnalysisStore(applicationContext,fixturePrefix?.let{it+"-analytics.db"}?:"caritda-analytics.db").use{derived->
                     val changes=soc.changes();val gaps=soc.gaps()
                     listOf("EV_SOC","ODOMETER").associateWith{kind->
                         val refs=raw.analysisRefs(kind,since);VehicleAnalytics.analyze(kind,refs.takeLast(2000),since,now,changes,gaps,refs.size>2000).also{derived.remember(it)}
@@ -684,7 +726,8 @@ class MainActivity : Activity() {
         if(screen==Screen.HISTORY)selectedCard?.let{shown.addAll(snapshots.timeline(it,20,historyPage*20))}
         times.addAll(shown.flatMap{it.evidence}.mapNotNull{it.value.receivedAt})
         val now=System.currentTimeMillis()
-        return times.distinct().joinToString{"$it:${now-it>=VehiclePresentation.STALE_AFTER_MS}:${it>now+60_000}"}
+        if(screen==Screen.VEHICLE)times.addAll(healthFreshness)
+        return times.distinct().joinToString{"$it:${now-it>=VehiclePresentation.STALE_AFTER_MS}:${it>now}:${it>now+60_000}"}
     }
     private fun metricGroup(body:LinearLayout,snapshot:Snapshot?=null,fromSnapshot:Boolean=false){
         fun pair(kind:String)=if(fromSnapshot)VehicleUi.values(snapshot,kind)else observations.mostRecent(kind) to observations.mostRecent(kind,true)
@@ -706,16 +749,35 @@ class MainActivity : Activity() {
         body.addView(label(source,20).apply{tag="vehicle_source"})
     }
     private fun healthSummary(body:LinearLayout){
-        body.addView(ui.expandable("문·등화·차량 안내 확인","health_expand",showHealth,canEdit()){edit{showHealth=!showHealth;draw()}})
+        val policy=lowSoc.policy()
+        val readings=(listOf("EV_SOC")+VehicleHealth.labels.keys).map{kind->DriveCheck.assess(kind,observations.mostRecent(kind),observations.mostRecent(kind,true),policy)}
+        healthFreshness=readings.mapNotNull{it.receivedAt}
+        val attention=readings.filter{it.attention}
+        if(attention.isNotEmpty()){
+            body.addView(ui.state("DriveCheck · 확인할 항목", "받은 차량 안내 또는 사용자 기준에 해당해요. 자동 고장 판정이나 저장된 사용자 문제가 아니에요.").apply{tag="drivecheck_attention"})
+            attention.forEach{reading->
+                val card=panel();card.addView(ui.state(reading.title,reading.text(vehicleDisplay::time)))
+                card.addView(ui.action("직접 확인한 증상 남기기","drivecheck_draft_${reading.kind}",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){beginFromCheck(reading.kind)})
+                if(!canWrite())card.addView(label("증상을 남기려면 먼저 기록할 사람으로 운전 시작을 눌러 주세요.",20))
+                body.addView(card)
+            }
+        }
+        if(service.draft()!=null)draftBanner(body)
+        body.addView(ui.expandable("문·등화·차량 안내 확인 · DriveCheck","health_expand",showHealth,canEdit()){edit{showHealth=!showHealth;draw()}})
         if(!showHealth)return
         body.addView(label("받은 항목만 표시해요. 등화 켜짐은 전구·LED의 정상 작동을 보증하지 않아요.",20))
-        val cards=VehicleHealth.labels.map{(kind,title)->
-            val last=observations.mostRecent(kind,true)
-            val text=VehicleHealth.text(kind,observations.mostRecent(kind),last)
-            ui.state(title,text+(last?.receivedAt?.let{"\n마지막 수신 "+vehicleDisplay.time(it)}?:""))
-        }
+        val cards=readings.map{reading->ui.state(reading.title,reading.text(vehicleDisplay::time)).apply{tag="drivecheck_item_${reading.kind}"}}
         body.addView(ui.grid(cards,columns()))
         body.addView(label("타이어 항목은 차량이 제공한 저압 안내 기준이에요. 실제 타이어 압력·TPMS 경고 전체·등화 고장은 일반 앱 지원을 확인하지 못했어요.",20))
+    }
+    private fun beginFromCheck(kind:String){
+        if(!canWrite()||!captureDraft())return
+        val current=DriveCheck.assess(kind,observations.mostRecent(kind),observations.mostRecent(kind,true),lowSoc.policy())
+        if(!current.attention){notice="새로 받은 차량 상태를 다시 확인해 주세요. 이전 안내로 새 문제를 확정하지 않아요.";draw();return}
+        if(service.draft()!=null){notice="작성 중인 초안을 먼저 계속 작성하거나 취소해 주세요. 기존 내용을 덮어쓰지 않았어요.";draw();return}
+        beginRecord();draft.type=DriveCheck.draftType(kind)
+        situationInput?.setText(DriveCheck.draftText(kind));captureDraft()
+        notice="차량 안내에서 시작한 사용자 초안이에요. 직접 확인한 증상으로 고쳐 주세요. 차량 수치·시각·위치는 본문이나 AI에 자동 추가하지 않아요.";draw()
     }
     private fun vehicleScreen(body:LinearLayout){
         body.addView(ui.loading(if(pleos.busy)"차량 정보를 불러오는 중이에요."else"앱을 열 때 지원되는 값을 한 번 확인해요.").apply{tag="load_status"})
@@ -750,16 +812,9 @@ class MainActivity : Activity() {
         body.addView(label(socObserver.message,22).apply{tag="soc_watch_status"})
         val notices=lowSoc.notices()
         val latest=observations.mostRecent("EV_SOC")
-        val trusted=latest?.let{SnapshotStore.accepted(it)&&it.receivedAt!=null&&System.currentTimeMillis()-it.receivedAt in 0..599999}==true
-        val core=when{
-            !p.enabled->"자동 안내가 꺼져 있어요."
-            !trusted->"새로 받은 유효한 값이 없어 현재 조건을 판단하지 않아요."
-            notices.firstOrNull()?.phase=="LOW"&&latest!!.raw!!.toDouble()<p.threshold->"배터리 충전량이 설정한 기준보다 낮아요."
-            notices.firstOrNull()?.phase=="LOW"->"낮은 충전량 안내가 유지 중이에요. 해제 기준은 ${p.threshold+2}% 이상이에요."
-            notices.firstOrNull()?.phase=="EXITED"->"배터리 충전량이 올라가 설정한 낮은 충전량 안내가 해제됐어요. 아래는 이전 사건의 기록이에요."
-            else->"현재 설정한 낮은 충전량 안내는 없어요."
-        }
-        body.addView(ui.state("현재 안내",if(!p.enabled)"자동 안내가 꺼져 있어요. 이전 사건은 아래에서 볼 수 있어요."else core).apply{tag="soc_core"})
+        body.addView(ui.state("현재 안내",SocGuide.text(p,notices,latest)).apply{tag="soc_core"})
+        if(DriveCheck.assess("EV_SOC",latest,observations.mostRecent("EV_SOC",true),p).attention)body.addView(ui.action("이 안내에서 직접 증상 남기기","drivecheck_draft_EV_SOC",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){beginFromCheck("EV_SOC")})
+        if(service.draft()!=null)draftBanner(body)
         body.addView(label("사용자 편의 안내예요. 고장 원인·수리 완료·운행 안전을 판단한 결과는 아니에요.",20))
         body.addView(label("앱이 보이고 입력이 허용된 동안만 SOC 변화를 확인해요. 종료·제한·연결 끊김 동안에는 관측 공백이 있어요.",20))
         body.addView(label("사용자 편의 기준이에요. 제조사 고장 기준이 아니며, 안내 해제는 기준보다2%p 높은 값부터 기록해요.",20))
@@ -771,7 +826,7 @@ class MainActivity : Activity() {
         })
         if(p.enabled)body.addView(button("안내 끄기","disable_soc",enabled=canEdit()){lowSoc.configure(false,p.threshold,observations);stopSocWatch("자동 안내를 껐어요. 이전 기록은 남아 있어요.");draw()})
         body.addView(button("자동 기록 다시 정리","reconcile_soc",enabled=canEdit()){lowSoc.reconcile(observations);notice="저장된 관측으로 안내를 다시 확인했어요.";draw()})
-        body.addView(label("AI 설명: 아직 연결되지 않았어요. 실제 AI 모델 응답은 표시하지 않아요.",22).apply{tag="ai_connection_status"})
+        body.addView(label("이 안내는 기기 내 규칙으로 만들어요. AI 설명은 직접 저장한 증상에서 선택해요. 차량 수치를 자동 전송하지 않아요.",22).apply{tag="ai_connection_status"})
         body.addView(ui.expandable("수신 근거 자세히","soc_evidence",socTechnical,canEdit()){edit{socTechnical=!socTechnical;draw()}})
         body.addView(ui.expandable("이전 안내 기록 · ${notices.size}건","soc_history",socHistory,canEdit()){edit{socHistory=!socHistory;draw()}})
         if(notices.isEmpty())body.addView(ui.state("아직 낮은 충전량 안내가 없어요.","실제로 새 값을 받은 뒤에만 사용자 기준과 비교해요."))
@@ -1055,8 +1110,9 @@ class MainActivity : Activity() {
             openIssueAi(id)
         })
         body.addView(ui.action("이 기록 음성으로 듣기","speak_issue",ActionStyle.QUIET,canEdit()){readAloud(issue.type.label+". "+issue.situation+". 현재 상태는 "+statusText(issue.status)+"입니다.")})
-        IssueLocationStore(this).use{it.latest(id)}?.let{location->body.addView(label("함께 저장한 위치 · 위도 "+location.latitude+" · 경도 "+location.longitude+"\n위치 확인 "+VehicleUi.shortTime(location.measuredAt)+" · 증상 발생 위치로 확정하지 않아요.",20))}
-        if(service.canManage(issue))body.addView(ui.action("현재 위치 함께 저장 (선택)","attach_location",ActionStyle.QUIET,canWrite()){attachLocation(id)})
+        linkedLocations(body,id)
+        if(service.canManage(issue))body.addView(ui.action("현재 위치 함께 저장 (선택)","attach_location",ActionStyle.QUIET,canWrite()&&!locationReader.busy){attachLocation(id)})
+        if(locationReader.busy)body.addView(ui.action("이번 위치 확인 취소","cancel_location",ActionStyle.QUIET,canWrite()){locationReader.cancel();draw()})
         snapshots.linked(id)?.let{linkedVehicle(body,it)}
         if(service.canManage(issue)&&snapshots.linked(id)==null){
             body.addView(ui.action(if(snapshots.pending(id))"차량 정보 연결 다시 시도"else"차량 정보 함께 저장","link_snapshot",ActionStyle.QUIET,canWrite(),HmiIcon.VEHICLE){
@@ -1101,7 +1157,9 @@ class MainActivity : Activity() {
         body.addView(label("시간대: ${ZoneId.systemDefault().id}\n외부 정비소에는 전송되지 않았습니다.", 18))
         val issues = selectedIssue?.let { listOf(service.issue(it)) } ?: service.issues()
         body.addView(label("범위: ${if(selectedIssue==null) "전체 기록" else "선택한 문제"} ${issues.size}건 · 사용자 직접 기록",24,true))
-        if(issues.isNotEmpty())body.addView(ui.action("정비 장소 길찾기 (좌표 입력)","inspection_navigation",ActionStyle.QUIET,canEdit()){destination()})
+        if(issues.isNotEmpty())body.addView(ui.action("정비 장소 길찾기 (좌표 입력)","inspection_navigation",ActionStyle.QUIET,canEdit()&&!navigation.busy){destination()})
+        if(navigationEvents.isNotEmpty())body.addView(ui.state("길찾기 수신 이력 · 현재 경로는 내비게이션에서 확인해 주세요",navigationEvents.joinToString("\n\n"){event->vehicleDisplay.time(event.at)+"\n"+InspectionNavigation.message(event.code)}).apply{tag="navigation_progress"})
+        if(navigation.busy)body.addView(ui.action("이번 요청 결과 확인 멈추기","cancel_navigation_monitor",ActionStyle.QUIET,canEdit()){navigation.cancel();navigationEvents=navigation.events;draw()})
         issues.forEach { issue ->
             val card = panel()
             card.addView(label(ConsultationSummary.build(issue, service.events(issue.id),::statusText), 24).apply { tag = "consultation_summary" })

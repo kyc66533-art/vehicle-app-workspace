@@ -34,9 +34,11 @@ class DriveExperimentChecks(private val inst:Instrumentation){
         main{try{car=Car.createCar(c,android.os.Handler(android.os.Looper.getMainLooper()),Car.CAR_WAIT_TIMEOUT_DO_NOT_WAIT){connected,ready->
             if(ready)try{val manager=connected.getCarManager(Car.PROPERTY_SERVICE) as CarPropertyManager
                 for((property,label)in listOf(VehiclePropertyIds.PERF_VEHICLE_SPEED to "SPEED",VehiclePropertyIds.GEAR_SELECTION to "GEAR")){
+                    val permission=if(label=="SPEED")"android.car.permission.CAR_SPEED"else"android.car.permission.CAR_POWERTRAIN"
+                    if(c.checkSelfPermission(permission)!=PackageManager.PERMISSION_GRANTED){lines.add("RUNTIME $label PERMISSION_DENIED; capability and receipt remain unverified");continue}
                     try{val config=manager.getCarPropertyConfig(property)
                         if(config==null)lines.add("RUNTIME $label UNSUPPORTED")
-                        else{val value=manager.getProperty<Any>(property,0);lines.add("RUNTIME $label status="+value.status+" value="+value.value+" vehicle_timestamp_ns="+value.timestamp)}
+                        else{val value=manager.getProperty<Any>(property,0);lines.add("RUNTIME $label status="+value.status+" value="+value.value+" vehicle_timestamp_ns="+value.timestamp+" config_hz="+config.minSampleRate+"~"+config.maxSampleRate+"; one read is not continuous-data validation")}
                     }catch(_:SecurityException){lines.add("RUNTIME $label PERMISSION_DENIED")}catch(_:Exception){lines.add("RUNTIME $label READ_FAILED")}
                 }
             }finally{latch.countDown()}

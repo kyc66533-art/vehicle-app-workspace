@@ -1,5 +1,13 @@
 # CARITDA 가상 주행·자동 기록·AI 연결 PoC
 
+## 이번 실제 SDK 재검증 — 2026-11-11 19:10 +09:00
+
+현재 구현/결과는 [DriveCheck 검증](DRIVE_CHECK_ACCEPTANCE.md)을 따른다. 일반 UI 구조를 유지한 validation Main에서 Console100→18→18 반복→45와 실제 SDK GET/CALLBACK·한 사건/진입·해제·사용자 명시 저장·A/B 읽음·cold restore를 새로 실행했다. 마지막 Console100/P/0와 SDK100/안전 gate ALLOWED를 확인했다. 이전11월8일 Console 성공을 이번 성공으로 대체하지 않았다.
+
+SOC 최초 유효 수신15초 timeout·지연 callback 차단과 시간 역순 원관측의 상태 되돌림 방지를 보완했다. raw와 기존 사건/공백은 보존한다. 새 DriveCheck는 사용자 선택으로만 일반 초안을 열고 센서 숫자를 본문/AI에 자동 넣지 않는다. 이번 유료 Gemini/서버 배포/정책 변경0이며, 현재 일반 증상용 Gemini 모델ON·기존 동의·한도를 보존했다. 아래 “AI 미연결”은 과거 PoC 당시 사실이다.
+
+급가감속은 CAR_SPEED 권한 거부/연속 실제 입력 부족, 진동은 기기 센서 없음으로 검증용 조사에 제한한다. validation 마이크 수동 진폭 실험은 고장 진단이 아니며 자동 수집하지 않았다. 일반 데이터·AVD/설정 초기화0, 기존 SDK·Gleo·STT/TTS·AI 캐시 보존. 아래 원래 측정 이력은 유지한다.
+
 2026-11-08 21:45 +09:00 (Asia/Seoul). 기준 main `3c1a5f5a034a0515bda5a9d1202863bb8d7fd17b`. Pleos Connect v2.1.0/API34, Vehicle SDK2.3.2, emulator-5554/Android user10. CARITDA는 상표 검증 전 가칭입니다.
 
 **부분 성공:** Console→실제 SDK GET/변화 callback→유효성/사용자 규칙→자동 안내 저장·화면→재실행 복원은 성공했습니다. 실제 인증된 AI 모델 요청/응답은 승인된 중계 인증과 비용 설정을 전달받지 못해 **실행하지 않았습니다**. HTTPS 연결과 validation JSON Mock를 AI 연결 성공으로 바꾸어 보고하지 않습니다. 실차/실제 배터리 고장 실험이 아닙니다.

@@ -1,5 +1,19 @@
 # CARITDA 통합 구현·실행 검증
 
+## DriveCheck 보조·위치·SOC 안정화 — 2026-11-11 19:10 +09:00
+
+CARITDA의 기존 홈/기록/차량/AI 구조를 유지하며 위치 동의→실제 last-known 조회→명시적 append 연결/이력과 DriveCheck 안내→편집 초안→명시적 저장→기존 AI/인계를 연결했다. SDK 버전·기존 STT/Gemini/TTS·DB 스키마·Gleo·운영 정책은 바꾸지 않았다. 센서값은 Gemini body에 자동 추가하지 않는다.
+
+실제 Navi에서 목적지 일치·탐색 시작·ROUTE_DRIVE/ROUTE_GUIDING을 받았지만 onRoutingCompleted는30초 안에 오지 않았다. 수신 이력을 표시하고 전체 완료는 보류한다. 기존 경로와 약관·좌표·권한·중복·생명주기를 검사하며 사용자 경로를 교체하지 않는다. 이번에 발행한 일치 fixture 경로만 정리하고 SAFE_GUIDING/inactive를 재확인했다. 공식 이벤트 의미에 따라 onRouteStarted를 안내 시작으로 잘못 표시하던 부분을 수정했다.
+
+실제 validation Main에서 Console100→SDK18 callback→반복18 GET→45 callback, 동일 사건 진입1/해제1, A 명시 저장·B 읽음·cold restore를 검증했다. 종료 뒤 SDK 수신 중단·공백 및 Console100/P/0와 SDK100/실제 ALLOWED 복원 확인. 차량20항목12수신/8미지원과 실제 Fused 연결·TTS 완료를 재검증했다. CAR_SPEED 권한은 거부, 연속 속도/가속도 미확보·기기 가속도 센서 없음이므로 급가감속 점수/진단은 없다. 마이크는 validation 수동 최대5초 RMS/peak/직접 중단만 보완했고 이번 자동 녹음0이다.
+
+Debug/Validation/AndroidTest/Lint 성공,0오류/56경고·Unit NO-SOURCE. **신규102+관련 회귀331=433 assertion**, 새로운 유료 Gemini/Worker 배포0회. 모델ON·동의·인증·캐시·한도 보존. 일반 앱 서명 일치 교체 및 COLD/resumed 실행 성공, 일반 UI 자동화0이다. 새 위치/DriveCheck의 일반 사람 실조작 E와 실차 F는 미검증이다.
+
+[이번 파일21개·A~F·433개 검사·실제 SDK/합성 구분·데이터 보존·남은 기술적 제한](DRIVE_CHECK_ACCEPTANCE.md)이 최신 근거다. 아래 과거 실모델1회/298/281개 결과는 각 작업 당시 기록으로 보존한다.
+
+---
+
 ## 작성·AI 설명·TTS·인계 연결 — 2026-11-11 17:31 +09:00
 
 일반 작성 화면에 **저장하고 AI 설명**을 추가했습니다. STT final+ended→직접 편집→명시적 SQLite 저장/읽기 확인→그 issue ID의 기존 AI 화면으로 이어집니다. 전송 요약을 확인하고 새 설명을 명시적으로 요청해야 모델을 호출합니다. 현재 `USER_SELECTED_RECORD`/issue별 revision 캐시 계약을 유지하기 위해 미저장 분석은 추가하지 않았습니다. 가짜 문제·ID 재사용·AI 완료 후 자동 저장은 없습니다.

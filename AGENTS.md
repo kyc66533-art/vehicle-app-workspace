@@ -1,10 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — STT 자동 종료·취소 안정화
-- 최신 지시는 공식 ON_DEVICE/request/Locale.KOREA 자동 종료와 재입력이다. 실제 한국어3회·자동종료는 사용자/SDK로그로 확인했다. 수동 완료 UI/수동EOF 분기는 제거한다. 취소는 별도CANCELLED이며 stop/release·generation 차단으로 늦은 결과와 중복 요청을 막고 원래 작성 내용/DB를 바꾸지 않는다. final과실제ended 모두 있어야 완료다. 타이머·부분문장으로 성공을 만들지 않는다.
-- Windows 캡처는 정상이나 Android전달이 peak2였고 -allow-host-audio 명시로 기존AVD를 재실행해 복구했다. 기존AVD/설정파일/데이터/백업을 초기화하지 않는다. passive meter0은 입력실패 증거가 아니다. PCM/RMS/SDK/실제발화/합성을 구분하며 음성·문장·키를 진단로그나외부에 남기지 않는다. docs/STT_STABILITY.md·STT_RUN_GUIDE.md를 따른다.
-- Vehicle2.3.2/기록/운전자ID/초안/원관측/AI캐시/View홈을 보존한다. Navi3.0.5/Fused1.1.3/STT·TTS3.3.1 공개API와 Maven.security 필터를 유지한다. 타이어기준은 실압이 아니며 등화ON은 고장 증거가 아니다. Gleo승인/외부호출·실제경로·실차는 미검증을 유지한다.
-- 계측은 validation 고유fixture/조기분기만 쓰며 기존validation DB도 초기화하지 않는다. 일반앱 UI자동화 금지. 313 assertion과 실제발화3회/공개PCM3회는 별도다. 위험한 기본prepare는 실행하지 않는다. 원본 DB현재수를 다시 확인하고 과거23건으로 고정하지 않는다.
+## 현재 작업 — CARITDA 위치·SOC·DriveCheck 보조
+- STT는 공식 ON_DEVICE/request/Locale.KOREA 자동종료·재입력이다. final+실제ended 둘 다 있어야 완료며 타이머/부분문장/수동EOF는 금지한다. CANCELLED는 stop/release/generation으로 지연·중복을 차단하고 원 초안/DB를 보존한다. 한국어3회는 별도 근거다.
+- STT입력은 -allow-host-audio로 복구했다. AVD/설정/DB/백업 초기화 금지. passive meter0은 실패 증거가 아니다. 음성/문장/키를 로그·외부에 남기지 않는다. docs/STT_STABILITY.md·STT_RUN_GUIDE.md를 따른다.
+- Vehicle2.3.2/Navi3.0.5/Fused1.1.3/STT·TTS3.3.1/보안Maven필터/View홈·기록·운전자·원관측·캐시를 유지한다. DriveCheck는 편의 안내→선택 초안→명시 저장이며 센서 숫자를 본문/AI에 자동 넣지 않는다. 타이어 기준·등화ON은 실압·고장이 아니다.
+- 위치는 동의·권한·최종 확인 후 기존sidecar append다. Navi는 기존 경로/활성모드를 보호하며 onRouteStarted는 탐색 시작이다. 실제 목적지·ROUTE_DRIVE/안내모드 수신과 탐색완료 미수신을 구분한다. 일반 코드로 경로를 취소하지 않는다. SOC역순/오래됨/공백은 정상·해제가 아니다. docs/DRIVE_CHECK_ACCEPTANCE.md를 따른다.
+- 계측은 validation 고유fixture/prepare전 조기분기만 사용한다. 기존validation도 초기화 금지·일반앱 UI자동화0. 이번433과 과거313/발화3회는 별도다. 현재 원본수를 다시 확인한다. 공개 연속 속도/가속도·진동 미확보이며 마이크PoC는 validation 수동 진폭만이다. Gleo외부/일반 새흐름/실차는 미검증이다.
 - Gemini/Firebase/Keystore·BUDGET/portable:v2/UNKNOWN·모델ON·일5/월100/서비스월300을 보존한다. 이번 실모델/배포0. AI는 명시적 문제 저장 후 기존 화면에서 요청한다. category/situation만 전송하며 이름/메모/ID/시각/위치/차량값/다른기록은 제외한다. 연구·타작업·아래GitHub 게시규칙을 유지한다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분

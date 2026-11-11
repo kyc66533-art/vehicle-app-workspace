@@ -1,5 +1,17 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## DriveCheck·위치·내비 실제 재검증 — 2026-11-11 19:10 +09:00
+
+기존 Vehicle2.3.2/NaviHelper3.0.5/Fused1.1.3/STT·TTS3.3.1을 유지했다. Vehicle20개 조회의12개 수신·8개 미지원, 실제 Fused last-known·선택 fixture 연결, 실제 TTS 완료 callback을 이번에도 확인했다. 일반 앱의 실제 STT·실모델 성공은 보존된 별도 과거 사실이며 이번 유료 모델 요청0이다.
+
+Navi service3.0.4/내비 앱3.3.2-rc5-hotfix.3에서 preflight→목적지 전달→검색 시작→ROUTE_DRIVE→ROUTE_GUIDING→목적지 일치를 수신했다. onRoutingCompleted는30초 내 미수신이라 전체 성공을 만들지 않는다. isRouting=false라도 안내 모드가 활성화되어 있으면 기존 경로를 보호한다. 이번 fixture만 좌표 일치 후 취소·SAFE_GUIDING/inactive 확인. 생산 코드에는 기존 경로 취소가 없다.
+
+SOC100→실제18 callback→반복18 GET→45 callback·사건 한 개/진입·해제·A/B 인계·재시작을 validation Main에서 확인했다. Console HTTP200과 SDK 수신은 별도다. 시험 후 Console100/P/0 및 SDK100/정차 gate 복원도 확인했다. DriveCheck는 정보 품질과 사용자 기준을 표시하며 고장/정상 판정을 하지 않는다.
+
+공개 Vehicle2.3.2 sources에는 연속 실제 가속도·진동·소음 입력을 확보하지 못했다. cruise target은 실제 속도가 아니다. validation의 AAOS CAR_SPEED는 PERMISSION_DENIED라 capability/실수신/주기는 미검증이다. AAOS gear 단발 수신은 연속 운전 입력의 대체가 아니다. 기기 accelerometer 없음, 마이크 입력 장치 inventory는 파형 성공과 다르며 이번 자동 수집0. 위험 점수/음향 고장 감지/새 권한·센서 AI 전송은 없다.
+
+[공식 1차 근거·설치 버전·A~F·433개 검사·정확한 미완료](docs/DRIVE_CHECK_ACCEPTANCE.md). 아래 예전 경로 미전달/AI OFF/수신0은 당시 이력으로 보존한다.
+
 ## 최종 통합 재검증 — 2026-11-11 15:46 +09:00
 
 이번 실제 Vehicle20개 읽기에서도12개 RECEIVED/8개 UNSUPPORTED를 확인했습니다. SOC100%/0.0km 및 문·등화·페달 등은 에뮬레이터 SDK 응답이지 실차 고장 판정이 아닙니다. 기존 SDK/권한은 바꾸지 않았습니다.

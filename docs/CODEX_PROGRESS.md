@@ -1,5 +1,19 @@
 # Codex 개발 진행 기록
 
+## 2026-11-11 19:10 +09:00 — 위치·내비·DriveCheck 보조 실제 통합
+
+- 시작 main `80f76b1bdac9044f649eba01e727ef4cee084b48`, 로컬209개 일치/원격 전용 연구18개. 작업 중 main `d0e7281fea775d306dc2cf7d9f32e30a70d79ce8`의 연구8개 추가만 확인했다. 대상 source/blob는 불변이라 기존 규칙의 Aside-only 예외로 최신 tree/parent를 이어 보존한다. 로컬 Git/연구 수정 없음.
+- 실제 Kotlin21개 변경(일반11/validation3/계측7). 위치는 매번 설명·동의/권한·실제 Fused last-known·유효/오래됨/시각·최종 확인→기존 v1 sidecar append/readback/history/cold 복원이다. 취소 후 버튼 재활성 오류를 수정했다. 기존 위치/문제 원문/작성자/상태/이력은 덮어쓰지 않는다.
+- Navi 공개3.0.5를 실제 service3.0.4/maps3.3.2-rc5-hotfix.3과 대조했다. onRouteStarted는 검색 시작으로 수정. 기존 routing 또는 활성 안내모드/약관·준비/좌표·권한·중복·해제를 검사한다. 실제 목적지 일치·검색 시작·ROUTE_DRIVE/ROUTE_GUIDING 수신, **onRoutingCompleted 미수신→30초 timeout**. 전체 안내 완료를 만들지 않는다. 사용자 기존 경로는 건드리지 않고, 이번 fixture만 일치 검증 뒤 정리/SAFE_GUIDING·inactive 확인했다. 입력·실제 Main 이력/회전7개 통과.
+- DriveCheck는 기존 차량 화면에서 정보 품질과 사용자 확인 기준만 표시한다. 선택한 항목→기존 초안 보존 또는 일반 편집 문장→사용자 명시 저장→선택 AI·B 인계다. 자동 안내로 문제/초안을 확정하지 않으며 숫자·시각·위치·차량 ID를 본문/AI에 자동 삽입하지 않는다. STT/공유 분석 서비스/Gemini/TTS/Gleo3 Action/Callback은 유지했다.
+- SOC15초 유효 초기 수신 timeout·generation 해제와 시간 역순 상태 되돌림 방지를 보완했다. 실제 정차 validation Main에서 Console100→SDK18 CALLBACK→18 반복 GET→45 CALLBACK, 한 사건/진입1·해제1·A 명시 저장/B 읽음/cold/종료 공백을 확인했다. 마지막 Console100/P/0와 SDK100/실제 safety ALLOWED 복원. 공개20조회12수신·8미지원/실제 Fused·실제 TTS 완료도 재확인했다.
+- P2: 공개 Vehicle 연속 실제 속도/가속도 미확보, validation AAOS CAR_SPEED 권한 거부로 실제 capability/주기 미검증. gear 단발은 연속 입력의 대체가 아니다. 가속도 센서 없음. P3: validation 수동 최대5초 마이크 RMS/peak·중단만 보완, 자동 수집0. 위험 점수·소음/진동 고장 판정·일반 앱 진단 없음.
+- Debug/Validation/AndroidTest/Lint exit0. Lint0오류/56경고, Unit NO-SOURCE. **신규102+관련 회귀331=433 assertion** 실제 통과. SDK/합성/부분 이벤트·미검증 E/F를 구분했다. 초기 이름 제한/취소 UI/비동기 종료 대기/내비 정리 지연응답·Console 객체 파서는 수정 후 재검증했다. 기본 prepare/운영 UI 자동화·시험 문제/AVD reset0.
+- 기존254DB 전체 원본10,810행·스키마·무결성/FK 보존. 일반24문제/97이벤트/10운전자/0초안 불변, 정상 진입 SDK 관측·파생46행 추가. 일반15개 private 파일 동일·설치 표시1개만 갱신. validation 원본9535행 보존/새 fixture76DB, SDK heartbeat·시험 포인터2개·설치 표시만 갱신. Firebase 인증·AI 캐시/동의·모델ON·일5/월100/서비스300/비용 예약·pending/UNKNOWN 유지, 이번 실모델/Worker 배포/정책 변경0.
+- 일반 APK 기존 서명 일치·교체 설치/설치내용 SHA 대조·Main COLD/resumed 성공. APK SHA256 `48f478ff99cd773e630ed1a9e1f246367105b9177c46e29ced76347aa77f445b`. 새 흐름의 일반 사람 조작 E/실차 F는 미검증이며 자동 시험은 validation이다.
+- [상세 파일·A~F·433개 결과·공식 자료·사용자 최소 확인](DRIVE_CHECK_ACCEPTANCE.md), 통합 보고서/SDK matrix/Console PoC/README/루트지침 갱신. 검증된 파일만 **GitHub 연결 도구를 통한 게시**, 최신 main parent/expected SHA·force=false·연구26개 포함 나머지 blob 검증을 적용한다. 자기 SHA 반복 커밋은 하지 않으며 게시 SHA는 최종 응답에서 확인한다.
+- 남은 작업: 내비 앱의 검색완료 이벤트 정합성, 정차 일반 앱에서 새 위치 연결/DriveCheck 사람 확인, 실제 연속 운동 데이터/소음 label 확보 후 연구, 외부 Gleo 승인, 실차/물리 접근성, 후속 최종 UI·Release. 새 유료 AI 시험은 필요하지 않았다.
+
 ## 2026-11-11 17:31 +09:00 — STT·AI 설명·TTS·다음 운전자 인계 연결
 
 - 기준 main `f59abc15bcfb26f4d784b696bd2c97cc683eee2f`/tree `2c069eda…f0b4ec`; 시작 시 원격222 blob과 존재하는 로컬204개가 일치했습니다. 로컬에 없는 Aside 연구18개는 원격 그대로 보존합니다. 로컬 Git/clone/push·AVD/사용자 DB 초기화·운영 재개 실행기는 사용하지 않았습니다.

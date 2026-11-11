@@ -48,14 +48,18 @@ class LowSocStore(context:Context,name:String="caritda-soc-notices.db"):SQLiteOp
     /** Idempotent replay after raw commit/derived failure; never evaluate a historical low on enable. */
     fun reconcile(raw:ObservationStore,now:Long=System.currentTimeMillis(),afterWrite:()->Unit={}){
         val p=policy();if(!p.enabled)return
+        val clocks=mutableMapOf<String,Long>()
+        readableDatabase.rawQuery("SELECT scope,max(last_at) FROM episodes GROUP BY scope",null).use{c->while(c.moveToNext())clocks[c.getString(0)]=c.getLong(1)}
         raw.refs().filter{it.storeId==p.store&&it.rowId>p.since&&it.value.kind=="EV_SOC"}.forEach{ref->
             val v=ref.value;val scope="${ref.storeId}:${v.source}:EV_SOC"
+            val at=v.receivedAt;val reversed=at!=null&&clocks[scope]?.let{at<it}==true
+            if(DriveCheck.accepted(v)&&at!=null&&at<=now+60000)clocks[scope]=maxOf(clocks[scope]?:0L,at)
             val db=writableDatabase;db.beginTransaction()
             try{
                 val seen=db.rawQuery("SELECT 1 FROM evaluations WHERE policy_version=? AND store_id=? AND row_id=?",arrayOf(p.version.toString(),ref.storeId,ref.rowId.toString())).use{it.moveToFirst()}
                 if(!seen){
                     val active=db.rawQuery("SELECT id FROM episodes WHERE scope=? AND phase='LOW'",arrayOf(scope)).use{if(it.moveToFirst())it.getString(0)else null}
-                    val result=SocRule.assess(v,p.threshold,active!=null,now)
+                    val result=if(reversed)SocAssessment.STALE_OR_INSUFFICIENT else SocRule.assess(v,p.threshold,active!=null,now)
                     db.insertOrThrow("evaluations",null,ContentValues().apply{put("policy_version",p.version);put("store_id",ref.storeId);put("row_id",ref.rowId);put("scope",scope);put("classification",result.name);put("rule",SocRule.VERSION);put("threshold",p.threshold);put("at",now)})
                     if(active!=null&&result==SocAssessment.NORMAL_INFORMATION)db.execSQL("UPDATE episodes SET policy_version=?,threshold=? WHERE id=?",arrayOf(p.version,p.threshold,active))
                     if(result==SocAssessment.USER_LOW_SOC||result==SocAssessment.CONDITION_EXIT){

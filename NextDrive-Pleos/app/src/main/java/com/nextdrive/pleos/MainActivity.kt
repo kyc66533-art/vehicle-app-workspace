@@ -73,6 +73,10 @@ class MainActivity : Activity() {
     private val locationReader by lazy{OneShotLocation(this){visible&&canWrite()}}
     private val navigation by lazy{InspectionNavigation(this){visible&&canEdit()}}
     private var permissionAction:(()->Unit)?=null
+    // Instrumentation can use an isolated database family, never either app's existing records.
+    private val fixturePrefix by lazy { intent.getStringExtra("validation_fixture")?.takeIf {
+        packageName=="com.nextdrive.pleos.validation" && Regex("gleo-ui-[a-f0-9-]{36}").matches(it)
+    } }
     private fun stopAssistance(){speechOutput.stop();speechInput.stop();locationReader.stop();navigation.stop();permissionAction=null}
     private fun permission(name:String,action:()->Unit){
         if(!canEdit())return
@@ -87,16 +91,24 @@ class MainActivity : Activity() {
     private fun voiceDraft(){
         if(!canWrite()||!captureDraft())return
         speechOutput.stop()
-        val draftId=journal?.id?:return
         permission(android.Manifest.permission.RECORD_AUDIO){
+            val editing=journal?:return@permission
+            val field=situationInput?:return@permission
+            val delivery=SpeechDraftDelivery(editing.id,editing.ownerId,field.text.toString())
             notice="기기에서 음성 입력을 준비하고 있어요. 자동으로 저장하지 않아요.";feedback?.apply{text=notice;visibility=View.VISIBLE}
             speechInput.listen({message->notice=message;feedback?.apply{text=message;visibility=View.VISIBLE}},{text->
-                if(canWrite()&&journal?.id==draftId){
-                    val field=input("인식된 내용을 확인해 주세요.",800).apply{setText(text)}
-                    val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle("음성 입력 확인").setView(field).setNegativeButton("취소",null).setPositiveButton("입력에 반영"){_,_->
-                        if(canWrite()&&journal?.id==draftId){situationInput?.setText(field.text.toString());captureDraft();notice="입력에 반영했어요. 내용을 확인한 뒤 저장해 주세요.";draw()}
-                    }.create();activeDialog=dialog;dialog.show()
+                val current=situationInput
+                val merged=delivery.accept(text,journal?.id,journal?.ownerId,current?.text?.toString().orEmpty(),
+                    visible&&canWrite()&&screen==Screen.RECORD&&current===field)
+                if(merged!=null&&current!=null){
+                    // SpeechInput delivers only after both SDK final and ended. No modal confirmation
+                    // and no issue save: the driver can edit this draft and use the existing Save action.
+                    current.setText(merged);current.setSelection(current.length())
+                    if(captureDraft())notice="음성을 입력란에 반영했어요. 내용을 확인한 뒤 저장해 주세요."
+                }else if(visible&&screen==Screen.RECORD){
+                    notice="작성 내용이 바뀌었거나 길이가 길어 음성을 덧붙이지 않았어요. 기존 입력과 인식한 문장을 확인해 주세요."
                 }
+                feedback?.apply{setText(notice);visibility=View.VISIBLE}
             })
         }
     }
@@ -109,7 +121,7 @@ class MainActivity : Activity() {
                     if(value==null){notice="위치를 받지 못했어요. 기록은 유지돼요. 확인 코드: "+code;draw()}
                     else if(canWrite()&&service.canManage(service.issue(id))){
                         val at=VehicleUi.shortTime(value.measuredAt)
-                        confirm("이 위치를 함께 저장할까요?","위도 "+value.latitude+" · 경도 "+value.longitude+"\n위치 확인 "+at+"\n오래된 위치일 수 있어요. 증상 당시 위치로 확정하지 않아요."){
+                        confirm("이 위치를 함께 저장할까요?","위도 "+value.latitude+" · 경도 "+value.longitude+"\n위치 확인 "+at+"\n오래된 위치일 수 있어요. 증상 당시 위치로 확정하지 않아요. 정확도(m)는 이 SDK 값으로 확인할 수 없어요."){
                             check(service.canManage(service.issue(id)))
                             IssueLocationStore(this).use{it.save(id,value)};notice="위치를 이 기록과 함께 저장했어요.";draw()
                         }
@@ -127,7 +139,7 @@ class MainActivity : Activity() {
             val latitude=lat.text.toString().toDoubleOrNull();val longitude=lon.text.toString().toDoubleOrNull();val title=name.text.toString().trim()
             if(latitude==null||longitude==null||!latitude.isFinite()||!longitude.isFinite()||latitude !in -90.0..90.0||longitude !in -180.0..180.0||title.isBlank()){lat.error="장소 이름과 유효한 좌표를 확인해 주세요.";return@setOnClickListener}
             if(!canEdit())return@setOnClickListener
-            dialog.dismiss();navigation.request(latitude,longitude,title){code->notice=when(code){"NAVI_ROUTING_COMPLETED"->"내비게이션이 경로 검색 완료를 알려 왔어요.";"NAVI_REQUEST_SENT"->"경로를 요청했어요. 내비게이션 응답을 기다려 주세요.";"NAVI_EXISTING_ROUTE"->"진행 중인 경로가 있어 변경하지 않았어요.";"NAVI_TERMS_REQUIRED"->"내비게이션에서 이용 약관을 먼저 확인해 주세요.";else->"길찾기를 완료하지 못했어요. 확인 코드: "+code};feedback?.apply{text=notice;visibility=View.VISIBLE}}
+            dialog.dismiss();navigation.request(latitude,longitude,title){code->notice=when(code){"NAVI_ROUTE_STARTED"->"내비게이션이 경로 시작을 알려 왔어요. 목적지는 내비게이션에서 확인해 주세요.";"NAVI_ROUTING_COMPLETED"->"내비게이션이 경로 검색 완료를 알려 왔어요. 경로 시작은 아직 확인 중이에요.";"NAVI_REQUEST_SENT"->"경로를 요청했어요. 내비게이션 응답을 기다려 주세요.";"NAVI_EXISTING_ROUTE"->"진행 중인 경로가 있어 변경하지 않았어요.";"NAVI_TERMS_REQUIRED"->"내비게이션에서 이용 약관을 먼저 확인해 주세요.";else->"길찾기를 완료하지 못했어요. 확인 코드: "+code};feedback?.apply{text=notice;visibility=View.VISIBLE}}
         }
     }
     private val freshnessHandler=android.os.Handler(android.os.Looper.getMainLooper())
@@ -188,11 +200,11 @@ class MainActivity : Activity() {
         root = column().apply { setBackgroundColor(Color.rgb(14, 23, 34)); setPadding(dp(24), dp(16), dp(24), dp(16)) }
         setContentView(root, ViewGroup.LayoutParams(-1, -1))
         root.addOnLayoutChangeListener { _,l,_,r,_,oldL,_,oldR,_ -> if(oldR>oldL && r-l!=oldR-oldL)root.post{draw()} }
-        repository = SqliteIssueRepository(this)
-        observations = ObservationStore(this)
-        snapshots=SnapshotStore(this)
+        repository = if(fixturePrefix==null)SqliteIssueRepository(this)else SqliteIssueRepository(this,fixturePrefix+".db")
+        observations = if(fixturePrefix==null)ObservationStore(this)else ObservationStore(this,fixturePrefix+"-observations.db")
+        snapshots=if(fixturePrefix==null)SnapshotStore(this)else SnapshotStore(this,fixturePrefix+"-snapshots.db")
         vehicleDisplay=VehicleDisplaySettings(getSharedPreferences("caritda_vehicle_display",MODE_PRIVATE))
-        lowSoc=LowSocStore(this)
+        lowSoc=if(fixturePrefix==null)LowSocStore(this)else LowSocStore(this,fixturePrefix+"-soc.db")
         socObserver=PleosSocObserver(this,observations,{visible&&canEdit()&&lowSoc.policy().enabled},{
             runCatching{lowSoc.reconcile(observations)}.onFailure{notice="차량 정보는 저장됐지만 안내 갱신에 실패했어요. 자동 안내에서 다시 시도해 주세요."}
             requestAnalytics()
@@ -319,6 +331,7 @@ class MainActivity : Activity() {
     private fun maybeSocWatch(){if(::socObserver.isInitialized&&visible&&canEdit()&&screen!=Screen.WELCOME&&!pleos.busy&&lowSoc.policy().enabled)socObserver.start()}
     private fun stopSocWatch(reason:String){if(::socObserver.isInitialized){if(socObserver.running)runCatching{lowSoc.gap(reason)};socObserver.stop(reason)}}
     private fun maybeAutomaticRead(){
+        if(fixturePrefix!=null)return // synthetic UI fixture; actual SDK checks run separately
         if(entry.claim(visible,canEdit(),screen!=Screen.WELCOME,pleos.busy)){
             android.util.Log.i("Caritda","entry_read_once")
             pleos.readOnce()
@@ -412,6 +425,7 @@ class MainActivity : Activity() {
         body.addView(menu)
     }
     private fun draw() {
+        if(::service.isInitialized)ActionDriverSession.id=if(service.confirmed())service.driver().id else null
         if(screen!=Screen.RECORD&&speechFormVisible){speechInput.stop();speechFormVisible=false}
         if (!::service.isInitialized || isDestroyed || isFinishing) return
         socThresholdDraft=socThresholdInput?.text?.toString()?:socThresholdDraft;socThresholdInput=null

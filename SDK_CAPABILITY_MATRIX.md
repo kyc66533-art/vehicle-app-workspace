@@ -1,5 +1,13 @@
 # 공식 SDK 및 실제 지원 기능 점검표
 
+## 최종 통합 재검증 — 2026-11-11 15:46 +09:00
+
+이번 실제 Vehicle20개 읽기에서도12개 RECEIVED/8개 UNSUPPORTED를 확인했습니다. SOC100%/0.0km 및 문·등화·페달 등은 에뮬레이터 SDK 응답이지 실차 고장 판정이 아닙니다. 기존 SDK/권한은 바꾸지 않았습니다.
+
+일반 앱 실제 한국어 final+ended→초안 자동 반영을 사용자가 확인했습니다. Fused1.1.3은 실제 유효 last-known 위치/시각을 수신하고 validation 고유 sidecar에 선택 fixture 연결·재개방을 검증했습니다. confidence를 정확도(m)로 바꾸지 않습니다. Navi3.0.5는 경로 상태 수신까지 실제 확인, 사용자 목적지 전달·경로 시작은 미검증입니다. Pleos TTS는 onDone, 물리 청취는 별도입니다.
+
+Gleo3개 Action/공식 Callback 구성·외부 Intent 로컬 처리 검증은 실제 wake word/음성 응답과 다릅니다. 시스템 음성 관련 앱은 존재하나 신뢰할 응답 수신자·호출 계약·Schema 승인은 확인되지 않아 개인정보 Broadcast를 차단합니다. Gemini 새 요청은 기존 정책을 거치도록 연결했고, 이번 모델/배포0회입니다. [공식 소스 파일·A~G 구분](docs/GLEO_INTEGRATION_ACCEPTANCE.md), [이번281개 검사와 일반 APK](docs/CARITDA_INTEGRATION_REPORT.md)를 따릅니다.
+
 ## 최신 공개 SDK 통합 — 2026-11-11 Asia/Seoul
 
 Vehicle2.3.2의 기존3종+공개17종을 실제 에뮬레이터에서 읽었습니다. SOC100%/거리0km/문4개 위치/등화3개/방향지시/브레이크 페달/출력 저하 안내의12개 값 수신, 연료·오일·브레이크액·워셔액·저압기준4개는 UNSUPPORTED입니다. 새 CAR_DOORS/CAR_LIGHTS/CAR_SAFETY는 읽기만 사용하며 PRIVATE 권한은 선언하지 않았습니다. 타이어 저압 기준은 실압/고장이 아닙니다.

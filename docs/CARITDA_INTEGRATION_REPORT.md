@@ -1,5 +1,96 @@
 # CARITDA 통합 구현·실행 검증
 
+## 최종 통합 갱신 — 2026-11-11 15:46 +09:00
+
+기준 main `d946720bb5598982ded7d56027b4eb788188740e`와 로컬 tracked 파일이 일치한 상태에서 시작했습니다. 새로운 사용자 지시에 따라 일반 앱의 음성 초안 팝업 제거를 먼저 완료했습니다. 아래 과거 통합 결과는 이력이며, **이번 버전의 검사는 총 281 assertion**입니다. 과거 313개 전체를 재실행한 것으로 쓰지 않습니다.
+
+| 기능 | 이번 판정 | 실제 근거와 한계 |
+| --- | --- | --- |
+| 일반 앱 STT → 입력란 | 확인된 런타임 성공 | 사용자가 교체된 일반 앱에서 “팝업 없이 입력란에 반영됨” 확인. 실제 PLEOS_ON_DEVICE ENDED→FINAL→COMPLETE 순서 수신. 음성/문장 로그 저장 없음 |
+| 초안·명시적 저장·다음 운전자 | 확인된 런타임 성공 | validation 실제 MainActivity/SQLite: 합성 callback→초안, 중복/취소, Activity 재생성, 명시적 저장, B 재진입·인계 확인. 자동 issue 저장/해결 없음 |
+| Vehicle 2.3.2 | 확인된 런타임 성공 | 기존 20개 공개 조회 중 12개 RECEIVED/8개 UNSUPPORTED. SOC100%, 거리0.0km, 문/등화/방향지시/페달/출력저하. 실차 고장 판단 아님 |
+| 기존 Gemini 설명·암호화 캐시 | 확인된 런타임 성공(기존 사용자 사실), 이번은 로컬 회귀 | 이전 실모델 성공 사실 유지. 이번 issue/cache/cold/인증 계약은 격리 Mock 검사이며 신규 Gemini0회 |
+| Gleo Schema·Intent·Callback 구성(A~C) | 확인된 런타임 성공(내부 계약/validation) | 일반/TEST별 Schema3개, 실제 ActionActivity 실행, payload 검사37개. 자연어 호출 성공과 다름 |
+| 신뢰 대상 전송·Wake word·Gleo 음성(D~F) | 외부 Gleo 승인·환경 대기 | 관련 시스템 앱은 존재하지만 공식 응답 receiver/호출 신원·Schema 승인을 확인하지 못함. 개인정보 Broadcast는 차단 |
+| Gleo 신규 Gemini 실시간 분기 | 코드·빌드만 성공 / 기존 Gemini 모델 OFF·한도 차단 유지 | 기존 클라이언트/동의/한도 재사용. 신규 호출0, Gleo 7초 내 신규 분석·음성 왕복 미검증. 현재 서버 정책을 변경하거나 추가 조회하지 않음 |
+| FusedLocation last-known·연결 | 확인된 런타임 성공(validation) | 실제 유효 좌표·시각 수신, 선택 fixture issue에 sidecar 저장·재개방 일치4개. 일반 앱 사용자 위치 연결 UI 실조작은 미검증, 정확도(m)·증상 당시 위치는 확정 불가 |
+| 앱 Pleos TTS | 확인된 런타임 성공(callback) | ON_DEVICE 완료 callback. 이번 물리 스피커 청취는 별도 미검증 |
+| Navi 경로 상태 | 확인된 런타임 성공 | routing=false, terms=true 실제 callback. request/검색완료/시작 분리·listener 해제 보완은 빌드 확인; 실제 사용자 목적지 전달/시작은 미검증 |
+| 실제 TPMS 압력·DTC·등화 고장 | 공개 API 미지원/현재 접근 불가 | 저압 기준·등화 ON을 실압·고장으로 쓰지 않음 |
+| Release APK | 코드·빌드만 성공 | unsigned 산출물만 생성. 서명·설치·공개 제출용 검증 미완료 |
+
+### 변경 파일
+
+- 일반 소스: `MainActivity.kt`, `CaritdaActionActivity.kt`, `integration/CaritdaActions.kt`, 신규 `SpeechDraftDelivery.kt`, `GleoReplyChannel.kt`, `GleoIssueAnalysis.kt`, `InspectionNavigation.kt`.
+- Manifest, 일반/validation `assets/schema.json`, 신규 `res/values/gleo.xml`. 추가 SDK/계정/Secret/권한을 만들지 않았습니다.
+- 계측: `MvpScenarioInstrumentation.kt`의 준비 전 조기 분기, 신규 `GleoIntegrationChecks.kt`, `SpeechDraftUiChecks.kt`, `LocationLinkChecks.kt`.
+- 문서: 본 보고서, [Gleo 검증·공식 근거](GLEO_INTEGRATION_ACCEPTANCE.md), [STT 기록](STT_STABILITY.md), [실행법](STT_RUN_GUIDE.md), README, SDK_CAPABILITY_MATRIX, CODEX_PROGRESS.
+
+STT SDK/생명주기 코드를 다시 쓰지 않았습니다. `SpeechDraftDelivery`는 원문/작성자/초안/화면이 같은 경우에만 성공 문장을 한 번 덧붙입니다. 일반 앱의 확인 팝업을 제거하고 수동 완료 버튼도 복원하지 않았습니다. `validation_fixture`는 validation 패키지와 제한된 고유 이름에서만 별도 DB를 선택하며 일반 앱은 이 extra를 무시합니다. 합성 callback 주입은 androidTest의 reflection에만 있습니다.
+
+### 실제 빌드·검사
+
+Windows11, JBR21, Gradle8.11.1, AGP8.10.1, Kotlin2.2.21, API34, 기존 Pleos_Connect_v2.1.0/user10, 2560×1440/density160. 호스트 오디오 시작 설정과 AVD는 그대로입니다.
+
+```text
+:app:assembleDebug :app:assembleValidation :app:assembleValidationAndroidTest
+:app:lintDebug :app:testDebugUnitTest :app:assembleRelease
+BUILD SUCCESSFUL (3m20s, exit 0)
+```
+
+Lint 오류0/경고56. `testDebugUnitTest`는 NO-SOURCE로, Unit Test 성공 개수를 만들어내지 않습니다. 이후 새 검사의 fixture 운전자 등록/화면 재생성·위치 저장 검사를 보완한 테스트 APK만 재빌드했고 exit0입니다. 초기 PowerShell -P 인자 분리 오류와 신규 fixture의 미등록 운전자 오류를 고친 뒤 재실행했습니다. 기존 DB를 지우거나 운전자 정책을 바꾸어 통과시키지 않았습니다.
+
+위 명령은 기존 `-PcaritdaDebugKeystore`로 이미 설치된 Debug 서명을 재사용했습니다. 로컬 Gradle 네트워크 제한 때문에 기존 읽기 캐시/오프라인 설정을 사용했으며 새 Sync·설치를 요구하지 않았습니다.
+
+| 실제 validation 분기 | assertion |
+| --- | ---: |
+| gleoOnly — 새 Schema/입력/Callback/신뢰 차단/분석 정책 | 37 |
+| speechDraftUiOnly — 새 MainActivity 초안·저장·재생성·B 확인 | 21 |
+| locationLinkOnly — 실제 위치 값의 격리 연결·복원 | 4 |
+| coreDatabaseOnly / integrationOnly | 19 / 33 |
+| sttSessionOnly / sttAutomaticUiOnly | 40 / 6 |
+| issueAiOnly / issueAiColdOnly | 56 / 4 |
+| portableAiOnly / portableAiUiOnly | 26 / 4 |
+| analyticsContractOnly / integrationLiveOnly | 24 / 7 |
+| 합계 | **281** |
+
+각 분기를 `am instrument -w -r --user 10 -e <분기> true com.nextdrive.pleos.validation.test/com.nextdrive.pleos.MvpScenarioInstrumentation`로 실행했고 PASS marker·실제 계측 종료를 확인했습니다. 일반 앱 UI 자동화와 기존 destructive prepare는 실행하지 않았습니다. 합성 SDK callback/Mock 모델, 실제 에뮬레이터 Vehicle·Fused·TTS, 사용자 실제 한국어 발화를 분리합니다.
+
+### 데이터·일반 앱 설치
+
+변경 전 및 교체 직후/사용자 시험 후 각각 일반·TEST의 databases/shared_prefs/files를 로컬 비공개 백업했습니다. 기존 일반 41DB + validation163DB = **204DB**의 스키마/user_version/전체 원본 행/무결성/외래키 검사를 통과했습니다. 이후 추가 fixture DB는 기존 DB를 초기화하지 않았습니다.
+
+| 일반 앱 | 변경 전 | 최종 사용자 음성 시험 후 |
+| --- | ---: | ---: |
+| 문제 / 이벤트 / 운전자 | 24 / 96 / 10 | 24 / 96 / 10 |
+| 초안 | 0 | 1 — 사용자가 실제 음성으로 작성한 미저장 초안 |
+| 원관측 | 220 | 240 — 실제 진입 조회20개 추가 |
+| 스냅샷 | 73 | 74 |
+| 분석 인사이트 | 144 | 146 |
+
+일반 원본1112행·validation 원본9264행은 모두 동일하게 남았고, 일반 앱은 새 관측/스냅샷/인사이트/사용자 초안24행이 추가됐습니다. 일반 앱 인증·암호화 캐시·개인 파일15개는 변경 전후 byte-identical입니다. 기록 수를 과거23건으로 고정하지 않았습니다. Worker·Firebase·BUDGET·Secret·모델/정책 설정·연구 파일은 수정하지 않았고 외부 모델/배포0회입니다.
+
+설치된 일반 APK와 새 Debug의 인증서 SHA256 일치를 확인한 뒤 `adb install -r --user 10 .../app-debug.apk` 성공, 일반 MainActivity COLD 실행 Status:ok, 실제 foreground를 확인했습니다. 사용자가 새 일반 앱의 음성 자동 반영을 직접 확인했습니다. 시험 직후 백업을 위해 정상 앱을 종료했지만 초안과 인증 자료는 유지했습니다.
+
+### APK와 제출 제한
+
+- 일반: `NextDrive-Pleos/app/build/outputs/apk/debug/app-debug.apk` — 기존 Debug 서명, 교체 설치·사용자 실행 확인.
+- TEST: `NextDrive-Pleos/app/build/outputs/apk/validation/app-validation.apk` — 별도 applicationId·데이터.
+- 계측: `NextDrive-Pleos/app/build/outputs/apk/androidTest/validation/app-validation-androidTest.apk`.
+- Release: `NextDrive-Pleos/app/build/outputs/apk/release/app-release-unsigned.apk` — 빌드 성공, apksigner verify exit1(서명 없음). 실행 가능한 제출 APK라고 표시하지 않습니다. 새 키 생성·내보내기·APK 게시 없음.
+
+공모전 실제 열람·제출 준비는 README의 최신 절을 따릅니다. 저장소는 이번 연결 도구 조회에서 Private입니다. 공개 전 이력 전체 시크릿 검사, 기존 소유 서명키로 Release 서명·설치 검증, 최종 APK/영상·기획서 준비와 사용자 최종 공개/제출 승인이 남았습니다.
+
+### 남은 확인
+
+실제 Gleo A~G 판정과 승인/호출자 인증 조건은 [Gleo 보고서](GLEO_INTEGRATION_ACCEPTANCE.md)에 기록했습니다. 외부 D~G, 실제 새 Gemini 7초 왕복, 사용자 정비소 목적지/경로 시작, 물리 TTS 청취, PC B·실차·고령 사용자·TalkBack/rotary는 이번 성공으로 주장하지 않습니다. 안전 제한을 우회하지 않았으며 주행 중 복잡한 UI/백그라운드 음성 감시는 제공하지 않습니다.
+
+UI 팀은 MainActivity의 음성 최종 결과 적용, validation DB 분리, CarSafetyGate, 기록 원문/초안·작성자, Gleo 신뢰 확인과 기존 AI 최소 전송 계약을 유지해야 합니다. 홈 구조와 디자인 토큰은 다시 설계하지 않았습니다.
+
+---
+
+아래는 이전 통합 작업 당시의 기록입니다.
+
 기준: GitHub main `e0517f3972b8043c6f13b448c412d23f2217682e`. 2026-11-10 Asia/Seoul. 기존 Android View·홈·3개 핵심 흐름을 유지하며 보조 기능을 연결했습니다. 아래 결과는 Pleos Connect v2.1.0 에뮬레이터이며 실차 검증이 아닙니다.
 
 ## 실제 구현

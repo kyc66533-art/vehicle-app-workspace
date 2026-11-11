@@ -34,6 +34,9 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("locationLinkOnly")=="true"){val lines=LocationLinkChecks(this).run();result.putString("stream","CARITDA_LOCATION_LINK_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("gleoOnly")=="true"){val lines=GleoIntegrationChecks(this).run();result.putString("stream","CARITDA_GLEO_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("speechDraftUiOnly")=="true"){val lines=SpeechDraftUiChecks(this).run();result.putString("stream","CARITDA_SPEECH_DRAFT_UI_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("sttAutomaticUiOnly")=="true"){val lines=SpeechAutomaticUiChecks(this).run();result.putString("stream","CARITDA_STT_AUTOMATIC_UI_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("sttStopOnly")=="true"){val lines=SpeechFixtureChecks(this).run(true);result.putString("stream","CARITDA_STT_STOP_DIAGNOSTIC checks=0\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("sttRequestOnly")=="true"){val lines=SpeechRequestChecks(this).run();result.putString("stream","CARITDA_STT_REQUEST_DIAGNOSTIC checks=0\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

@@ -2,14 +2,14 @@
   "packageName": "com.nextdrive.pleos.validation",
   "appDescription": "A local vehicle observation and driver concern journal with explicit handover and inspection records.",
   "invokeWord": "카잇다",
-  "version": "0.2",
+  "version": "0.1.0",
   "actionCalls": [
     {
       "type": "function",
       "function": {
         "component": "activity",
         "name": "QUERY_CARITDA_CONTEXT",
-        "description": "Opens a local preview of recorded concerns, handover notes, received vehicle values or tire data availability. User confirmation is required before reading stored content.",
+        "description": "Read received vehicle values, battery charge, driver concerns, handover records or tire data availability. Does not diagnose, save records or call Gemini.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -19,6 +19,7 @@
                 "recent_issues",
                 "handover",
                 "vehicle",
+                "battery",
                 "tires"
               ],
               "description": "The requested kind of local vehicle context."
@@ -45,6 +46,35 @@
             }
           },
           "required": []
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "activity",
+        "name": "ANALYZE_CARITDA_ISSUE",
+        "description": "Explain one explicitly selected existing symptom record. Use existing to read a saved explanation or new only when the user explicitly requests a new Gemini analysis. Requires account, consent, device authorization and available quota. Does not confirm a diagnosis.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "record_query": {
+              "type": "string",
+              "description": "An exact identifying phrase from one existing symptom. Do not guess what this or that refers to."
+            },
+            "request_mode": {
+              "type": "string",
+              "enum": [
+                "existing",
+                "new"
+              ],
+              "description": "Use new only for an explicit request for a new analysis; existing does not call a model."
+            }
+          },
+          "required": [
+            "record_query",
+            "request_mode"
+          ]
         }
       }
     }

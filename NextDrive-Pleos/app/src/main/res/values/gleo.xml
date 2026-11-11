@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Populate only after official receiver identity, caller contract and Schema approval
+         have been verified. These are not credentials. Never infer a peer from an incoming Intent. -->
+    <string name="caritda_gleo_peer_package" translatable="false"></string>
+    <string name="caritda_gleo_peer_sha256" translatable="false"></string>
+</resources>

@@ -1,5 +1,39 @@
 # CARITDA(가칭) — 차량 시계열·자동 인사이트
 
+## 공모전 최종 통합 기준 — 2026-11-11
+
+CARITDA는 지원되는 차량 정보 확인 → 운전자 증상 초안 → 명시적 저장 → 선택적 Gemini 설명 → 다음 운전자 인계·점검 확인 흐름을 제공합니다. Android View 홈/기록/차량 정보 구조를 유지합니다. 자동 고장 진단·수리 완료 판정 서비스로 소개하지 않습니다.
+
+**일반 앱에서 실제 한국어 음성이 확인 팝업 없이 입력란에 반영되는 것을 사용자가 확인했습니다.** STT는 공식 ON_DEVICE/request 자동 종료이며, 직접 확인한 뒤 저장해야 문제 기록이 됩니다. 이번281개 계측 검사와 일반 앱 데이터 보존·교체 설치를 완료했습니다. [전체 결과/제한](docs/CARITDA_INTEGRATION_REPORT.md), [STT 실행법](docs/STT_RUN_GUIDE.md)을 확인하세요.
+
+Gleo Schema3개/Intent/Callback 구성과 보안 차단은 구현했습니다. **실제 Gleo wake word→새 Gemini→7초 내 Gleo 음성 답변은 미검증**입니다. 승인된 Schema와 검증 가능한 호출자·수신자 계약이 필요합니다. 캐시 재생을 새 분석으로 표시하지 않습니다. 기존 Firebase·Keystore·Worker·사용량 정책은 유지했고 이번 신규 모델/서버 배포는0회입니다. [Gleo 공식 근거·A~G 검증](docs/GLEO_INTEGRATION_ACCEPTANCE.md).
+
+### 실행 환경과 APK
+
+Android Studio에서 `NextDrive-Pleos`를 엽니다. 기존 Pleos_Connect_v2.1.0/API34, 앱 창2560×1440/density160에서 검증했습니다. Gradle8.11.1/AGP8.10.1/Kotlin2.2.21, Vehicle2.3.2, Navi3.0.5, Fused1.1.3, STT/TTS3.3.1입니다. 다른 PC는 공식 SDK Maven과 자기 환경의 Android SDK 경로가 필요하며 PC B 실행은 아직 미검증입니다. 기존 AVD/앱 데이터를 초기화하지 마세요.
+
+일반 `com.nextdrive.pleos`와 검증 전용 `com.nextdrive.pleos.validation`은 별도 UID/DB입니다. 일반 앱은 기존 설치 서명과 같은 APK로만 `adb install -r` 교체합니다. API 키나 공통 인증 토큰을 APK에 넣지 않습니다. AI 최초 로그인·동의·기기 등록 이후 세션/암호화 캐시를 재사용합니다. 관리자 사용량/모델 설정을 앱이 임의로 바꾸지 않습니다.
+
+| 산출물 | 프로젝트 루트 기준 경로 / 상태 |
+| --- | --- |
+| 일반 Debug | `NextDrive-Pleos/app/build/outputs/apk/debug/app-debug.apk` — 기존 Debug 서명, 일반 앱 교체·실행 검증 |
+| TEST | `NextDrive-Pleos/app/build/outputs/apk/validation/app-validation.apk` |
+| 계측 | `NextDrive-Pleos/app/build/outputs/apk/androidTest/validation/app-validation-androidTest.apk` |
+| 서명 전 Release | `NextDrive-Pleos/app/build/outputs/apk/release/app-release-unsigned.apk` — 빌드만 성공, 설치 가능한 제출 APK 아님 |
+
+기존 서명을 사용한 Debug/validation/AndroidTest, Lint, Release 빌드를 실행했습니다. AndroidTest는 격리 분기만 사용하며 인자 없는 기존 runner는 DB 준비 경로가 있어 실행하지 마세요. 정확한 분기·결과는 통합 보고서에 있습니다. Firebase 공개 Android 설정 파일은 로컬 구성으로 유지하며 인증 파일/DB/백업/음성/개인 캡처/APK는 이번 소스 커밋에 포함하지 않았습니다.
+
+### 제출 준비 상태
+
+이번에 [공식 공모전](https://appdevchallenge.auto-hmg.io/), [FAQ](https://appdevchallenge.auto-hmg.io/faq), [개발 가이드](https://appdevchallenge.auto-hmg.io/guide/development), [제출 가이드](https://appdevchallenge.auto-hmg.io/guide/submission)를 직접 확인했습니다. 접수양식(기획서)이 필수이고 영상·소스/APK GitHub는 선택 가산점 산출물입니다. 공식1차 마감은2026-11-15 23:59 KST, 2차 PT는12-03~04입니다.
+
+- 공식 안내의 제출 APK 위치는 같은 저장소의 `apk/팀명_앱이름_release.apk`입니다. **현재 그 파일은 게시하지 않았습니다.** 기존 소유 Release 서명키 사용·서명/설치 검증과 사용자 게시 승인이 필요합니다. Debug를 Release로 이름만 바꾸지 않습니다.
+- 시연 영상과 기획서 파일은 아직 이번 작업에서 생성·제출하지 않았습니다. 실제 일반 앱 STT 초안·저장/인계, SDK 차량 정보·그래프, 저장된 AI 설명을 구분해 촬영하세요. 신규 Gemini와 Gleo 왕복을 시연하려면 해당 실제 검증이 먼저 필요합니다.
+- 저장소는 현재 Private입니다. 공식 FAQ는11-16까지 Public 전환 후11-23까지 유지를 안내합니다. 공개 불가하면 마감 전에 공식 대체 다운로드 제출 경로를 확인해야 합니다. 코드/과거 이력 전체의 비밀정보 검토와 최종 승인 없이 공개·초대·외부 제출하지 않습니다.
+- 심사 기준 SHA는 최종 GitHub 연결 도구 게시 커밋을 사용합니다. 본 보고서에 자기 자신의 SHA를 넣기 위한 반복 커밋은 만들지 않습니다.
+
+아래는 이전 단계의 실행 기록이며 현재 기능·검증 범위는 위 링크를 우선합니다.
+
 2026-11-08: 실제 Pleos SDK SOC/누적거리 원본으로 그래프·통계·데이터 품질·자동 인사이트와 다음 확인 행동을 구현했습니다. Console80→60→18→45%의 실제 callback/차트/사건해제·cold복원, 기존320+신규49=369 assertion을 확인했습니다. SOC 현재값과 이전 사건을 분리하고 보조 버튼 경계·아이콘을 개선했습니다. 기존 홈·사용자 기록·원관측은 유지합니다.
 
 **실제 AI는 아직 미연결입니다.** 사용자가 중계/인증/모델·비용 설정 없이 로컬 분석부터 진행하도록 선택했습니다. 모델 호출·외부 전송·서버 배포는 하지 않았습니다. 분석 설명은 로컬 규칙이며 JSON/동의 검사를 실제 AI 성공으로 보고하지 않습니다. [실행 방법·실제/합성 구분·검사·중단 로그·데이터 보존·남은 작업](docs/CARITDA_ANALYTICS_AI_INTEGRATED_REPORT.md)을 확인하세요.

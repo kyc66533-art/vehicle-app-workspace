@@ -1,5 +1,20 @@
 # Codex 개발 진행 기록
 
+## 2026-11-11 15:46 +09:00 — 일반 앱 음성 초안·Gleo 안전 통합
+
+- 기준 main `d946720bb5598982ded7d56027b4eb788188740e`; 최초 로컬 tracked 파일 일치. GitHub 연결 도구로 HEAD/tree/blob를 확인했으며 로컬 Git·Aside 연구 파일은 변경하지 않았습니다.
+- MainActivity의 인식 확인 팝업을 제거하고 final+ended 이후 기존 입력란에 한 번 덧붙입니다. 원문/작성자/초안/동시편집/취소/중복 보호, Activity 재생성·명시적 저장·B 인계 확인을 유지했습니다. 사용자가 교체된 **일반 앱의 팝업 없는 반영**을 확인했고 실제 SDK ENDED→FINAL→COMPLETE를 확인했습니다. 수동 완료/마이크 재설정 없음.
+- Gleo QUERY/DRAFT를 재사용하고 명시적 기존/새 분석 Action을 추가했습니다. 공식 Callback 영어 message/status/mode/data 문자열 계약, 신뢰하는 호출자/서명/명시적 receiver/읽기 동의/6초 내부 예산을 구현했습니다. 검증된 수신 계약·Schema 승인이 없어 외부 전송은 차단합니다. 시스템 관련 앱 존재와 실제 Gleo 음성 성공을 구분합니다.
+- 기존 PortableAiClient/Firebase/Keystore/암호화 캐시·category/situation 동의·모델/한도/pending/UNKNOWN을 재사용했습니다. 새 모델/배포/설정 변경0회. 신규 Gemini 7초 왕복 미검증이며 캐시로 대체하지 않았습니다.
+- Debug/validation/AndroidTest/Lint/서명 전 Release 빌드 exit0. Lint 오류0/경고56, Unit NO-SOURCE. 신규62 + 기존 영향 범위219 = **281 assertion** 실제 통과. 초기 빌드 인자·새 fixture 운전자 준비 오류는 수정 후 재실행했으며 성공으로 누락하지 않았습니다.
+- 실제 Vehicle20개 중12개 수신/8개 미지원, Navi 경로 상태, Pleos TTS onDone, 실제 Fused last-known 수신·validation 선택 fixture DB 연결/재개방을 검증했습니다. 정확도(m)/실차/목적지 경로 시작/물리 음성 출력은 별도 미검증입니다.
+- 설치 서명 일치 후 일반 `install -r` 성공 및 COLD foreground 실행. 현재 일반24문제/96이벤트/10운전자 유지, 사용자 음성 미저장 초안0→1. 원관측220→240/스냅샷73→74/인사이트144→146. 기존204DB의 스키마·모든 원본행·무결성 통과, 일반 인증/개인/AI캐시15파일 byte-identical. 기존 원본1112+9264행 보존. 백업/DB/개인 결과는 로컬에만 있습니다.
+- 변경 파일: MainActivity, CaritdaActionActivity, CaritdaActions, SpeechDraftDelivery, GleoReplyChannel, GleoIssueAnalysis, InspectionNavigation, Manifest, 두 Schema, gleo resources, 신규3계측+runner, README/본 문서/통합·Gleo·STT·SDK 문서. 기존 View 홈/SDK 버전/AI 서버/Firebase 설정/안전 게이트/원본 스키마 보존.
+- 공모전 공식 페이지·FAQ·개발/제출 가이드와 Gleo5개 문서, 공식 샘플의 Kotlin/Manifest/Gradle을 직접 열었습니다. [상세 파일·A~G](GLEO_INTEGRATION_ACCEPTANCE.md), [281개 결과·APK·보존](CARITDA_INTEGRATION_REPORT.md).
+- 남은 범위: 외부 Gleo 승인·호출 신원·수신 계약, 실제 신규 AI 왕복, 사용자 정비소 경로 시작, Release 소유 키 서명·설치/게시 승인, PC B·실차·물리 접근성, 영상·기획서/공개 전 이력 검사. Private 저장소 공개·심사자 초대·제출을 실행하지 않았습니다.
+- 검증된 명시적 파일만 기대 HEAD를 지정해 **GitHub 연결 도구를 통한 게시**를 진행합니다. 최종 SHA/원격 확인은 완료 응답에 기록하며 로컬 Git push 성공으로 표현하지 않습니다.
+
+
 마지막 작업 갱신: 2026-11-11 02:26:21 +09:00 (Asia/Seoul)
 
 ## STT 자동 종료·취소 최종 정리 / SDK 통합 기반

@@ -18,6 +18,7 @@
         <package android:name="ai.pleos.playground.service.navi" />
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <intent><action android:name="ai.pleos.playground.intent.action.APP_ACTION_RESPONSE" /></intent>
     </queries>
     <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -37,6 +38,7 @@
             <intent-filter>
                 <action android:name="QUERY_CARITDA_CONTEXT" />
                 <action android:name="DRAFT_CARITDA_ISSUE" />
+                <action android:name="ANALYZE_CARITDA_ISSUE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

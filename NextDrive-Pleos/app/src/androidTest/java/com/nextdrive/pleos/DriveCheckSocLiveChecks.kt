@@ -30,7 +30,7 @@ class DriveCheckSocLiveChecks(private val inst:Instrumentation,private val runId
         val (a,b)=SqliteIssueRepository(c,db).use{val s=CaritdaService(it,{true});s.registerDriver("SDK작성A") to s.registerDriver("SDK작성B")}
         val raw=ObservationStore(c,prefix+"-observations.db");val low=LowSocStore(c,prefix+"-soc.db")
         val activity=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture",prefix).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
-        fun click(tag:String){await{activity.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{check(activity.window.decorView.findViewWithTag<Button>(tag).performClick())}}
+        fun click(tag:String){if(BLightTestNavigation.prepare(inst,activity,tag))return;await{activity.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{check(activity.window.decorView.findViewWithTag<Button>(tag).performClick())}}
         var issueId=""
         try{
             click("driver_${a.id}");click("start_driving");click("nav_VEHICLE");click("soc_notices")

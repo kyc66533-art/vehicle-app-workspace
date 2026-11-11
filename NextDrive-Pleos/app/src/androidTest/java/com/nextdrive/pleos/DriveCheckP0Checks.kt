@@ -115,7 +115,7 @@ class DriveCheckP0Checks(private val inst:Instrumentation){
         val prefix="gleo-ui-"+UUID.randomUUID();val db=prefix+".db"
         val (author,issue)=SqliteIssueRepository(c,db).use{repo->val service=CaritdaService(repo,{true});val author=service.registerDriver("위치검증");service.selectDriver(author);author to service.record(SymptomType.OTHER,"위치를 연결할 사용자 기록 fixture",System.currentTimeMillis(),"")}
         var a=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture",prefix).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
-        fun click(tag:String){await{a.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{check(a.window.decorView.findViewWithTag<Button>(tag).performClick())}}
+        fun click(tag:String){if(BLightTestNavigation.prepare(inst,a,tag))return;await{a.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{check(a.window.decorView.findViewWithTag<Button>(tag).performClick())}}
         fun dialog():AlertDialog=a.javaClass.getDeclaredField("activeDialog").apply{isAccessible=true}.get(a) as AlertDialog
         fun confirm(yes:Boolean){await{dialog().isShowing};main{dialog().getButton(if(yes)AlertDialog.BUTTON_POSITIVE else AlertDialog.BUTTON_NEGATIVE).performClick()}}
         try{
@@ -144,7 +144,7 @@ class DriveCheckP0Checks(private val inst:Instrumentation){
         val prefix="gleo-ui-"+UUID.randomUUID();val db=prefix+".db"
         val (author,issue)=SqliteIssueRepository(c,db).use{repo->val service=CaritdaService(repo,{true});val driver=service.registerDriver("경로검증");service.selectDriver(driver);driver to service.record(SymptomType.OTHER,"사용자가 확인한 정비 장소 fixture",System.currentTimeMillis(),"")}
         var a=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture",prefix).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
-        fun click(tag:String){await{a.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{a.window.decorView.findViewWithTag<Button>(tag).performClick()}}
+        fun click(tag:String){if(BLightTestNavigation.prepare(inst,a,tag))return;await{a.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{a.window.decorView.findViewWithTag<Button>(tag).performClick()}}
         fun dialog()=a.javaClass.getDeclaredField("activeDialog").apply{isAccessible=true}.get(a) as AlertDialog
         fun text(v:View):String=when(v){is TextView->v.text.toString();is ViewGroup->(0 until v.childCount).joinToString(" "){text(v.getChildAt(it))};else->""}
         val fake=Navi();var created=0

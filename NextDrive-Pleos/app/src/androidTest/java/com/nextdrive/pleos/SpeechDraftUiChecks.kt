@@ -43,7 +43,7 @@ class SpeechDraftUiChecks(private val inst:Instrumentation){
         fun launch()=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture",prefix).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
         var activity=launch()
         fun button(tag:String)=activity.window.decorView.findViewWithTag<Button>(tag)
-        fun click(tag:String){await{button(tag)?.isEnabled==true};main{check(button(tag).performClick())}}
+        fun click(tag:String){if(BLightTestNavigation.prepare(inst,activity,tag))return;await{button(tag)?.isEnabled==true};main{check(button(tag).performClick())}}
         try{
             click("driver_${author.id}");click("start_driving")
             val engine=Fake()

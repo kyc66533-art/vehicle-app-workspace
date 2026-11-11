@@ -169,7 +169,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
         if(body.isNotBlank())addView(text(body,22,secondary=true))
         tag=if(error)"error_state"else"empty_state"
     }
-    fun metric(name:String,value:String,time:String,state:String,key:String,icon:HmiIcon)=card().apply{
+    fun metric(name:String,value:String,time:String,state:String,key:String,icon:HmiIcon)=column().apply{
         tag="metric_$key"
         addView(text(name,22,true).apply{setCompoundDrawablesRelative(CaritdaIcon(icon,colors.secondary).apply{setBounds(0,0,dp(CaritdaTokens.METRIC_ICON),dp(CaritdaTokens.METRIC_ICON))},null,null,null);compoundDrawablePadding=dp(CaritdaTokens.MEDIUM)})
         addView(text(value,CaritdaTokens.METRIC,true).apply{tag="value_$key";setPadding(0,dp(12),0,dp(8))})

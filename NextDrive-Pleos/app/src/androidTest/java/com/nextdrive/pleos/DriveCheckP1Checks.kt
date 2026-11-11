@@ -96,7 +96,7 @@ class DriveCheckP1Checks(private val inst:Instrumentation){
         val (a,b)=SqliteIssueRepository(c,db).use{val service=CaritdaService(it,{true});service.registerDriver("DC작성A") to service.registerDriver("DC작성B")}
         val activity=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture",prefix).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
         val raw=ObservationStore(c,prefix+"-observations.db");val low=LowSocStore(c,prefix+"-soc.db");val fake=Soc();var observer:PleosSocObserver?=null
-        fun click(tag:String){await{activity.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{check(activity.window.decorView.findViewWithTag<Button>(tag).performClick())}}
+        fun click(tag:String){if(BLightTestNavigation.prepare(inst,activity,tag))return;await{activity.window.decorView.findViewWithTag<Button>(tag)?.isEnabled==true};main{check(activity.window.decorView.findViewWithTag<Button>(tag).performClick())}}
         try{
             click("driver_${a.id}");click("start_driving")
             main{observer=PleosSocObserver(activity,raw,{true},{low.reconcile(raw)},{activity.javaClass.getDeclaredMethod("draw").apply{isAccessible=true}.invoke(activity)},factory={fake})

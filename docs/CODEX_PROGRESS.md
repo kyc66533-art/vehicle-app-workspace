@@ -1,5 +1,15 @@
 # Codex 개발 진행 기록
 
+## 2026-11-11 21:35 +09:00 — B안 단계2 본문 전체 간소화·기능 경로
+
+- 단계1 게시 cc825855f90f9d4071620f657e11267369e57426을 이어 차량 그룹/점진 상세,문제 작성·목록·상세/위치,운전자 관리/도움,AI 요청·결과 영역을 실제 Kotlin View로 바꿨다. 최대1160dp 읽기 폭/76dp를 유지하며 OS 창/공조를 변경하지 않는다.
+- 원문/작성자/상태 우선,읽음/메모→AI→선택 연결→수동 상태·수정·이력이다. 저장 위치는 간단한 확인과 마지막 확인 위치 주의,좌표/시각/출처/이력은 상세다. 운전자 전환은 홈,추가/수정/보관은 설정. SOC 자동 안내와 분석은 별도다.
+- AI 진입 자동 호출 없음,명시적 동의/전송/요청과 캐시·신규 출처/전체TTS를 유지한다. 차량 데이터는 로컬에만 표시한다. 이전/홈이 실제 Main으로 복귀하며 초안 보관 실패는 이동/옛 메모 commit을 차단한다. DB/SDK/Firebase/캐시/할당량/Worker 계약은 불변이다.
+- Debug/Validation/AndroidTest/Lint exit0(2m33s), Unit NO-SOURCE, Lint0오류/57경고(프로그램 전용 ViewConstructor1개 추가). 새 BT23+관련120=143 assertion와 홈29 재검사 PASS. 실제SDK/실제STT취소/TTS와 합성/fixture AI를 구분한다. 스냅샷 fixture batch와 표시 숫자 기대의 초기 실패는 수정 후 통과했다.
+- 최신330개 기존 DB/11,264 원본행·스키마/무결성/FK 보존,일반24/97/10/0와private16개 동일. validation기존9919행 불변/새fixture87DB. 일반APK 교체 전. 유료 모델/배포/운영 변경/일반 UI 자동화/기본prepare/초기화0.
+- 수정 Kotlin: MainActivity/PortableAiActivity/CaritdaDesign,신규 ui/CaritdaPage·VehicleHealthPresentation;검증 BLightHarness/StageTwo/TestNavigation 및 기존 regression helper/runner. [단계별 근거](B_LIGHT_UI_ACCEPTANCE.md). 연구 수정 없음.
+- 다음 단계:22+2 매핑·모든폭/글자/방향/테마·캡처/시안대조·SDK홈·일반설치/보존. 이번 단계만으로 최종 전면 UX 완료를 주장하지 않는다. 검증된 파일만 GitHub 연결 도구를 통한 게시,최신 부모/기대HEAD/나머지 blob 보존을 확인한다.
+
 ## 2026-11-11 20:45 +09:00 — B안 단계1 홈·탐색·현재 확인 항목
 
 - 기준 main c424ec25/tree94e2e389, 로컬221개 일치·원격 연구26개 보존. 승인된 B 연구8개를 SHA 대조 후 읽었다. 전체22화면+AI2모드 개편 지시로 작업하며 이번 게시 범위는 기준/홈/탐색 단계다. 최종 전체 UX 완료가 아니다.

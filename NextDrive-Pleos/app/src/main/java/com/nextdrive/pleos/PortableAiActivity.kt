@@ -23,6 +23,7 @@ class PortableAiActivity:Activity(){
     private lateinit var gate:CarSafetyGate
     private lateinit var ui:CaritdaComponents
     private lateinit var body:LinearLayout
+    private lateinit var shell:LinearLayout
     private lateinit var status:TextView
     private lateinit var email:EditText
     private lateinit var password:EditText
@@ -46,6 +47,8 @@ class PortableAiActivity:Activity(){
     private val session by lazy{FirebasePortableSession(this) as PortableSession}
     private var message="저장된 충전량을 확인하고 있어요."
     private var resultText=""
+    private var resultOrigin=""
+    private var accountDetails=false
     private var issueResult:IssueAnalysisService.Result?=null
     private val spoken by lazy{com.nextdrive.pleos.integration.SpeechOutput(this){allowed()}}
     private val playback by lazy{com.nextdrive.pleos.integration.ExplanationPlayback({allowed()},
@@ -66,19 +69,38 @@ class PortableAiActivity:Activity(){
         previewOpen=saved?.getBoolean("preview_open")?:intent.getBooleanExtra("issue_after_save",false)
         usageRefreshAttempted=saved?.getBoolean("usage_refreshed")?:false
         vehicleDetails=saved?.getBoolean("vehicle_details")?:false
+        accountDetails=saved?.getBoolean("account_details")?:false
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val dark=CaritdaTheme.dark(this,fixturePrefix)
         ui=CaritdaComponents(this,CaritdaPalette.of(dark))
-        val root=ui.column().apply{setBackgroundColor(ui.colors.background);setPadding(ui.dp(24),ui.dp(12),ui.dp(24),ui.dp(12))};setContentView(root)
+        val root=ui.column().apply{setBackgroundColor(ui.colors.background);setPadding(ui.dp(24),ui.dp(12),ui.dp(24),ui.dp(12))};shell=root
+        setContentView(CaritdaPage(this,root).apply{setBackgroundColor(ui.colors.background)})
         if(packageName.endsWith(".validation"))root.addView(ui.text("검증 전용 · TEST",22,true))
-        root.addView(ui.action("이전 화면으로","portable_back",ActionStyle.QUIET,true,HmiIcon.BACK){finish()})
+        root.addView(aiHeader())
         status=ui.text("",22).apply{tag="portable_status";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
         root.addView(status)
-        body=ui.column();root.addView(ScrollView(this).apply{addView(body)},LinearLayout.LayoutParams(-1,0,1f))
+        body=ui.column();root.addView(ScrollView(this).apply{tag="portable_scroll";addView(body)},LinearLayout.LayoutParams(-1,0,1f))
+        root.addOnLayoutChangeListener{_,l,_,r,_,oldL,_,oldR,_->if(oldR>oldL&&r-l!=oldR-oldL)root.post{
+            root.findViewWithTag<View>("navigation_bar")?.let{root.removeView(it)};root.addView(aiHeader(),if(packageName.endsWith(".validation"))1 else 0);render()
+        }}
         gate=CarSafetyGate(this){if(it!=EditingState.ALLOWED){playback.cancel();cancelWork();if(::password.isInitialized)password.text.clear()};render()}
         FirebaseSessionProvider.prepare(this);message="저장된 충전량을 확인하고 있어요.";render()
     }
     private fun allowed()=visible&&::gate.isInitialized&&gate.state==EditingState.ALLOWED
+    private fun aiHeader():LinearLayout {
+        val width=if(::shell.isInitialized&&shell.width>0)shell.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
+        val back=ui.action("이전","portable_back",ActionStyle.QUIET,true,if(width<600)null else HmiIcon.BACK){finish()}
+        val home=ui.action("홈","portable_home",ActionStyle.QUIET,true,if(width<600)null else HmiIcon.HOME){
+            setResult(RESULT_OK,android.content.Intent().putExtra("caritda_home",true))
+            if(callingActivity==null){
+                val target=android.content.Intent(this,MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("caritda_home",true)
+                if(packageName=="com.nextdrive.pleos.validation")target.putExtra("validation_fixture",fixturePrefix?:"gleo-ui-"+java.util.UUID.randomUUID())
+                startActivity(target)
+            }
+            finish()
+        }
+        return ui.screenHeader(if(issueMode)"AI 문제 설명"else"충전량 AI 설명",false,listOf(back,home),width)
+    }
     private fun storeName(subject:String)=if(issueMode)"portable-issue-v1-$subject"else"portable-ai-v2-$subject"
     private fun issueJob()=issue?.let{IssueExplanation.jobKey(it)}
     private fun jobState():JSONObject {val s=state();return if(issueMode)s.optJSONObject("jobs")?.optJSONObject(issueJob().orEmpty())?:JSONObject()else s}
@@ -137,7 +159,13 @@ class PortableAiActivity:Activity(){
         val draftEmail=if(::email.isInitialized)email.text.toString()else""
         restoreExcerpt()
         excerptInput?.let{excerpt=it.text.toString()};excerptInput=null
-        body.removeAllViews();body.addView(ui.text("AI로 쉽게 설명",28,true))
+        body.removeAllViews()
+        val pageBody=body;val requestPane=ui.card();val resultPane=ui.card()
+        val width=if(shell.width>0)shell.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
+        pageBody.addView(ui.text("원인을 단정하지 않고, 다음 점검을 도와드려요.",28,true))
+        pageBody.addView(ui.twoPane(requestPane,resultPane,width>=840&&resources.configuration.fontScale<1.5f))
+        val body=requestPane
+        body.addView(ui.sectionTitle("이번에 보낼 내용",HmiIcon.RECORD))
         if(issueMode&&intent.getBooleanExtra("issue_after_save",false))body.addView(ui.state("기록을 저장했어요", "증상을 다시 입력할 필요 없어요. 전송 내용을 확인한 뒤 아래에서 AI 설명을 요청해 주세요.").apply{tag="portable_saved_record"})
         body.addView(ui.text(if(issueMode)"선택한 증상 한 건의 가능한 원인과 확인할 일을 설명해요. 확정 진단은 아니에요."else"차량에서 받은 충전량 기록만 설명해요. 고장 진단이나 운행 안전 판단은 하지 않아요.",22))
         if(issueMode&&issue!=null){
@@ -146,18 +174,16 @@ class PortableAiActivity:Activity(){
             val field=EditText(this).apply{tag="issue_ai_excerpt";setText(pendingText?:excerpt?:issue!!.situation);textSize=22f;minLines=2;setTextColor(ui.colors.text);isSaveEnabled=false;isEnabled=allowed()&&!busy&&pendingText==null;inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE}
             excerptInput=field;body.addView(field)
             body.addView(ui.text("개인 이름·연락처는 빼 주세요. 여기서 고쳐도 원래 기록은 바뀌지 않아요. 메모·작성자·다른 기록·차량값은 보내지 않아요.",20))
-            if(vehiclePanels.isEmpty())body.addView(ui.state("차량 참고 정보", "함께 볼 차량 정보가 아직 없어요. 센서값 없이 선택한 증상만 설명할 수 있어요.").apply{tag="portable_vehicle_context"})
-            else {
-                vehiclePanels.forEach{(title,snapshot)->body.addView(ui.state(title,
-                    VehicleUi.compact(snapshot)+"\n조회 · "+VehicleUi.shortTime(snapshot.at)+"\n"+VehicleUi.source(snapshot)+"\nAI에 보내지 않는 참고값이에요. 증상 당시 값이나 원인은 아니에요.").apply{tag="portable_vehicle_context"})}
-                body.addView(ui.expandable("차량 정보의 수신 시각·상태","portable_vehicle_details",vehicleDetails,allowed()){vehicleDetails=!vehicleDetails;render()})
-                if(vehicleDetails)vehiclePanels.forEach{(_,snapshot)->body.addView(ui.state("차량 정보 상세 · 로컬 참고",vehicleContextText(snapshot)))}
+            if(vehiclePanels.isNotEmpty()){
+                body.addView(ui.text("기기에서만 보는 차량 참고 · AI 미전송",20).apply{tag="portable_vehicle_context"})
+                body.addView(ui.expandable("함께 볼 차량 정보 자세히","portable_vehicle_details",vehicleDetails,allowed()){vehicleDetails=!vehicleDetails;render()})
+                if(vehicleDetails)vehiclePanels.forEach{(title,snapshot)->body.addView(ui.state(title,vehicleContextText(snapshot)))}
             }
         }
         if(!allowed())body.addView(ui.state("안전하게 정차한 뒤 이용해 주세요.","입력 허용 상태가 확인돼야 로그인·AI 요청을 할 수 있어요."))
         status.text=message
         if(!allowed()){status.text="현재는 AI 조작을 할 수 없어요. 안전하게 정차한 뒤 확인해 주세요.";return}
-        body.addView(ui.action(if(previewOpen)"전송 요약 접기"else"전송 요약 펼치기","portable_preview",ActionStyle.QUIET,allowed()&&!busy&&ready(),HmiIcon.RECORD){previewOpen=!previewOpen;render()})
+        body.addView(ui.action(if(previewOpen)"전송 내용 접기"else"전송 범위 자세히","portable_preview",ActionStyle.QUIET,allowed()&&!busy&&ready(),HmiIcon.RECORD){previewOpen=!previewOpen;render()})
         if(previewOpen&&ready()){
             val preview=runCatching{AiRequestUi.summary(if(issueMode)IssueExplanation.payload(issue!!,excerpt?:issue!!.situation)else PortableAnalysis.payload(analysis!!))}.getOrElse{(it as? PortableFailure)?.displayMessage()?:"전송할 내용을 확인해 주세요."}
             body.addView(ui.state("전송할 내용 · 원래 기록은 바뀌지 않아요",preview).apply{tag="portable_payload_preview"})
@@ -175,22 +201,27 @@ class PortableAiActivity:Activity(){
             });return
         }
         val cached=runCatching{jobState().optJSONObject("last")}.getOrNull()
-        if(issueMode&&issueResult==null&&cached!=null){issueResult=runCatching{IssueAnalysisService.saved(cached)}.getOrNull();resultText=issueResult?.text.orEmpty()}
-        if(resultText.isNotBlank()){
-            body.addView(ui.state(issueResult?.title?:"Gemini가 작성한 설명",resultText).apply{tag="portable_model_result"})
-            issueResult?.let{body.addView(ui.state("이 설명에 사용한 증상",it.situation).apply{tag="portable_result_input"})}
-            body.addView(ui.action("이 설명 음성으로 듣기 · 새 AI 요청 없음","portable_speak",ActionStyle.QUIET,allowed()&&!busy&&!playback.busy){speakResult()})
-            if(playback.busy)body.addView(ui.action("음성 안내 멈추기","portable_speak_stop",ActionStyle.QUIET,allowed()){playback.cancel();message="음성 안내를 멈췄어요.";render()})
+        if(resultText.isBlank()&&cached!=null){
+            if(issueMode){issueResult=runCatching{IssueAnalysisService.saved(cached)}.getOrNull();resultText=issueResult?.text.orEmpty()}
+            else resultText=runCatching{val answer=cached.getJSONObject("answer");PortableAnalysis.validate(answer,cached.getString("payload"),answer.getString("operation_id"))}.getOrDefault("")
+            if(resultText.isNotBlank())resultOrigin="저장된 AI 설명 · 새 요청 없음"
         }
+        if(resultText.isNotBlank()){
+            resultPane.addView(ui.state(issueResult?.title?:resultOrigin.ifBlank{"AI 점검 참고"},resultText).apply{tag="portable_model_result"})
+            issueResult?.let{resultPane.addView(ui.state("이 설명에 사용한 증상",it.situation).apply{tag="portable_result_input"})}
+            resultPane.addView(ui.action("이 설명 음성으로 듣기","portable_speak",ActionStyle.QUIET,allowed()&&!busy&&!playback.busy){speakResult()})
+            if(playback.busy)resultPane.addView(ui.action("음성 안내 멈추기","portable_speak_stop",ActionStyle.QUIET,allowed()){playback.cancel();message="음성 안내를 멈췄어요.";render()})
+        }
+        if(resultText.isBlank())resultPane.addView(ui.state("설명을 생성하기 전이에요.","기록은 이미 저장돼요. 전송할 내용을 확인하고 새 설명을 선택해 주세요."))
         val a=analysis
-        if(!issueMode&&a?.latest!=null)body.addView(ui.metric("설명할 충전량",VehicleAnalysis.fmt(a.latest!!.number)+" %","최근 수신 기록 · ${a.points.size}건","Pleos 에뮬레이터에서 받은 값이에요.","portable_soc",HmiIcon.BATTERY))
+        if(!issueMode&&a?.latest!=null)body.addView(ui.metric("설명할 충전량",VehicleAnalysis.fmt(a.latest!!.number)+" %","최근 하루 · ${a.points.size}건",if(a.latest!!.ref.value.source==ObservationSource.PLEOS_EMULATOR_SDK)"Pleos 에뮬레이터에서 받은 값이에요."else"차량 SDK에서 받은 값이에요.","portable_soc",HmiIcon.BATTERY))
         if(!consentReady()){
             autoConsumed=true // First-use login/registration never silently calls the model.
             body.addView(ui.state("처음 한 번 전송에 동의해 주세요.",if(issueMode)"선택한 한 건의 증상 종류와 위 본문을 Cloudflare 중계와 Google Gemini로 보내요. 작성자·메모·시간·차량값·다른 기록은 보내지 않아요. 개인 이름 등이 본문에 있으면 먼저 빼 주세요. 설명은 이 기기에 암호화해 저장하고, 서버 결과는 하루 뒤 삭제해요. AI가 틀릴 수 있어요. 이후 선택한 기록의 AI 버튼을 누르면 같은 범위로 요청하며, 동의는 철회할 수 있어요."else"충전량의 최근값·최소·최대·관측 평균·비교 가능한 변화량, 표본 수·상대 경과시간·품질 요약을 Cloudflare 중계와 Google Gemini로 보내요. 이름·VIN·위치·증상 원문·원본 DB는 보내지 않아요. 로그인 계정과 기기 서명은 중계 인증에만 사용해요. 다음 요청부터 같은 범위에 동의를 유지하며 언제든 철회할 수 있어요."))
             body.addView(ui.action("동의하고 이 기기 등록","portable_register",ActionStyle.PRIMARY,allowed()&&!busy&&ready(),HmiIcon.CHECK){sessionTask {api->api.register();"AI 이용 동의와 기기 등록을 저장했어요."}})
             body.addView(ui.action("동의하지 않고 돌아가기","portable_consent_cancel",ActionStyle.SECONDARY,!busy,HmiIcon.BACK){finish()})
         }else{
-            body.addView(ui.text("AI 이용 동의가 유지돼요. 같은 범위의 설명에는 로그인·체크박스를 반복하지 않아요.",20))
+            body.addView(ui.text("AI 이용 동의가 유지 중이에요.",20))
             val quotaBlock=AiRequestUi.block(state().optJSONObject("usage_status"),jobState().has("pending"))
             if(quotaBlock!=null)body.addView(ui.state("새 설명 이용 안내",quotaBlock).apply{tag="portable_quota_notice"})
             body.addView(ui.action(if(jobState().has("pending"))"진행 중 요청 결과 확인"else"새로 설명 생성","portable_explain",ActionStyle.PRIMARY,allowed()&&!busy&&ready()&&quotaBlock==null,HmiIcon.RECORD){if(jobState().has("last")&&!jobState().has("pending"))android.app.AlertDialog.Builder(this).setTitle("새 설명을 생성할까요?").setMessage("새 API 요청으로 이용 한도가 차감될 수 있어요. 기존 설명은 보존해요.").setNegativeButton("취소",null).setPositiveButton("새로 생성"){_,_->requestExplanation(true)}.show()else requestExplanation(true)})
@@ -206,15 +237,20 @@ class PortableAiActivity:Activity(){
         if(consentReady())body.addView(ui.action("AI 이용 가능 횟수 확인 · 모델 호출 없음","portable_status_check",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.CHECK){sessionTask {api->val s=api.status();AiRequestUi.quotaText(s)}})
         jobState().optJSONObject("last_failure")?.takeIf{it.optLong("at")>(cached?.optLong("saved_at")?:0)}?.let{body.addView(ui.state("최근 새 요청은 실패했어요 · 기존 성공 설명은 보존돼요",PortableFailure(it.optString("code")).displayMessage(),true))}
         if(issueMode){val jobs=runCatching{state().optJSONObject("jobs")}.getOrNull();jobs?.keys()?.asSequence()?.filter{it!=issueJob()}?.mapNotNull{jobs.optJSONObject(it)}?.filter{it.optString("record")==issueId}?.mapNotNull{it.optJSONObject("last")}?.forEach{old->val a=old.getJSONObject("answer");val text=runCatching{IssueExplanation.validate(a,old.getString("payload"),a.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("수정 전 기록의 AI 설명 · 현재 내용과 다를 수 있어요",text))}}
-        if(cached!=null)body.addView(ui.action("기존 AI 설명 보기 · API 호출 없음","portable_view_saved",ActionStyle.SECONDARY,allowed()&&!busy,HmiIcon.RECORD){playback.cancel();val a=cached.getJSONObject("answer");resultText=if(issueMode)IssueAnalysisService.saved(cached).also{issueResult=it}.text else PortableAnalysis.validate(a,cached.getString("payload"),a.getString("operation_id"));message="저장된 설명이에요. 새 요청은 하지 않았어요.";render()})
+        if(cached!=null&&resultText.isBlank())body.addView(ui.action("기존 AI 설명 보기 · API 호출 없음","portable_view_saved",ActionStyle.SECONDARY,allowed()&&!busy,HmiIcon.RECORD){playback.cancel();val a=cached.getJSONObject("answer");resultText=if(issueMode)IssueAnalysisService.saved(cached).also{issueResult=it}.text else PortableAnalysis.validate(a,cached.getString("payload"),a.getString("operation_id"));message="저장된 설명이에요. 새 요청은 하지 않았어요.";render()})
         if(resultText.isBlank()&&cached!=null){val answer=cached.getJSONObject("answer");val text=runCatching{if(issueMode)IssueExplanation.validate(answer,cached.getString("payload"),answer.getString("operation_id"))else PortableAnalysis.validate(answer,cached.getString("payload"),answer.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("이전에 받은 AI 설명 · 현재 상태 판정 아님",text).apply{tag="portable_cached_result"})}
         body.addView(ui.action("로그아웃","portable_logout",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.BACK){playback.cancel();cancelWork();session.subject?.let{PortableAiStore(this,storeName(it)).withdraw()};FirebaseSessionProvider.signOut();resultText="";issueResult=null;message="로그아웃했어요. 차량 기록은 그대로예요.";render()})
+        val accountTags=setOf("portable_withdraw","portable_status_check","portable_logout")
+        val accountViews=(0 until body.childCount).map{body.getChildAt(it)}.filter{it.tag in accountTags}
+        accountViews.forEach{body.removeView(it)}
+        body.addView(ui.expandable("계정·이용 정보","portable_account_details",accountDetails,allowed()&&!busy){accountDetails=!accountDetails;render()})
+        if(accountDetails){
+            body.addView(ui.text("로그아웃하면 이 계정의 기기 내 AI 저장 결과를 지워요. 차량 기록은 남으며 동의 철회는 별개예요.",20))
+            accountViews.forEach{body.addView(it)}
+        }
         val fixtureUi=fixturePrefix!=null||fixtureIssueDb!=null
         if(issueMode&&!fixtureUi&&!usageRefreshAttempted&&ready()&&consentReady()&&allowed()&&!busy&&AiRequestUi.shouldRefresh(state().optJSONObject("usage_status"))){
             usageRefreshAttempted=true;body.post{if(visible&&allowed()&&!busy)sessionTask{api->AiRequestUi.quotaText(api.status())}}
-        }
-        if(!autoConsumed&&(!issueMode&&intent.getBooleanExtra("request_from_analysis",false))&&allowed()&&!busy&&ready()&&consentReady()){
-            autoConsumed=true;body.post{if(visible&&allowed()&&!busy)requestExplanation()}
         }
     }
     private fun requestExplanation(fresh:Boolean=false){
@@ -247,17 +283,17 @@ class PortableAiActivity:Activity(){
             val s=PortableAiStore(this,storeName(VehicleAnalytics.id(uid)));activeStore=s
             val api=session.client(s,uid,token,allowed={visible&&run==generation&&gate.state==EditingState.ALLOWED&&session.matches(uid)},job=if(issueMode)issueJob()?:throw PortableFailure("ISSUE_UNAVAILABLE")else null,record=if(issueMode)issueId else null);client=api
             worker.execute {val result=runCatching{work(api)};runOnUiThread {
-                if(visible&&run==generation){busy=false;client=null;activeStore=null;result.onSuccess{if(modelResult){issueResult=prepared?.invoke();resultText=it;message="AI 설명을 받았어요. 아래에서 확인해 주세요."}else message=it}.onFailure{message=((it as? PortableFailure)?:PortableFailure("AI_REQUEST_FAILED")).displayMessage()};render()}
+                if(visible&&run==generation){busy=false;client=null;activeStore=null;result.onSuccess{if(modelResult){issueResult=prepared?.invoke();resultText=it;resultOrigin="새로 받은 AI 설명";message="AI 설명을 받았어요. 아래에서 확인해 주세요."}else message=it}.onFailure{message=((it as? PortableFailure)?:PortableFailure("AI_REQUEST_FAILED")).displayMessage()};render()}
             }}
         }
     }
     private fun loadAnalysis(){val run=++loadGeneration;worker.execute {
         if(issueMode){val selected=runCatching{selectedRecord()}.getOrNull();val panels=if(selected!=null)loadVehicleContext()else emptyList();runOnUiThread{if(visible&&run==loadGeneration){issue=selected;vehiclePanels=panels;if(selected!=null)runCatching{val job=jobState();if(excerpt==null&&job.has("excerpt"))excerpt=job.getString("excerpt")};message=if(selected==null)"기록을 찾을 수 없어요. 이전 화면에서 다시 선택해 주세요."else"선택한 증상만 설명해요. 원래 기록은 바뀌지 않아요.";render()}};return@execute}
-        val r=runCatching{val now=System.currentTimeMillis();ObservationStore(this).use{val refs=it.analysisRefs("EV_SOC",now-86400000);VehicleAnalytics.analyze("EV_SOC",refs.takeLast(2000),now-86400000,now,truncated=refs.size>2000)}}
+        val r=runCatching{val now=System.currentTimeMillis();ObservationStore(this,fixturePrefix?.let{it+"-observations.db"}?:"caritda-observations.db").use{val refs=it.analysisRefs("EV_SOC",now-86400000);VehicleAnalytics.analyze("EV_SOC",refs.takeLast(2000),now-86400000,now,truncated=refs.size>2000)}}
         runOnUiThread{if(visible&&run==loadGeneration){analysis=r.getOrNull();message=if(analysis?.latest!=null)"설명할 최근 충전량이 있어요."else"차량 정보 화면에서 최근 값을 먼저 불러와 주세요.";render()}}
     }}
     override fun onStart(){super.onStart();visible=true;loadedSubject=session.subject;stopObserving=FirebaseSessionProvider.observe {val next=session.subject;if(next!=loadedSubject){playback.cancel();cancelWork();resultText="";issueResult=null;excerpt=null;excerptInput=null;usageRefreshAttempted=false;loadedSubject=next;message=if(next==null)"계정으로 로그인해 주세요."else"로그인됐어요. AI 이용 안내를 확인해 주세요."};if(visible)render()};gate.start();loadAnalysis()}
     override fun onStop(){persistExcerpt();visible=false;playback.cancel();loadGeneration++;cancelWork();resultText="";issueResult=null;if(::password.isInitialized)password.text.clear();if(::email.isInitialized)email.text.clear();stopObserving?.invoke();stopObserving=null;gate.stop();super.onStop()}
     override fun onDestroy(){worker.shutdownNow();super.onDestroy()}
-    override fun onSaveInstanceState(out:Bundle){persistExcerpt();out.putBoolean("auto_consumed",autoConsumed);out.putBoolean("preview_open",previewOpen);out.putBoolean("usage_refreshed",usageRefreshAttempted);out.putBoolean("vehicle_details",vehicleDetails);out.putString("issue_excerpt",excerptInput?.text?.toString()?:excerpt);super.onSaveInstanceState(out)}
+    override fun onSaveInstanceState(out:Bundle){persistExcerpt();out.putBoolean("auto_consumed",autoConsumed);out.putBoolean("preview_open",previewOpen);out.putBoolean("usage_refreshed",usageRefreshAttempted);out.putBoolean("vehicle_details",vehicleDetails);out.putBoolean("account_details",accountDetails);out.putString("issue_excerpt",excerptInput?.text?.toString()?:excerpt);super.onSaveInstanceState(out)}
 }

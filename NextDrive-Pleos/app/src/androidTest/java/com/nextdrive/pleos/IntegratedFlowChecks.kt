@@ -42,7 +42,7 @@ class IntegratedFlowChecks(private val inst:Instrumentation){
         override fun listen(events:SpeechBackend.Events){this.events=events}
         override fun finish(){};override fun detach(){};override fun release(){}
     }
-    private inner class FixtureSession:PortableSession {
+    inner class FixtureSession:PortableSession {
         val id=UUID.randomUUID().toString();val uid="flow-fixture-$id"
         val key=DeviceKeyStore("caritda.validation.flow.$id")
         override val signedIn=true
@@ -80,7 +80,7 @@ class IntegratedFlowChecks(private val inst:Instrumentation){
         var activity=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture",prefix).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
         var ai:PortableAiActivity?=null
         fun button(tag:String)=activity.window.decorView.findViewWithTag<Button>(tag)
-        fun click(tag:String){await{button(tag)?.isEnabled==true};main{check(button(tag).performClick())}}
+        fun click(tag:String){if(BLightTestNavigation.prepare(inst,activity,tag))return;await{button(tag)?.isEnabled==true};main{check(button(tag).performClick())}}
         try{
             click("driver_${a.id}");click("start_driving")
             val engine=Speech();val input=main{SpeechInput(activity,factory={engine},allowed={true})}
@@ -221,9 +221,13 @@ class IntegratedFlowChecks(private val inst:Instrumentation){
             snapshots.prepareLink(issue.id,snapshot.id);snapshots.completeLink(issue.id)
             val screen=inst.startActivitySync(Intent(c,PortableAiActivity::class.java).putExtra("validation_fixture",prefix).putExtra("issue_id",issue.id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as PortableAiActivity;activity=screen
             await{screen.window.decorView.findViewWithTag<View>("portable_vehicle_context")!=null&&screen.window.decorView.findViewWithTag<EditText>("issue_ai_excerpt")!=null}
-            verify(main{text(screen,"portable_vehicle_context").contains(VehicleUi.compact(snapshot))&&text(screen,"portable_vehicle_context").contains("이 기록에 함께 저장")&&text(screen,"portable_vehicle_context").contains("에뮬레이터")},"IF43 actual AI View displays the linked SDK snapshot with time/source and local-only boundary")
+            main{screen.window.decorView.findViewWithTag<Button>("portable_vehicle_details").performClick()};await{all(screen.window.decorView).filterIsInstance<TextView>().any{it.text.contains("마지막 수신")}}
+            verify(main{val text=all(screen.window.decorView).filterIsInstance<TextView>().joinToString("\n"){it.text};
+                val receivedValues=snapshot.evidence.filter{it.value.kind in setOf("EV_SOC","ODOMETER")&&SnapshotStore.accepted(it.value)}
+                receivedValues.size==2&&receivedValues.all{ref->val v=ref.value;val shown=java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA).format(java.math.BigDecimal(v.raw!!).stripTrailingZeros());text.contains("$shown ${v.unit}")}&&text.contains("마지막 수신")&&text.contains("에뮬레이터")&&text.contains("기기에서만")
+            },"IF43 actual linked SDK SOC/distance/time/source remain available under local-only details")
             val fixture=FixtureSession();fixture.api(issue).register();session(screen,fixture)
-            main{screen.window.decorView.findViewWithTag<Button>("portable_vehicle_details").performClick();screen.window.decorView.findViewWithTag<Button>("portable_explain").performClick()}
+            main{screen.window.decorView.findViewWithTag<Button>("portable_explain").performClick()}
             await{screen.window.decorView.findViewWithTag<View>("portable_model_result")!=null}
             verify(fixture.posts==1&&fixture.frozen==IssueExplanation.payload(issue)&&JSONObject(fixture.frozen).length()==4,"IF44 actual SDK context cannot enrich the existing category/situation wire payload (provider fixture)")
             verify(main{val texts=all(screen.window.decorView).filterIsInstance<TextView>().joinToString("\n"){it.text};texts.contains("마지막 수신")&&texts.contains("증상 당시 값이나 원인")&&screen.window.decorView.findViewWithTag<View>("portable_model_result")!=null}&&SqliteIssueRepository(c,prefix+".db").use{it.issue(issue.id)==issue&&it.events(issue.id).size==1},"IF45 actual SDK context and fixture AI result coexist without changing original issue/history")

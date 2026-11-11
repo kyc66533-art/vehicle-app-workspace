@@ -75,18 +75,33 @@ class PortableAiActivity:Activity(){
         ui=CaritdaComponents(this,CaritdaPalette.of(dark))
         val root=ui.column().apply{setBackgroundColor(ui.colors.background);setPadding(ui.dp(24),ui.dp(12),ui.dp(24),ui.dp(12))};shell=root
         setContentView(CaritdaPage(this,root).apply{setBackgroundColor(ui.colors.background)})
-        if(packageName.endsWith(".validation"))root.addView(ui.text("검증 전용 · TEST",22,true))
-        root.addView(aiHeader())
         status=ui.text("",22).apply{tag="portable_status";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
-        root.addView(status)
-        body=ui.column();root.addView(ScrollView(this).apply{tag="portable_scroll";addView(body)},LinearLayout.LayoutParams(-1,0,1f))
-        root.addOnLayoutChangeListener{_,l,_,r,_,oldL,_,oldR,_->if(oldR>oldL&&r-l!=oldR-oldL)root.post{
-            root.findViewWithTag<View>("navigation_bar")?.let{root.removeView(it)};root.addView(aiHeader(),if(packageName.endsWith(".validation"))1 else 0);render()
+        body=ui.column();aiChrome()
+        root.addOnLayoutChangeListener{_,l,t,r,b,oldL,oldT,oldR,oldB->if(oldR>oldL&&(r-l!=oldR-oldL||(b-t!=oldB-oldT&&currentFocus !is EditText)))root.post{
+            render()
         }}
         gate=CarSafetyGate(this){if(it!=EditingState.ALLOWED){playback.cancel();cancelWork();if(::password.isInitialized)password.text.clear()};render()}
         FirebaseSessionProvider.prepare(this);message="저장된 충전량을 확인하고 있어요.";render()
     }
     private fun allowed()=visible&&::gate.isInitialized&&gate.state==EditingState.ALLOWED
+    /** Keeps the body reachable in short windows and with large system text; never covers OS UI. */
+    private fun aiChrome(){
+        val oldY=shell.findViewWithTag<ScrollView>("portable_scroll")?.scrollY?:0
+        (body.parent as? android.view.ViewGroup)?.removeView(body)
+        (status.parent as? android.view.ViewGroup)?.removeView(status)
+        shell.removeAllViews();shell.setBackgroundColor(ui.colors.background);status.setTextColor(ui.colors.text)
+        val width=if(shell.width>0)shell.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
+        val height=if(shell.height>0)shell.height/resources.displayMetrics.density else resources.configuration.screenHeightDp.toFloat()
+        val inset=if(width<600)18 else if(width<840)24 else 32
+        shell.setPadding(ui.dp(inset),ui.dp(8),ui.dp(inset),ui.dp(8))
+        val short=height<480||resources.configuration.fontScale>=1.5f
+        val content=if(short)ui.column()else shell
+        if(packageName.endsWith(".validation"))content.addView(ui.text("검증 전용 · TEST",20,true))
+        content.addView(aiHeader());content.addView(status)
+        val scroll=ScrollView(this).apply{tag="portable_scroll";isFillViewport=true}
+        if(short){content.addView(body);scroll.addView(content)}else scroll.addView(body)
+        shell.addView(scroll,LinearLayout.LayoutParams(-1,0,1f));scroll.post{scroll.scrollTo(0,oldY)}
+    }
     private fun aiHeader():LinearLayout {
         val width=if(::shell.isInitialized&&shell.width>0)shell.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
         val back=ui.action("이전","portable_back",ActionStyle.QUIET,true,if(width<600)null else HmiIcon.BACK){finish()}
@@ -159,6 +174,7 @@ class PortableAiActivity:Activity(){
         val draftEmail=if(::email.isInitialized)email.text.toString()else""
         restoreExcerpt()
         excerptInput?.let{excerpt=it.text.toString()};excerptInput=null
+        aiChrome()
         body.removeAllViews()
         val pageBody=body;val requestPane=ui.card();val resultPane=ui.card()
         val width=if(shell.width>0)shell.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
@@ -207,10 +223,14 @@ class PortableAiActivity:Activity(){
             if(resultText.isNotBlank())resultOrigin="저장된 AI 설명 · 새 요청 없음"
         }
         if(resultText.isNotBlank()){
-            resultPane.addView(ui.state(issueResult?.title?:resultOrigin.ifBlank{"AI 점검 참고"},resultText).apply{tag="portable_model_result"})
-            issueResult?.let{resultPane.addView(ui.state("이 설명에 사용한 증상",it.situation).apply{tag="portable_result_input"})}
-            resultPane.addView(ui.action("이 설명 음성으로 듣기","portable_speak",ActionStyle.QUIET,allowed()&&!busy&&!playback.busy){speakResult()})
+            resultPane.addView(ui.action("이 설명 음성으로 듣기","portable_speak",ActionStyle.SECONDARY,allowed()&&!busy&&!playback.busy){speakResult()})
             if(playback.busy)resultPane.addView(ui.action("음성 안내 멈추기","portable_speak_stop",ActionStyle.QUIET,allowed()){playback.cancel();message="음성 안내를 멈췄어요.";render()})
+            resultPane.addView(ui.column().apply{
+                tag="portable_model_result"
+                addView(ui.sectionTitle(issueResult?.title?:resultOrigin.ifBlank{"AI 점검 참고"}))
+                addView(ui.text(resultText,22,secondary=true))
+            })
+            issueResult?.let{resultPane.addView(ui.state("이 설명에 사용한 증상",it.situation).apply{tag="portable_result_input"})}
         }
         if(resultText.isBlank())resultPane.addView(ui.state("설명을 생성하기 전이에요.","기록은 이미 저장돼요. 전송할 내용을 확인하고 새 설명을 선택해 주세요."))
         val a=analysis

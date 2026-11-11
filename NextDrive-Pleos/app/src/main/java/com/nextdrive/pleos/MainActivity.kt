@@ -540,10 +540,11 @@ class MainActivity : Activity() {
     private fun themeSetting(body:LinearLayout){
         val preference=CaritdaTheme.preferences(this,fixturePrefix).getString("theme","light")
         body.addView(label("화면 테마",22,true))
-        val choices=listOf("light" to "밝게","dark" to "어둡게","system" to "기기 설정")
+        val choices=listOf("light" to "밝게","dark" to "어둡게","system" to "자동")
         body.addView(ui.grid(choices.map{(value,title)->ui.action((if(value==preference)"✓ "else"")+title,"theme_$value",ActionStyle.SECONDARY,canEdit()){
             edit{check(CaritdaTheme.preferences(this,fixturePrefix).edit().putString("theme",value).commit());notice="화면 테마를 저장했어요.";draw()}
         }.apply{isSelected=value==preference}},if(columns()==2)3 else 1))
+        if(preference=="system")body.addView(label("기기의 밝은 화면·어두운 화면 설정을 따라요.",20))
     }
     private fun vehicleSettings(body:LinearLayout){
         body.addView(label("차량 동력 방식",26,true))
@@ -579,7 +580,7 @@ class MainActivity : Activity() {
         if(checks.isNotEmpty()){
             val first=checks.first();val card=ui.checkCard(first.title,first.reason,first.origin).apply{tag="home_vehicle_attention"}
             card.addView(label(vehicleDisplay.time(first.reading.receivedAt!!)+(if(checks.size>1)" · 그 밖에 ${checks.size-1}개 항목"else""),20))
-            card.addView(ui.action("차량 안내 확인하기","open_vehicle_check",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}});primary.addView(card)
+            card.addView(ui.action("차량 안내 확인하기","open_vehicle_check",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE){positions[Screen.VEHICLE]=0}}});primary.addView(card)
         }
         if(service.draft()!=null)draftBanner(primary)else{
             val create=panel();create.addView(ui.sectionTitle("어떤 문제가 있었나요?",HmiIcon.PLUS))
@@ -812,7 +813,8 @@ class MainActivity : Activity() {
         if(checks.isNotEmpty()){
             body.addView(label("확인이 필요한 항목",24,true).apply{tag="drivecheck_attention"})
             checks.forEach{check->
-                val card=ui.checkCard(check.title,check.reading.value+" · "+check.reason,check.origin)
+                val reason=listOf(check.reading.value,check.reason).distinct().joinToString(" · ")
+                val card=ui.checkCard(check.title,reason,check.origin)
                 card.addView(label(vehicleDisplay.time(check.reading.receivedAt!!),20))
                 card.addView(ui.action("직접 확인한 내용 남기기","drivecheck_draft_${check.kind}",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){beginFromCheck(check.kind)})
                 if(!canWrite())card.addView(label("기록 운전자를 확인한 뒤 남길 수 있어요.",20))
@@ -997,8 +999,7 @@ class MainActivity : Activity() {
         body.addView(ui.state("문제 남기기", "직접 적거나 말한 뒤 확인하고 저장해요. AI 설명은 선택이에요."))
         body.addView(ui.state("다음 운전자에게 인계", "기록을 읽고 점검·조치 내용을 이어 남겨요."))
         body.addView(label("안전하게 정차한 뒤 이용해 주세요. 차량 전체의 고장 여부를 판정하지 않아요.",20))
-        if(guideReplay)body.addView(ui.action("안내 닫기","close_guide",ActionStyle.PRIMARY,canEdit()){edit{onBackPressed()}})
-        else{
+        if(!guideReplay){
             body.addView(ui.action("시작하기","guide_choose",ActionStyle.PRIMARY,canEdit()){edit{finishGuide(false)}})
             body.addView(ui.action("나중에","guide_skip",ActionStyle.QUIET,canEdit()){edit{finishGuide(true)}})
         }
@@ -1050,7 +1051,7 @@ class MainActivity : Activity() {
             edit{if(captureDraft()){draft.type=type;captureDraft();draw()}}
         }.apply{isSelected=draft.type==type}}
         fields.addView(ui.grid(types,if(columns(600)==2)2 else 1).apply{tag="symptom_type"})
-        situationInput=input("어떤 때, 무엇이 달랐는지 적어 주세요.",1000).apply{tag="situation";setText(draft.situation)}
+        situationInput=input("어떤 때, 무엇이 달랐는지 적어 주세요.",1000).apply{tag="situation";setText(draft.situation);minimumHeight=dp(142);minLines=3}
         fieldLabel(fields,"상황",situationInput!!);fields.addView(situationInput)
         situationInput!!.addTextChangedListener(watcher{captureDraft()})
         fields.addView(SpeechControls(this,ui,speechInput,{canWrite()},{voiceDraft()}))

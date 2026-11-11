@@ -16,6 +16,7 @@ import java.util.Locale
 class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
     private val main=Handler(Looper.getMainLooper())
     private var sdk:TextToSpeech?=null
+    private var sdkListener:EventListener?=null
     private var android:AndroidTts?=null
     private var generation=0
     var busy=false;private set
@@ -32,7 +33,7 @@ class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
         var finished=false
         fun complete(message:String,success:Boolean=false){if(finished)return;finished=true;busy=false;report(message);completed(success)}
         fun androidFallback(){
-            runCatching{sdk?.release()};sdk=null;source="ANDROID_ON_DEVICE"
+            releaseSdk(false);source="ANDROID_ON_DEVICE"
             try{android=AndroidTts(context.applicationContext){status->post{
                 val engine=android
                 val voice=engine?.voices?.firstOrNull{it.locale.language=="ko"&&!it.isNetworkConnectionRequired}
@@ -58,11 +59,28 @@ class SpeechOutput(private val context:Context,private val allowed:()->Boolean){
         try{
             val t=TextToSpeech(context.applicationContext,Mode.ON_DEVICE);sdk=t
             t.initialize(object:OnInitializeListener{
-                override fun onSuccess(){post{try{t.addEventListener(listener);t.setLocale(Locale.KOREA);t.speak(phrase,true)}catch(_:Exception){complete("음성 요청을 보내지 못했어요.")}}}
+                override fun onSuccess(){post{try{t.addEventListener(listener);sdkListener=listener;t.setLocale(Locale.KOREA);t.speak(phrase,true)}catch(_:Exception){complete("음성 요청을 보내지 못했어요.")}}}
                 override fun onFailure(errorType:ErrorType){post{androidFallback()}}
             })
         }catch(_:Exception){androidFallback()}catch(_:LinkageError){androidFallback()}
         main.postDelayed({if(run==generation&&busy){stop();complete("음성 서비스 응답이 늦어 중단했어요.")}},20000)
     }
-    fun stop(){generation++;main.removeCallbacksAndMessages(null);runCatching{sdk?.stop();sdk?.release()};sdk=null;runCatching{android?.stop();android?.shutdown()};android=null;busy=false}
+    private fun releaseSdk(interrupt:Boolean){
+        val engine=sdk;sdk=null
+        val listener=sdkListener;sdkListener=null
+        // The public SDK requires removing the same listener before release. Its stop is
+        // asynchronous: stopping an already completed phrase can reach the next phrase.
+        if(engine!=null){
+            listener?.let{runCatching{engine.removeEventListener(it)}}
+            if(interrupt)runCatching{engine.stop()}
+            runCatching{engine.release()}
+        }
+    }
+    fun stop(){
+        val interrupt=busy;generation++;main.removeCallbacksAndMessages(null);busy=false
+        releaseSdk(interrupt)
+        val engine=android;android=null
+        if(interrupt)runCatching{engine?.stop()}
+        runCatching{engine?.shutdown()}
+    }
 }

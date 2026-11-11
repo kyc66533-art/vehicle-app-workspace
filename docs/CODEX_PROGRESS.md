@@ -1,5 +1,16 @@
 # Codex 개발 진행 기록
 
+## 2026-11-11 22:54 +09:00 — B안 전체 화면 구현·native 검증·일반 앱 반영
+
+- 단계1 cc825855/단계2 ee39d6f1을 이어 기존22+AI2/신규 인계25scene을 실제 Kotlin View로 정리했다. B 라이트 기본/다크 선택·white header/1.4:1/76dp/32·24·20·40sp·큰 글씨/짧은 창 스크롤,위치/관리/기술 상세 접기와 원래 서비스 경로를 유지했다.
+- 446 assertion+별도1600 native 조합 PASS,해시 확인한 원본B HTML9페이지를 offline WebView로 시각 대조,검토한 native 캡처14장 게시. 일반앱UI자동화/기본prepare/DB초기화0. 실제SDK SOC18새홈/45제거·A저장/B읽음·cold·100/P/0+SDK100복원. SDK20종12수신8미지원,내비 상태만 조회.
+- 전체 결과TTS 버튼을 앞에 두고,완료 후 불필요stop을 제거/동일listener해제 후release하도록 보완했다. 시작 전STOPPED 회귀 수정 후 같은player 전체문장2연속실제완료3개,취소/실패/generation을 유지했다. STT는 표시만 정리·기존final+ended계약불변.
+- Debug/Val/AndroidTest/Lint exit0(최종2m23s),계측1m11s. Lint0오류/63경고,Unit NO-SOURCE. 초기TTS/SDK미수신·fixture/캡처/DPR 실패는 상세에 원인/재검사범위를 구분했다. 모델 신규/Worker배포/정책변경0.
+- 330개 기존DB의11,264원본행·schema/version/integrity/FK보존. 일반24/97/10/0불변,정상SDK/파생23행추가. 설치직후private16동일·실행후15동일/profileInstalled1갱신,인증/동의/AI캐시·사용량동일. validation기존9919행불변/고유fixture251DB추가.
+- 일반APK서명일치/install-r/설치SHA대조·COLD/resumed와실제B라이트초기화면/OS경계를확인했다. SHA256 3b5d1aa1d397fc37e61c35a1b7645300c500003b92c4ef3c06890dbadfe30f9b. 개인캡처는비공개,보존검사후앱종료.
+- [전체 인수/446개](B_LIGHT_UI_ACCEPTANCE.md),[22+2/버튼/9B비교](B_LIGHT_UI_SCREEN_MATRIX.md),[실제14캡처](B_LIGHT_UI_GALLERY.md). 일반Kotlin9/검증12·Manifest/themes,루트지침/README/기록을갱신했다. 연구미수정.
+- 코드/자동검증/일반설치완료와전체UX수용을구분한다. 일반9화면사람실조작·고령자이해도/물리접근성/실차는미검증,다음은사용자의가독성확인이다. GitHub연결도구로검증된명시파일만게시하고기대HEAD/부모/대상·나머지/Aside SHA를확인한다. 최종SHA는응답에서보고한다.
+
 ## 2026-11-11 21:35 +09:00 — B안 단계2 본문 전체 간소화·기능 경로
 
 - 단계1 게시 cc825855f90f9d4071620f657e11267369e57426을 이어 차량 그룹/점진 상세,문제 작성·목록·상세/위치,운전자 관리/도움,AI 요청·결과 영역을 실제 Kotlin View로 바꿨다. 최대1160dp 읽기 폭/76dp를 유지하며 OS 창/공조를 변경하지 않는다.

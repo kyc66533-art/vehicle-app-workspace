@@ -43,6 +43,11 @@ class DriveCheckSocLiveChecks(private val inst:Instrumentation,private val runId
             val episode=low.notices().single();val entered=raw.refs().single{it.rowId==episode.row&&it.storeId==episode.store}
             verify(entered.value.raw=="18"&&entered.value.source==ObservationSource.PLEOS_EMULATOR_SDK&&entered.value.detail.contains("SOC CALLBACK"),"SL03 actual18 callback creates the evidence-linked user criterion episode")
             verify(main{activity.window.decorView.findViewWithTag<Button>("drivecheck_draft_EV_SOC")?.isEnabled==true}&&SqliteIssueRepository(c,db).use{it.issues().isEmpty()},"SL04 actual warning offers a user draft without confirming a problem automatically")
+            click("nav_HOME")
+            await{activity.window.decorView.findViewWithTag<View>("home_vehicle_attention")!=null}
+            verify(main{BLightHarness(inst).text(activity.window.decorView.findViewWithTag("home_vehicle_attention")).contains("사용자 기준 20% 미만")},"SL16 actual SDK18 reaches the B home with the user's criterion, distinct from a vehicle fault")
+            BLightHarness(inst).capture(activity,"home-sdk-soc18.png",false)
+            click("open_vehicle_check")
             stage("LOW_18")
             click("drivecheck_draft_EV_SOC")
             val initial=main{activity.window.decorView.findViewWithTag<EditText>("situation").text.toString()}
@@ -57,6 +62,8 @@ class DriveCheckSocLiveChecks(private val inst:Instrumentation,private val runId
             await{low.notices().single().phase=="EXITED"}
             val exit=low.notices().single();val exitRef=raw.refs().single{it.storeId==exit.store&&it.rowId==exit.row}
             verify(exit.id==episode.id&&exit.value=="45"&&low.changeCount()==2&&exitRef.value.detail.contains("SOC CALLBACK"),"SL08 actual45 callback exits the same condition with immutable entry/exit evidence")
+            click("nav_HOME")
+            verify(main{activity.window.decorView.findViewWithTag<View>("home_vehicle_attention")?.let{BLightHarness(inst).text(it).contains("사용자 기준 안내")}!=true},"SL17 actual SDK45 removes the current low-SOC home notice without resolving the driver's problem")
             click("menu");click("change_driver");click("driver_${b.id}");click("start_driving");click("all_issues");click("issue_${issue.id}");click("acknowledge")
             SqliteIssueRepository(c,db).use{verify(it.issue(issue.id)?.copy(updatedAt=issue.updatedAt)==issue&&it.events(issue.id).any{e->e.kind==EventKind.ACKNOWLEDGED&&e.actor.id==b.id},"SL09 B handover is an explicit user history, separate from automatic SOC exit")}
             stage("EXIT_45")

@@ -79,7 +79,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     fun shape(color:Int,radius:Int=CaritdaTokens.CARD_RADIUS,stroke:Int?=null)=GradientDrawable().apply{setColor(color);cornerRadius=dp(radius).toFloat();stroke?.let{setStroke(dp(CaritdaTokens.BORDER),it)}}
     fun text(value:String,size:Int=CaritdaTokens.BODY,bold:Boolean=false,secondary:Boolean=false)=TextView(context).apply{
         text=value;textSize=size.toFloat();setTextColor(if(secondary)colors.secondary else colors.text)
-        typeface=Typeface.create(if(bold)"sans-serif-medium" else "sans-serif",Typeface.NORMAL)
+        typeface=Typeface.create("sans-serif",if(bold)Typeface.BOLD else Typeface.NORMAL)
         setLineSpacing(dp(3).toFloat(),1.2f);setPadding(0,dp(6),0,dp(6));layoutParams=LinearLayout.LayoutParams(-1,-2)
     }
     fun card()=column().apply{
@@ -94,9 +94,12 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     /** B navigation: one home action, two child actions. Short windows may scroll this header. */
     fun screenHeader(title:String,brand:Boolean,actions:List<Button>,available:Float):LinearLayout=column().apply{
         tag="navigation_bar";setPadding(0,dp(8),0,dp(16))
+        background=android.graphics.drawable.LayerDrawable(arrayOf(
+            android.graphics.drawable.ColorDrawable(colors.line),
+            android.graphics.drawable.InsetDrawable(android.graphics.drawable.ColorDrawable(colors.surface),0,0,0,dp(1))))
         val narrow=available<600||context.resources.configuration.fontScale>=1.5f
         val heading=column().apply{
-            addView(text(title,CaritdaTokens.TITLE,true).apply{tag=if(brand)"app_brand"else"page_title"})
+            addView(text(title,CaritdaTokens.TITLE,true).apply{tag=if(brand)"app_brand"else"page_title";if(brand)letterSpacing=.05f})
             if(brand)addView(text("차량 기록을 잇다",20,secondary=true))
         }
         if(narrow){
@@ -132,7 +135,20 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
         addView(heading,if(stacked)LinearLayout.LayoutParams(-1,-2)else LinearLayout.LayoutParams(0,-2,1f))
     }
     fun attention(content:AttentionContent)=card().apply{
-        tag="attention_card";addView(text(content.title,CaritdaTokens.EMPHASIS,true).apply{tag="home_counts"})
+        background=object:Drawable(){
+            private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
+            override fun draw(canvas:Canvas){
+                val box=RectF(bounds);val radius=dp(CaritdaTokens.CARD_RADIUS).toFloat()
+                paint.style=Paint.Style.FILL;paint.color=colors.surface;canvas.drawRoundRect(box,radius,radius,paint)
+                val save=canvas.save();val path=Path().apply{addRoundRect(box,radius,radius,Path.Direction.CW)};canvas.clipPath(path)
+                paint.color=colors.accent;canvas.drawRect(box.left,box.top,box.left+dp(5),box.bottom,paint);canvas.restoreToCount(save)
+                paint.style=Paint.Style.STROKE;paint.strokeWidth=dp(1).toFloat();paint.color=colors.line
+                box.inset(.5f,.5f);canvas.drawRoundRect(box,radius,radius,paint)
+            }
+            override fun setAlpha(alpha:Int){};override fun setColorFilter(colorFilter:ColorFilter?){}
+            @Deprecated("Drawable opacity") override fun getOpacity()=PixelFormat.TRANSLUCENT
+        }
+        tag="attention_card";addView(text(content.title,CaritdaTokens.TITLE,true).apply{tag="home_counts"})
         if(content.preview.isNotBlank())addView(text(content.preview,22))
         if(content.explanation.isNotBlank())addView(text(content.explanation,20,secondary=true))
     }

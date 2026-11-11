@@ -1,12 +1,13 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — CARITDA 위치·SOC·DriveCheck 보조
-- STT는 공식 ON_DEVICE/request/Locale.KOREA 자동종료·재입력이다. final+실제ended 둘 다 있어야 완료며 타이머/부분문장/수동EOF는 금지한다. CANCELLED는 stop/release/generation으로 지연·중복을 차단하고 원 초안/DB를 보존한다. 한국어3회는 별도 근거다.
-- STT입력은 -allow-host-audio로 복구했다. AVD/설정/DB/백업 초기화 금지. passive meter0은 실패 증거가 아니다. 음성/문장/키를 로그·외부에 남기지 않는다. docs/STT_STABILITY.md·STT_RUN_GUIDE.md를 따른다.
-- Vehicle2.3.2/Navi3.0.5/Fused1.1.3/STT·TTS3.3.1/보안Maven필터/View홈·기록·운전자·원관측·캐시를 유지한다. DriveCheck는 편의 안내→선택 초안→명시 저장이며 센서 숫자를 본문/AI에 자동 넣지 않는다. 타이어 기준·등화ON은 실압·고장이 아니다.
-- 위치는 동의·권한·최종 확인 후 기존sidecar append다. Navi는 기존 경로/활성모드를 보호하며 onRouteStarted는 탐색 시작이다. 실제 목적지·ROUTE_DRIVE/안내모드 수신과 탐색완료 미수신을 구분한다. 일반 코드로 경로를 취소하지 않는다. SOC역순/오래됨/공백은 정상·해제가 아니다. docs/DRIVE_CHECK_ACCEPTANCE.md를 따른다.
-- 계측은 validation 고유fixture/prepare전 조기분기만 사용한다. 기존validation도 초기화 금지·일반앱 UI자동화0. 이번433과 과거313/발화3회는 별도다. 현재 원본수를 다시 확인한다. 공개 연속 속도/가속도·진동 미확보이며 마이크PoC는 validation 수동 진폭만이다. Gleo외부/일반 새흐름/실차는 미검증이다.
-- Gemini/Firebase/Keystore·BUDGET/portable:v2/UNKNOWN·모델ON·일5/월100/서비스월300을 보존한다. 이번 실모델/배포0. AI는 명시적 문제 저장 후 기존 화면에서 요청한다. category/situation만 전송하며 이름/메모/ID/시각/위치/차량값/다른기록은 제외한다. 연구·타작업·아래GitHub 게시규칙을 유지한다.
+## 현재 작업 — B안 라이트 전체 UI
+- REDESIGN_20261111 승인 B·Kotlin View·라이트 기본/다크 선택·76dp를 유지한다. 연구는 수정하지 않는다. docs/B_LIGHT_UI_ACCEPTANCE.md·B_LIGHT_UI_SCREEN_MATRIX.md·B_LIGHT_UI_GALLERY.md를 따른다.
+- 홈은 운전자→미확인 인계→유효 확인 항목→작성/초안→차량·기록이다. 정상 수치·지난 SOC 사건·4전역탭을 되살리지 않는다. 하위는 이전/제목/홈, 이름 관리는 설정이다. 숨은 더미 버튼을 만들지 않는다. 초안/검색/스크롤·작성자/네 상태/이력을 보존한다.
+- 값/단위·시각/출처/실패·오래됨을 유지하고 문·등화 원시값은 그룹/상세로 둔다. DriveCheck는 선택 초안→명시 저장이다. SOC 사용자 기준·차량 안내를 구분하고 타이어 기준/등화ON을 고장으로 추정하지 않는다. 자동 안내와 그래프는 별도다.
+- STT ON_DEVICE/request/Locale.KOREA·final+실제ended·CANCELLED stop/release/generation을 유지한다. 수동EOF/부분문장/타이머 성공은 금지다. 음성 패널은 표시만 바꾼다. AVD/DB/백업/오디오 설정을 초기화하지 않는다.
+- Vehicle2.3.2/Navi3.0.5/Fused1.1.3/STT·TTS3.3.1·Maven필터를 유지한다. 위치는 동의 후 append/마지막 확인 위치이며 Navi 기존 경로를 취소하지 않는다. SDK 등록/실제 수신·fixture/외부Gleo/실차를 구분한다.
+- Gemini/Firebase/Keystore·캐시/pending/UNKNOWN·모델ON·일5/월100/서비스300/비용 예약을 보존한다. 저장 후 명시 요청/전송동의와 전체결과TTS를 분리한다. 차량·위치·이름·메모를 증상 AI에 자동 추가하지 않는다. 이번 신규 유료 요청/배포0이다.
+- 계측은 validation 고유fixture/prepare전 조기분기만 사용하며 기존validation도 삭제하지 않는다. 일반앱 UI자동화 금지, 원본수를 매번 새 백업/비교한다. fixture/실제SDK/일반앱/이해도는 별도다. 아래 GitHub 연결 도구·Aside 보호 규칙을 유지한다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

@@ -34,6 +34,8 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("bLightReferenceOnly")=="true"){val lines=BLightReferenceChecks(this).run();result.putString("stream","CARITDA_B_LIGHT_REFERENCE_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("bLightLayoutOnly")=="true"||argumentsBundle?.getString("bLightLayoutSmokeOnly")=="true"){val lines=BLightLayoutChecks(this).run(argumentsBundle?.getString("bLightLayoutSmokeOnly")=="true");result.putString("stream","CARITDA_B_LIGHT_LAYOUT_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("bLightStageTwoOnly")=="true"){val lines=BLightStageTwoChecks(this).run();result.putString("stream","CARITDA_B_LIGHT_STAGE_TWO_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("bLightColdOnly")=="true"){val lines=BLightStageTwoChecks(this).cold();result.putString("stream","CARITDA_B_LIGHT_COLD_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("bLightStageOneOnly")=="true"){val lines=BLightStageOneChecks(this).run();result.putString("stream","CARITDA_B_LIGHT_STAGE_ONE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

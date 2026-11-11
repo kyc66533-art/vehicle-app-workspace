@@ -81,7 +81,9 @@ class BLightStageTwoChecks(private val inst:Instrumentation){
             verify(h.main{h.text(screen.window.decorView).contains("AI에 보내지")&&screen.window.decorView.findViewWithTag<Button>("portable_speak")?.isEnabled==true},"BT17 result/whole-TTS and local-only vehicle detail coexist without wire enrichment")
             h.click(screen,"portable_home");h.await{activity.window.decorView.findViewWithTag<Button>("settings_help")!=null}
             verify(fixture.posts==1,"BT18 actual AI home action returns to CARITDA home without another request")
-            click("settings_help");click("manage_drivers");click("add_driver");h.main{activity.window.decorView.findViewWithTag<EditText>("driver_name").setText("예시추가C")};click("save_driver")
+            click("settings_help");click("replay_guide")
+            verify(h.main{activity.window.decorView.findViewWithTag<Button>("back")!=null&&activity.window.decorView.findViewWithTag<Button>("close_guide")==null&&activity.window.decorView.findViewWithTag<Button>("guide_skip")==null},"BT24 replay uses one previous action without duplicate close or setup completion")
+            click("back");click("manage_drivers");click("add_driver");h.main{activity.window.decorView.findViewWithTag<EditText>("driver_name").setText("예시추가C")};click("save_driver")
             val added=SqliteIssueRepository(c,db).use{it.drivers().single{d->d.label=="예시추가C"}}
             click("rename_${added.id}");h.main{activity.window.decorView.findViewWithTag<EditText>("driver_name").setText("예시수정C")};click("save_driver");click("archive_${added.id}");h.confirm(activity)
             SqliteIssueRepository(c,db).use{verify(it.drivers().none{d->d.id==added.id}&&it.issue(issue.id)?.reporter?.id==a.id,"BT19 settings registration/rename/archive preserve historical issue authors")}

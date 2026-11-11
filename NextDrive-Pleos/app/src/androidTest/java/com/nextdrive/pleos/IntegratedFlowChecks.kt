@@ -238,17 +238,24 @@ class IntegratedFlowChecks(private val inst:Instrumentation){
     /** Actual SDK TTS with a validated fixture explanation, never an actual Gemini response. */
     fun tts():List<String>{
         ValidationEnvironment.requireIsolated(c)
+        val foreground=inst.startActivitySync(Intent(c,MainActivity::class.java).putExtra("validation_fixture","gleo-ui-"+UUID.randomUUID()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)) as MainActivity
         var gate:CarSafetyGate?=null;val safe=CountDownLatch(1)
         main{gate=CarSafetyGate(c){if(it==EditingState.ALLOWED)safe.countDown()};gate!!.start()}
         check(safe.await(12,TimeUnit.SECONDS))
-        var output:SpeechOutput?=null;var playback:ExplanationPlayback?=null;val done=CountDownLatch(1);var last=""
+        var output:SpeechOutput?=null;var playback:ExplanationPlayback?=null
         try{
             main{output=SpeechOutput(c){gate?.state==EditingState.ALLOWED};playback=ExplanationPlayback({gate?.state==EditingState.ALLOWED},
-                {phrase,complete,changed->output!!.speak(phrase,complete,changed)},{output!!.stop()})
-                playback!!.play("가능한 원인입니다. 여러 부위에서 소음이 전달될 수 있어요. 정차한 뒤 증상이 나타난 상황을 적어 주세요. 증상이 반복되거나 심해지면 정비소에서 점검을 받아 주세요. 확정 진단은 아니에요."){message->last=message;if(playback?.busy==false)done.countDown()}}
-            verify(done.await(55,TimeUnit.SECONDS)&&last=="음성 안내를 마쳤어요.","IF35 actual existing Korean TTS completes multiple prepared-result phrases")
+                {phrase,complete,changed->output!!.speak(phrase,complete,changed)},{output!!.stop()})}
+            repeat(2){round->
+                val done=CountDownLatch(1);var last=""
+                main{playback!!.play("가능한 원인입니다. 여러 부위에서 소음이 전달될 수 있어요. 정차한 뒤 증상이 나타난 상황을 적어 주세요. 증상이 반복되거나 심해지면 정비소에서 점검을 받아 주세요. 확정 진단은 아니에요."){message->last=message;if(playback?.busy==false)done.countDown()}}
+                val complete=done.await(55,TimeUnit.SECONDS)
+                val code=when{last=="음성 안내를 마쳤어요."->"COMPLETED";last.contains("응답이 늦어")->"WATCHDOG";last.contains("확인 코드: ")->last.substringAfter("확인 코드: ").takeIf{Regex("[A-Z_0-9]+").matches(it)}?:"SDK_ERROR";last.contains("멈췄어요")->"STOPPED";else->"INCOMPLETE"}
+                check(complete&&code=="COMPLETED"){"IF35_TTS_METADATA_ONLY round=$round code=$code callback=$complete source=${main{output?.source}} busy=${main{output?.busy}} started=${main{output?.started}}"}
+                verify(true,"IF35_${round+1} actual Korean TTS completes the whole prepared text sequentially on the same player")
+            }
             verify(main{output?.source=="PLEOS_ON_DEVICE"},"IF36 actual Pleos on-device output, not Gemini or Gleo playback")
-        }finally{main{playback?.cancel();gate?.stop()}}
+        }finally{main{playback?.cancel();gate?.stop();foreground.finish()};inst.waitForIdleSync()}
         return lines
     }
 }

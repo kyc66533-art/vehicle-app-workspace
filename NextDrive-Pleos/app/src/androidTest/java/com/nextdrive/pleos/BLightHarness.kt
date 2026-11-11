@@ -18,11 +18,11 @@ class BLightHarness(val inst:Instrumentation){
     fun draw(a:MainActivity)=main{a.javaClass.getDeclaredMethod("draw").apply{isAccessible=true}.invoke(a)}
     fun render(a:PortableAiActivity)=main{a.javaClass.getDeclaredMethod("render").apply{isAccessible=true}.invoke(a)}
     fun confirm(a:MainActivity,yes:Boolean=true){val dialog=main{get(a,"activeDialog") as AlertDialog};await{dialog.isShowing};main{dialog.getButton(if(yes)AlertDialog.BUTTON_POSITIVE else AlertDialog.BUTTON_NEGATIVE).performClick()}}
-    fun capture(a:Activity,name:String){
+    fun capture(a:Activity,name:String,synthetic:Boolean=true){
         check(a.packageName=="com.nextdrive.pleos.validation"&&Regex("gleo-ui-[a-f0-9-]{36}").matches(a.intent.getStringExtra("validation_fixture").orEmpty()))
         check(Regex("[a-z0-9-]+\\.png").matches(name))
         main{val root=get(a,if(a is MainActivity)"root"else"shell") as View
-            views(root).filterIsInstance<TextView>().firstOrNull{it.text.startsWith("검증 전용") }?.text="검증 전용 · TEST · 합성 예시"
+            views(root).filterIsInstance<TextView>().firstOrNull{it.text.startsWith("검증 전용") }?.text=if(synthetic)"검증 전용 · TEST · 합성 예시"else"검증 전용 · TEST · 실제 에뮬레이터 SDK"
         };inst.waitForIdleSync()
         main{val root=get(a,if(a is MainActivity)"root"else"shell") as View;check(root.width>0&&root.height>0)
             val bitmap=Bitmap.createBitmap(root.width,root.height,Bitmap.Config.ARGB_8888);root.draw(Canvas(bitmap))

@@ -27,7 +27,7 @@ object BLightTestNavigation {
             "auto_snapshots"->{home();tap("vehicle_health");tap("auto_snapshots");return true}
             "my_issues"->{home();tap("all_issues");tap("filter_MINE");return true}
             "help"->{home();tap("settings_help");tap("help");return true}
-            "close_help","help_contents","close_menu"->{tap("back");return true}
+            "close_help","help_contents","close_menu","close_guide","cancel_driver"->{tap("back");return true}
             "issue_summary","recurrence","change_status","speak_issue","add_note"->if(has("issue_actions"))tap("issue_actions")
             "edit_issue","delete_issue"->if(has("issue_manage"))tap("issue_manage")
             "location_history","location_history_more"->if(has("location_details"))tap("location_details")

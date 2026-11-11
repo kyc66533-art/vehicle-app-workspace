@@ -54,6 +54,7 @@ class BLightStageOneChecks(private val inst:Instrumentation){
             verify(main{root().findViewWithTag<View>("nav_HOME")==null&&root().findViewWithTag<View>("nav_ISSUES")==null&&root().findViewWithTag<View>("nav_VEHICLE")==null&&root().findViewWithTag<View>("menu")==null},"BL10 removed global tabs have no hidden compatibility Views")
             verify(main{root().findViewWithTag<View>("home_vehicle_attention")==null&&root().findViewWithTag<View>("handover")==null&&views(root()).none{it.tag?.toString()?.startsWith("metric_")==true}},"BL11 zero-attention home omits empty warning cards and normal metric cards")
             verify(!main{CaritdaTheme.dark(activity,prefix)},"BL12 fixture with no stored choice defaults to B light")
+            BLightHarness(inst).capture(activity,"home-empty-light.png")
             lowStore.configure(true,20,raw);raw.appendRef(low);draw()
             verify(main{views(root()).count{it.tag=="home_vehicle_attention"}==1&&text(root().findViewWithTag("home_vehicle_attention")).contains("사용자 기준")},"BL13 fresh fixture SOC produces one criterion card with a next action")
             SqliteIssueRepository(c,db).use{verify(it.issues().size==2&&it.draft()==null,"BL14 displaying a vehicle notice creates no issue or draft")}

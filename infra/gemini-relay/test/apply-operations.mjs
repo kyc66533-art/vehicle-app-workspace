@@ -38,6 +38,11 @@ export function resumeAllowed(s){return s.stage==='STOPPED'&&s.code==='APP_CHECK
 export function quotaResumeAllowed(s){const q=s.off_usage||s.user_confirmed_off_usage;return !s.trial_instruction_issued&&!s.on_version&&!!s.off_version&&q?.remaining===0&&q.legacy===s.before_usage?.legacy&&q.portable===s.before_usage?.portable&&((s.stage==='WAITING_QUOTA'&&s.quota_wait_confirmed===true)||(s.stage==='STOPPED'&&s.code==='AUTHENTICATED_LEDGER_OR_QUOTA_MISMATCH'&&s.recovery==='MODEL_OFF_VERIFIED'&&s.user_confirmed_off_usage?.uncertain===false))}
 export function numeric(line){return /^\d{1,7}$/.test(line.trim())?Number(line.trim()):null}
 export function verifyWaitingCode(prior,current){ensure(prior.off_version?.script?.etag&&current.script?.etag===prior.off_version.script.etag,'ACTIVE_CODE_CHANGED_DURING_QUOTA_WAIT')}
+/** A saved explanation or a second request cannot satisfy a one-call live trial. */
+export function verifyTrialUsage(start,finish,remainingBefore,sameDay){
+ ensure(finish[0]===start[0]&&finish[1]===start[1]+1&&finish[2]>=0&&finish[2]<=5,'TRIAL_COUNT_MISMATCH');
+ if(sameDay)ensure(finish[2]===remainingBefore-1,'REVIEW_CONSUMED_EXTRA_QUOTA');
+}
 async function usage(ask,count){const values=[];for(const label of ['기존 TEST 사용 횟수','정식 요청 시도 횟수','현재 잔여 횟수'].slice(0,count)){for(;;){const line=await ask(label+' (숫자만, 오류면 FAIL) > ');if(/^FAIL\b/i.test(line.trim()))throw Error('APP_CHECK_FAILED');const n=numeric(line);if(n!==null){values.push(n);break}console.log('형식만 다시 입력하세요. 예: 1 (OK나 회라는 글자는 넣지 않아요.)')}}return values}
 async function affirm(ask,prompt){for(;;){const answer=(await ask(prompt+' (정상이면 Y, 오류면 FAIL) > ')).trim().toUpperCase();if(['Y','YES','OK','네','예'].includes(answer))return;if(['FAIL','N','NO','아니요'].includes(answer))throw Error('APP_CHECK_FAILED');console.log('화면 확인 결과만 Y 또는 FAIL로 입력하세요. 형식 오류는 서버 요청 없이 다시 입력할 수 있어요.')}}
 function cf(args,json=false){try{const out=execFileSync(process.execPath,[path.join(relay,'node_modules/wrangler/bin/wrangler.js'),...args,...(json?['--json']:[])],{cwd:relay,windowsHide:true,encoding:'utf8',timeout:120000,maxBuffer:4*1024*1024,env:{...process.env,CI:'true',WRANGLER_SEND_METRICS:'false'},stdio:['ignore','pipe','pipe']});return json?JSON.parse(out):null;}catch{throw Error('CLOUDFLARE_'+args[0].toUpperCase()+'_FAILED')}}
@@ -66,11 +71,14 @@ async function main(){
   console.log('3/5 승인한 같은 정책을 모델 ON으로 전환하고 공개401·기존 바인딩을 확인합니다.');mutation=true;state.stage='ON_DEPLOYING';save(state);deploy(true);const on=version();invariant(before.raw,on.raw,true);state.on_version=cleanVersion(on.raw);state.on_public=await publicCheck(true);state.stage='TRIAL_ISSUED';state.trial_instruction_issued=true;save(state);
   console.log('\n4/5 앱에서 횟수를 확인하세요. 모델 켜짐·불확실없음·직전 사용량 동일이 아니면 새 생성을 누르지 말고 FAIL을 입력하세요.');
   console.log('조건이 맞으면 개인정보 없는 선택 기록 한 건에 새로 설명 생성 버튼을 딱 한 번 누르세요. 실패하면 재시도하지 마세요.');
+  console.log('버튼이 "진행 중 요청 결과 확인"이면 새 시험을 하지 말고 FAIL을 입력하세요. 기존 요청 복구나 저장 설명 재생을 신규 분석으로 판정하지 않습니다.');
   console.log('새 요청 뒤 "AI 설명을 받았어요" 성공 안내와 새 본문을 먼저 확인하세요. 예전 설명이 남아 있는 것만으로 성공 처리하지 마세요.');
+  if(process.argv.includes('--verify-tts'))console.log('새 결과 화면에서 "이 설명 음성으로 듣기 · 새 AI 요청 없음"을 한 번 누르세요. 실제 한국어 음성과 "음성 안내를 마쳤어요"를 확인하세요. 이 버튼은 Gemini를 호출하지 않습니다.');
   console.log('실제 새 Gemini 설명 성공 후 기존 설명 보기→앱 종료·재실행→기존 설명 보기→횟수 확인을 진행하세요.');
   await affirm(ask,'신규 실제 Gemini 성공·저장 설명 복원·불확실없음 확인');
-  const finish=await usage(ask,3);ensure(finish[0]===start[0]&&finish[1]===start[1]+1&&finish[2]>=0&&finish[2]<=5,'TRIAL_COUNT_MISMATCH');
-  const final=await publicCheck(true);if(kst(final.server_date)===kst(state.off_public.server_date))ensure(finish[2]===offUsage[2]-1,'REVIEW_CONSUMED_EXTRA_QUOTA');
+  if(process.argv.includes('--verify-tts')){await affirm(ask,'새 Gemini 설명의 실제 한국어 음성·음성 안내 완료 확인');state.tts_user_verified=true;save(state);}
+  const finish=await usage(ask,3);
+  const final=await publicCheck(true);verifyTrialUsage(start,finish,offUsage[2],kst(final.server_date)===kst(state.off_public.server_date));
   const active=version();ensure(active.deployment.versions[0].version_id===on.deployment.versions[0].version_id,'REMOTE_DEPLOYMENT_CHANGED');invariant(before.raw,active.raw,true);
   state.after_usage={legacy:finish[0],portable:finish[1],remaining:finish[2]};state.final_public=final;state.actual_model_success_user_verified=true;state.policy_verified=INITIAL_RECURRING;state.stage='COMPLETE';state.complete=true;state.finished_at=new Date().toISOString();save(state);
   console.log('5/5 OPERATIONAL_ACCEPTANCE_PASS: 실제 배포·반복 정책·기존 원장/인증·저장 설명·실모델1회·잔여 확인 완료. 모델 원문/인증값은 저장하지 않았습니다.');

@@ -1,6 +1,6 @@
 // Only pure local checks. Never invokes Wrangler, external fetch, or the deployment main function.
 import fs from'node:fs';import assert from'node:assert/strict';
-import{validateConfigs,invariant,publicInvariant,confirmation,resumeAllowed,quotaResumeAllowed,numeric,verifyWaitingCode}from'./apply-operations.mjs';
+import{validateConfigs,invariant,publicInvariant,confirmation,resumeAllowed,quotaResumeAllowed,numeric,verifyWaitingCode,verifyTrialUsage}from'./apply-operations.mjs';
 import{INITIAL_RECURRING}from'./prepare-recurring-policy.mjs';
 const off=JSON.parse(fs.readFileSync(new URL('../../../.tools/worker-operations/model-off.json',import.meta.url),'utf8')),on=JSON.parse(fs.readFileSync(new URL('../../../.tools/worker-operations/model-on.json',import.meta.url),'utf8'));
 let n=0;function good(fn){assert.doesNotThrow(fn);n++}function bad(fn){assert.throws(fn);n++}
@@ -21,4 +21,11 @@ good(()=>assert.equal(numeric(' 3 '),3));good(()=>assert.equal(numeric('OK 3'),n
 const waiting={stage:'WAITING_QUOTA',quota_wait_confirmed:true,trial_instruction_issued:false,off_version:{},before_usage:{legacy:1,portable:5},off_usage:{legacy:1,portable:5,remaining:0}};
 good(()=>assert.equal(quotaResumeAllowed(waiting),true));good(()=>assert.equal(quotaResumeAllowed({...waiting,trial_instruction_issued:true}),false));good(()=>assert.equal(quotaResumeAllowed({...waiting,off_usage:{legacy:1,portable:0,remaining:0}}),false));
 good(()=>verifyWaitingCode({off_version:{script:{etag:'fixture-code'}}},{script:{etag:'fixture-code'}}));bad(()=>verifyWaitingCode({off_version:{script:{etag:'fixture-code'}}},{script:{etag:'changed-code'}}));bad(()=>verifyWaitingCode({},{script:{etag:'fixture-code'}}));
+good(()=>verifyTrialUsage([1,5],[1,6,4],5,true));
+bad(()=>verifyTrialUsage([1,5],[1,5,5],5,true)); // cached result, no new request
+bad(()=>verifyTrialUsage([1,5],[1,7,3],5,true)); // extra request
+bad(()=>verifyTrialUsage([1,5],[0,6,4],5,true)); // legacy ledger changed
+bad(()=>verifyTrialUsage([1,5],[1,6,3],5,true)); // review consumed quota
+bad(()=>verifyTrialUsage([1,5],[1,6,-1],5,false));
+good(()=>verifyTrialUsage([1,5],[1,6,5],5,false)); // KST day changed, monthly usage remains
 console.log('APPROVED_OPERATIONS_ORCHESTRATION_PASS checks='+n+' deployments=0 model_calls=0');

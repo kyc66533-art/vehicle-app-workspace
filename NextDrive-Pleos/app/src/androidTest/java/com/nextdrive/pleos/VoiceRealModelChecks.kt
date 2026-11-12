@@ -29,8 +29,10 @@ class VoiceRealModelChecks(private val inst:Instrumentation){
         override fun listen(events:SpeechBackend.Events){requests++;this.events=events;events.ready();events.started()}
         override fun finish(){};override fun detach(){};override fun release(){}
     }
-    private inner class GuardSession:PortableSession{
+    internal inner class GuardSession(private val supplemental:Boolean=false):PortableSession{
         private val actual=FirebasePortableSession(ctx)
+        private val approvalLedger=if(supplemental)ctx.getSharedPreferences("voice-real-model-extra-20261112",0)else guard
+        private val operationLimit=if(supplemental)1 else 2
         override val signedIn get()=actual.signedIn
         override val subject get()=actual.subject
         override fun matches(uid:String)=actual.matches(uid)
@@ -38,10 +40,12 @@ class VoiceRealModelChecks(private val inst:Instrumentation){
         private fun api(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String?,record:String?,dialogue:Boolean):PortableAiClient {
             val wire=AiRelayClient(URL(PortableAiClient.ORIGIN)){null};val operations=mutableMapOf<String,String>()
             val transport={path:String,body:JSONObject,device:String,version:Int->
-                if(path=="/v2/issues/explanations"||path=="/v2/issues/dialogue"){
+                val modelPath=path in setOf("/v2/explanations","/v2/issues/explanations","/v2/issues/dialogue")
+                if(supplemental&&modelPath&&path!="/v2/issues/dialogue")error("SUPPLEMENTAL_DIALOGUE_ONLY")
+                if(modelPath){
                     val operation=operations[body.getString("challenge_id")]?:error("TEST_OPERATION_ID_UNCONFIRMED")
-                    synchronized(guard){val approved=guard.getStringSet("operations",emptySet()).orEmpty()
-                        if(operation !in approved){check(approved.size<2){"APPROVED_TWO_OPERATION_CAP"};check(guard.edit().putStringSet("operations",approved+operation).commit())}
+                    synchronized(approvalLedger){val approved=approvalLedger.getStringSet("operations",emptySet()).orEmpty()
+                        if(operation !in approved){check(approved.size<operationLimit){if(supplemental)"SUPPLEMENTAL_ONE_OPERATION_CAP"else"APPROVED_TWO_OPERATION_CAP"};check(approvalLedger.edit().putStringSet("operations",approved+operation).commit())}
                     }
                 }
                 val result=JSONObject(wire.postPortable(path,bearer,body.toString(),device,version))
@@ -53,7 +57,7 @@ class VoiceRealModelChecks(private val inst:Instrumentation){
         override fun client(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String?,record:String?)=api(store,uid,bearer,allowed,job,record,false)
         override fun dialogueClient(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String,record:String)=api(store,uid,bearer,allowed,job,record,true)
     }
-    fun run(approval:String):List<String>{
+    fun run(approval:String,prepareOnly:Boolean=false):List<String>{
         ValidationEnvironment.requireIsolated(ctx);check(approval=="USER_APPROVED_MAX_TWO_20261112"){"EXPLICIT_PAID_VALIDATION_GATE_REQUIRED"}
         check(guard.getStringSet("operations",emptySet()).orEmpty().isEmpty()){ "EXISTING_REAL_ATTEMPT_DO_NOT_REPEAT" }
         val health=URL(PortableAiClient.ORIGIN+"/health").openConnection().apply{connectTimeout=8000;readTimeout=8000}.getInputStream().use{JSONObject(it.bufferedReader().readText())}
@@ -68,6 +72,7 @@ class VoiceRealModelChecks(private val inst:Instrumentation){
         val registration=session.dialogueClient(storage,uid!!,bearer!!,{true},"voice-preflight-dialogue","CONSENT_ONLY")
         val registered=registration.state();if(registered.optString("consent")!=IssueDialogueContract.CONSENT&&(registered.optJSONArray("consents")?.let{a->(0 until a.length()).any{a.optString(it)==IssueDialogueContract.CONSENT}}!=true))registration.register()
         val before=preflight.status();check(before.getBoolean("model_enabled")&&!before.optBoolean("uncertain_block")&&before.getInt("remaining")>=2){"BUDGET_OR_UNKNOWN_BLOCK_NO_PAID_REQUEST"}
+        if(prepareOnly)return listOf("PASS existing issue and dialogue scopes registered with the same key/account", "BUDGET remaining=${before.getInt("remaining")} attempts=${before.optInt("portable_attempts")} uncertain=${before.optBoolean("uncertain_block")} model_calls=0")
         val prefix="voice-auto-"+UUID.randomUUID();val owner=SqliteIssueRepository(ctx,"$prefix.db").use{val s=CaritdaService(it,{true});s.registerDriver("실모델시험A").also(s::selectDriver)}
         VoiceSettings(ctx,"$prefix-settings").write(owner.id,session.subject!!,VoiceSettings.Permit(true,true,true,true,true,false))
         check(guard.edit().putString("fixture",prefix).putString("stage","READY").commit())

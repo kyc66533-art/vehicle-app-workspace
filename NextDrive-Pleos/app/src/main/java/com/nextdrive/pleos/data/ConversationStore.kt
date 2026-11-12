@@ -74,7 +74,7 @@ class ConversationStore(context:Context,private val name:String="caritda-convers
         return String(cipher.doFinal(bytes.copyOfRange(12,bytes.size)),Charsets.UTF_8)
     }
     fun appendOnce(id:String,session:String,role:String,origin:String,text:String,revision:Int=0,parent:String?=null){
-        require(role in setOf("USER","ASSISTANT")&&origin in setOf("ASR","LOCAL_RULE","GEMINI_NEW","GEMINI_SAVED","GEMINI_RECOVERED"))
+        require(role in setOf("USER","ASSISTANT")&&origin in setOf("ASR","ASR_WAKE","LOCAL_RULE","GEMINI_NEW","GEMINI_SAVED","GEMINI_RECOVERED"))
         require(text.isNotBlank()&&text.length<=12000)
         val db=writableDatabase;db.beginTransaction()
         try{

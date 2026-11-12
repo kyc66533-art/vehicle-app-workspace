@@ -5,6 +5,16 @@ const config='wrangler.existing.jsonc',name='caritda-ai-relay-dev',origin='https
 export const APPROVED_DIALOGUE_BUNDLE='327b6f8b8715e71aa9c809a8ea0c85b451c183931a267e83e12c952f7f1fb833';
 // Last audited operational deployment. A parallel unpublished Worker fix must be reviewed first.
 export const APPROVED_BEFORE_VERSION='200edeff-41b1-4454-9d40-b0d2809014e8';
+export const APPROVED_ISSUED_READ_BUNDLE='ecde6a83bf161040834af3094c3821cb04c77696228bd28df3f6632c76c5a883';
+export const APPROVED_ISSUED_READ_BEFORE_VERSION='fb39412c-11f2-4080-b30f-b4751d71731f';
+export const APPROVED_CONTEXT_BUNDLE='4643c387ccce7a9056f12a3874a23abf3a75eea79e68779994c94b600498ca19';
+export const APPROVED_CONTEXT_BEFORE_VERSION='b0f65833-546d-4e5c-9a0c-4a5071f45ce7';
+export function deploymentPlan(issuedReadFix=false){
+ if(issuedReadFix==='context')return {bundle:APPROVED_CONTEXT_BUNDLE,before:APPROVED_CONTEXT_BEFORE_VERSION,journal:'dialogue-context-deployment.json'};
+ return issuedReadFix
+  ?{bundle:APPROVED_ISSUED_READ_BUNDLE,before:APPROVED_ISSUED_READ_BEFORE_VERSION,journal:'dialogue-issued-read-deployment.json'}
+  :{bundle:APPROVED_DIALOGUE_BUNDLE,before:APPROVED_BEFORE_VERSION,journal:'dialogue-deployment.json'};
+}
 const ensure=(ok,code)=>{if(!ok)throw Error(code)},sha=value=>createHash('sha256').update(value).digest('hex');
 const resources=value=>(value?.result??value)?.resources;
 export function bindingFingerprint(version){return(resources(version)?.bindings??[]).map(b=>({name:b.name,type:b.type,class_name:b.class_name??null,namespace:b.namespace_id?sha(b.namespace_id):null,text:b.type==='plain_text'?sha(String(b.text??b.value??'')):null})).sort((a,b)=>a.name.localeCompare(b.name));}
@@ -29,15 +39,22 @@ async function publicCheck(dialogue){
 }
 async function main(){
  ensure(process.argv.includes('--execute'),'USE_EXECUTE_FOR_APPROVED_CODE_DEPLOY');fs.mkdirSync(folder,{recursive:true});
- const journal=path.join(folder,'dialogue-deployment.json');if(fs.existsSync(journal)){const previous=JSON.parse(fs.readFileSync(journal,'utf8'));ensure(!['DEPLOYING','COMPLETE','POSTCHECK_FAILED'].includes(previous.stage),'EXISTING_DEPLOYMENT_DO_NOT_REPEAT')}
+ const contextFix=process.argv.includes('--context-schema-fix'),issuedFix=process.argv.includes('--issued-read-fix');
+ ensure(!(contextFix&&issuedFix),'ONE_APPROVED_PATCH_MODE_REQUIRED');
+ const fix=contextFix?'context':issuedFix,plan=deploymentPlan(fix);
+ const original=fix?JSON.parse(fs.readFileSync(path.join(folder,contextFix?'dialogue-issued-read-deployment.json':'dialogue-deployment.json'),'utf8')):null;
+ if(fix)ensure(original.stage==='COMPLETE'&&original.after?.id===plan.before&&original.bundle_sha256===(contextFix?APPROVED_ISSUED_READ_BUNDLE:APPROVED_DIALOGUE_BUNDLE),'VERIFIED_PRIOR_DEPLOYMENT_REQUIRED');
+ const journal=path.join(folder,plan.journal);if(fs.existsSync(journal)){const previous=JSON.parse(fs.readFileSync(journal,'utf8'));ensure(!['DEPLOYING','COMPLETE','POSTCHECK_FAILED'].includes(previous.stage),'EXISTING_DEPLOYMENT_DO_NOT_REPEAT')}
  const parsed=ts.parseConfigFileTextToJson(config,fs.readFileSync(path.join(root,config),'utf8'));const c=parsed.config;
  ensure(!parsed.error&&c.name===name&&c.keep_vars===true&&!c.vars&&c.durable_objects?.bindings?.length===1&&c.durable_objects.bindings[0].name==='BUDGET'&&c.migrations?.length===1&&c.migrations[0].tag==='caritda-budget-v1','PRESERVING_CONFIG_REQUIRED');
- const state={at:new Date().toISOString(),stage:'PRECHECK',gemini_requests:0};const save=()=>fs.writeFileSync(journal,JSON.stringify(state,null,2));
+ const state={at:new Date().toISOString(),stage:'PRECHECK',issued_read_fix:issuedFix,context_schema_fix:contextFix,gemini_requests:0};const save=()=>fs.writeFileSync(journal,JSON.stringify(state,null,2));
  let before,uploaded;
  try{
   for(const args of [['node_modules/typescript/bin/tsc','--noEmit'],['test/bundle-dialogue.mjs'],['--experimental-strip-types','test/portable-security.mjs','.bundle/voice-dialogue-worker.mjs'],['--experimental-strip-types','test/issue-security.mjs','.bundle/voice-dialogue-worker.mjs'],['--experimental-strip-types','test/dialogue-security.mjs','.bundle/voice-dialogue-worker.mjs'],['--experimental-strip-types','test/workerd-compatibility.mjs','.bundle/voice-dialogue-worker.mjs']])execFileSync(process.execPath,args,{cwd:root,stdio:['ignore','pipe','pipe'],timeout:120000});
-  const bundle=path.join(root,'.bundle/voice-dialogue-worker.mjs');ensure(sha(fs.readFileSync(bundle))===APPROVED_DIALOGUE_BUNDLE,'REVIEWED_BUNDLE_HASH_REQUIRED');state.bundle_sha256=APPROVED_DIALOGUE_BUNDLE;
-  before=current();ensure(before.id===APPROVED_BEFORE_VERSION,'ACTIVE_WORKER_CODE_NOT_AUDITED_DO_NOT_OVERWRITE');validatePreserved(before.raw,before.raw);state.before={id:before.id,bindings:bindingFingerprint(before.raw)};state.before_public=await publicCheck(false);save();
+  const bundle=path.join(root,'.bundle/voice-dialogue-worker.mjs');ensure(sha(fs.readFileSync(bundle))===plan.bundle,'REVIEWED_BUNDLE_HASH_REQUIRED');state.bundle_sha256=plan.bundle;
+  before=current();ensure(before.id===plan.before,'ACTIVE_WORKER_CODE_NOT_AUDITED_DO_NOT_OVERWRITE');validatePreserved(before.raw,before.raw);
+  if(fix)ensure(JSON.stringify(bindingFingerprint(before.raw))===JSON.stringify(original.after.bindings),'PRIOR_BINDINGS_OR_POLICY_CHANGED');
+  state.before={id:before.id,bindings:bindingFingerprint(before.raw)};state.before_public=await publicCheck(fix);save();
   ensure(current().id===before.id,'WORKER_CHANGED_BEFORE_DEPLOY');state.stage='DEPLOYING';save();
   const output=cli(['deploy',bundle,'--no-bundle','--config',config,'--keep-vars']);uploaded=output.match(/Current Version ID:\s*([a-f0-9-]{36})/i)?.[1];
   ensure(uploaded,'UPLOAD_VERSION_UNCONFIRMED');const after=current();ensure(after.id===uploaded,'WORKER_CHANGED_AFTER_DEPLOY');validatePreserved(before.raw,after.raw);

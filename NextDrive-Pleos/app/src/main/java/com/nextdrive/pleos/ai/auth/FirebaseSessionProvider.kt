@@ -7,6 +7,7 @@ import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.FirebaseTooManyRequestsException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.EmailAuthProvider
 import com.nextdrive.pleos.R
 
 /** Auth SDK owns session persistence and refresh. No password/JWT/refresh copy or token UI. */
@@ -61,6 +62,25 @@ object FirebaseSessionProvider {
             else if(task.isSuccessful)done(snapshot()) else done(Result(error(task.exception)))
             changed()
         }}catch(e:Exception){busy=false;done(Result(error(e)));changed()}
+    }
+    /** Refreshes only the current account. No sign-out, credential persistence or UID change. */
+    fun reauthenticate(password:String,done:(Result)->Unit){
+        val user=auth?.currentUser?:return done(Result("AUTH_SIGN_IN_REQUIRED"))
+        val email=user.email?:return done(Result("AUTH_PROVIDER_DISABLED"))
+        if(!initialized)return done(Result("AUTH_RESTORING"))
+        if(busy)return done(Result("AUTH_BUSY"))
+        if(password.isEmpty())return done(Result("AUTH_INPUT"))
+        busy=true;val operation=revision;changed()
+        try{user.reauthenticate(EmailAuthProvider.getCredential(email,password)).addOnCompleteListener{task->
+            if(operation!=revision||auth?.currentUser?.uid!=user.uid){busy=false;done(Result("AUTH_CANCELLED"));changed()}
+            else if(!task.isSuccessful){busy=false;done(Result(error(task.exception),true));changed()}
+            else user.getIdToken(true).addOnCompleteListener{refresh->
+                busy=false
+                if(operation!=revision||auth?.currentUser?.uid!=user.uid)done(Result("AUTH_CANCELLED"))
+                else done(Result(if(refresh.isSuccessful)"AUTH_REAUTHENTICATED"else error(refresh.exception),true,refresh.isSuccessful))
+                changed()
+            }
+        }}catch(e:Exception){busy=false;done(Result(error(e),true));changed()}
     }
     /** Metadata only for the Day1 compatibility gate. Never returns the bearer token to UI. */
     fun inspectToken(forceRefresh:Boolean=false,done:(Result)->Unit) {

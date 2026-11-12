@@ -1,0 +1,17 @@
+CARITDA optional offline home wake component
+
+Unmodified Vosk API 0.3.47 and vosk-model-small-ko-0.22
+Copyright their respective upstream contributors, Alpha Cephei and Kaldi contributors.
+https://github.com/alphacep/vosk-api
+https://alphacephei.com/vosk/models
+Licensed under Apache License 2.0; see APACHE-2.0.txt.
+
+Unmodified Java Native Access 5.13.0
+Copyright the Java Native Access contributors.
+https://github.com/java-native-access/jna/tree/5.13.0
+SPDX-License-Identifier: Apache-2.0 OR LGPL-2.1
+This application selects the Apache License 2.0 option; see APACHE-2.0.txt.
+
+Model/library files are downloaded separately from the official HTTPS distributors by
+scripts/Prepare-HomeWakeEngine.mjs. No model or library source has been modified.
+CARITDA's microphone lifecycle, consent and wake filtering code are separate local code.

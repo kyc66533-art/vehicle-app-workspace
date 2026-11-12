@@ -31,7 +31,7 @@ class VoiceAutomationUiChecks(private val inst:Instrumentation){
         override fun listen(events:SpeechBackend.Events){this.events=events;requests++;events.ready();events.started()}
         override fun finish(){};override fun detach(){};override fun release(){releases++}
     }
-    private inner class Session:PortableSession{
+    internal inner class Session:PortableSession{
         val uid="voice-ui-"+UUID.randomUUID();val key=DeviceKeyStore("caritda.validation.$uid")
         override val signedIn=true;override val subject=VehicleAnalytics.id(uid)
         override fun matches(uid:String)=uid==this.uid

@@ -1,5 +1,79 @@
 # CARITDA 음성 자동화 인수 결과
 
+## 최신 판정 — 2026-11-12 16:30 +09:00
+
+시작 main `a9c2b29c66ccff3b5a0bd2381113834e731eb5a2`. 기존 구현/성공 근거를 재사용하고 홈 대기·운영 배포·실모델·실패 복구의 잔여 부분을 수정했다. [이번 파일·계약·배포 상세](CARITDA_AUTOMATION_INTEGRATION.md). 아래 접힌 과거 기록의477/198·배포0·모델0을 이번 성공으로 재사용하지 않는다.
+
+**운영 대화 API와 실제 Gemini 분석/새 후속 답변·전체 TTS는 검증했다. 실제 사람의 홈 호출→연속 STT까지 포함한 전체 흐름은 미완료다.** 독립 호출어 실험은 FAIL, 기본 Pleos 제한 대기의 사람 발화는 사용자 보류 NOT_TESTED다.
+
+검증 수준은 ①소스 ②컴파일 ③합성 ④실제SDK ⑤validation 에뮬레이터 연결 ⑥일반 앱 실행 ⑦신규Gemini ⑧외부Gleo ⑨실차다. 각각을 대신 성공으로 표시하지 않는다.
+
+### 최종 A–E 시나리오
+
+| 시나리오 | 판정 | 실제 확인 범위 |
+|---|---|---|
+| A 홈에서 버튼 없이 호출 | **NOT_TESTED**(기본 Pleos 사람 발화) / **FAIL**(독립 Vosk 실제 발화) | 홈 자동대기·started표시·wake final+ended→prompt→증상·OFF/수명주기29개는 실제 Activity/SQLite와 callback fixture PASS. 별도 음성 Activity/시작 버튼은 필요하지 않음. 실제 PCM/SDK 권한은 확인했으나 말소리 인식 성공이 아님 |
+| B 저장→실제 신규 Gemini→전체 TTS | **PASS**(명시 validation 입력) | ASR만 fixture. 홈의 기존 제어기가 현재 운전자 문제1건을 자동commit→새 단일분석→실제 전체TTS DONE. 최초 전체 계측은 이후 후속 오류로 실패했으며 이 부분 성공은 저장 메타데이터/실제callback/새 프로세스 재조회로 확인 |
+| C 같은 문제의 새 Gemini 후속 답변 | **PASS**(복구 진입의 실모델/TTS) / **NOT_TESTED**(사람 연속STT) | 앞선 증상·검증된 실제AI를 사용한 ‘그럼 어떻게 해야 해?’의 새 응답·같은issue/revision/session·전체TTS DONE·암호화보관. 초기 후속은 MODEL_CONTEXT_INVALID로 실패. 수정 후 별도 추가 승인1회로 성공. 세 번째 질문은 계약만 검사/모델0 |
+| D SDK 변화→홈→음성→후속 | **NOT_TESTED**(이번 신규 실제SOC/사람발화) | 기존 실제18/45·자동TTS 성공은 과거 기준으로 보존. 이번에는 같은 사건→홈inline제어기/중복없음/이력연결 fixture PASS. SDK Console 값 변경·추가 Safety 이상값 수신을 새로 성공 처리하지 않음 |
+| E 장애·수명주기·보존 | **PASS**(선택 회귀) / **NOT_TESTED**(물리전화/PTT/일반캐시내용) | OFF·포커스거부/상실·안전제한·백그라운드·운전자/계정범위·늦은callback·중복·UNKNOWN/공유lock·영속조회. 실제503은 이번 모델에서 재발하지 않음. 원본 엄격 행동일성은 아래 읽음1건 차이로 FAIL이며 내용보존을 별도 감사 |
+
+### 실제 배포와 사용량
+
+- 기존 Worker에 사용자 정상 CMD 인증으로 비파괴 코드 배포3회. 최종 활성 **`37c6cab1-deb8-42ab-a0db-baa3614e44ae`**, 번들 SHA256 `4643c387ccce7a9056f12a3874a23abf3a75eea79e68779994c94b600498ca19`/99,641byte.
+- health200/modelON·기존단일분석401·신규dialogue401을 실제 에뮬레이터 HTTPS로 확인했다. `/v2/issues/dialogue`404 해결. 기존 Secret/binding/DO/Firebase/모델/할당량/비용 지문은 배포 전후 동일하다. Codex 호스트의 Cloudflare 제어 접근은 여전히 EACCES이며 사용자 OAuth를 복사하지 않았다.
+- 신규 공급자 시도 **총3회**: 최초분석 성공1, 첫후속 검증실패1, 사용자 ‘추가1회 승인’ 후 새후속 성공1. RATE_LIMIT/ISSUED READ만 있었던 구간을 별도 유료 호출로 중복 계산하지 않는다. 기존2회 hard guard를 늘리지 않고 추가1회 전용 guard를 사용했다.
+- 실제 계정 원장 portable attempts8→11, 잔여3→0, uncertain=false. 일5/월100/서비스300/기존 비용예약 유지, 원장초기화0/정책변경0. 추가 유료 호출0. 실제 청구금액은 조회하지 않았다.
+- 미해결 문제1건/revision1·실제AI2개·서버성공operation2개·prompt+두설명의 전체TTS DONE을 프로세스 재시작 뒤 복호화 재조회했다. 실패operation도 보존했다. 이력의 실제 응답과 local/fixture 응답을 구분한다.
+
+### 변경 영향 검사
+
+최종 Debug·Validation·ValidationAndroidTest·Lint·testDebugUnitTest 작업은 **BUILD SUCCESSFUL(2분20초)**이다. Lint **오류0/경고67**. Unit은 **NO-SOURCE**로 검사 수에 포함하지 않는다. 일반빌드는 선택 Vosk 엔진을 포함하지 않는다. 선택 native 실험의 추가16KiB정렬 경고2개/실차미검증은 일반APK 완료 결과와 분리한다.
+
+| 이번 선택 검사 | assertion | 경계 |
+|---|---:|---|
+| 홈 자동대기·같은제어기·inline경고 | 29 | 실제Main/SQLite/정차gate, ASR/AI/TTS callback fixture. 로컬SOC Q/A의 외부문맥 제외 포함 |
+| 기존 음성 핵심 / 수동 음성 Activity | 72 / 17 | 동의/receipt/암호화/중복/오류/latecallback/구성변경·두새fixture응답 |
+| STT 종료계약 / 전체TTS | 40 / 3 | final+실제ended·취소/generation, TTS는 실제SDK 전체재생 |
+| B 홈 / DB / Gleo 내부 | 29 / 19 / 37 | 기존 운전자·기록·홈·Action/Callback 회귀 |
+| 단일AI / 저장·AI·A/B인계 / 재실행 | 56 / 35 / 4 | fixture provider·기존cache/pending·명시저장·인계/읽음/점검영속 |
+| 실제 마이크/플랫폼 | 7 | AudioRecord16k/16,000sample수신, 음성원본저장0. role제공true/보유false, 온디바이스Recognizer false |
+| Relay 읽기 / 실모델 이력 재조회 / 사용량 읽기 | 4 / 5 / 1 | 실제HTTPS·Keystore·원래운전자/계정·남은횟수0, 모델0 |
+| 추가1회 실모델·실제TTS | 8 | 사용자 추가승인, ASR는 앞선fixture, 새Gemini후속/실제전체DONE |
+| 합계 | **366** | 최종 성공 묶음별 중복실행 제외. 최초477개를 더하지 않음 |
+
+별도 ‘기존2회 승인으로 추가1회 gate 실행’ 거부 검사1개도 통과했고 기존 원장 해시는 동일했다. 최초 실패한 호출어·후속·보존 검사는 성공 합계에 넣지 않았다. AndroidTest prepare/일반앱계측/무조건적인 전체477개 재실행은 하지 않았다.
+
+Worker 관련 검사는 TypeScript/결정적 번들과 portable64+issue42+recurring4+overlay5+dialogue54+quota12+stabilization10+workerd16+배포guard15 = **222개**다. 기존198개 전체를 무조건 반복하지 않았다. 실패 응답을 허용하도록 validator를 완화하지 않았다.
+
+### 일반 앱 적용과 최종 데이터 비교
+
+기존 일반APK를 별도 백업하고 서명 동일성을 확인해 `install -r`했다. 다시 읽은 설치 APK SHA256은 **`a3ebd79f1857769aaab46dbe0de2b0bc24dccadb540655ac234775d0ee598cee`**로 빌드 파일과 일치했다. 기본 APK에서 Vosk 모델/libvosk 미포함을 확인했다. MainActivity COLD 실행 Status:ok/resumed, 일반UI 버튼자동조작0. 일반 앱에서 실제 음성대화를 완료한 것은 아니다.
+
+최신 작업전 백업은 일반44DB/1,874행과 validation797DB/12,941행, 총 **841DB/14,815원본행**이다. 최종 새 백업은 일반44/validation981DB다. 양쪽 앱을 종료하고 독립 사본에서 전체schema/version/index/trigger/view·integrity/FK 및 원본행을 비교했다.
+
+| 대상 | 최종 결과 |
+|---|---|
+| 일반 문제·운전자·초안 | 문제25/운전자10/초안0 유지. 시험문제 추가0. 원문/작성자/발견시각/수동상태/revision/삭제표식 모두 유지 |
+| 엄격 행 동일성 | **FAIL: 기존 문제1행의 updated_at만 변경**. 16:04:40.012 KST에 같은문제/revision2의 ACKNOWLEDGED 이벤트1건 추가, 이벤트99→100. 일반APK 업데이트16:23:54 이전 발생. 생성주체 미확인이므로 사용자행동/자동화로 단정하거나 되돌리지 않음 |
+| 원본 내용·기존 이력 | 위1개 시각 차이를 정확한문제hash·시각·새읽음event로만 별도 감사. 나머지14,814원본행 완전동일, 해당문제의 다른모든필드·기존99이력 동일. 전체841DB schema/integrity/FK통과. 원래 strict실패와 전후백업을 보존 |
+| 일반 추가행 | 기존DB에366행 추가/새DB0. 문제추가0이며 읽음1건 포함. 전체불변이나 증가0으로 표현하지 않음 |
+| validation | 기존12,941행 내용 유지/기존DB391행추가/고유시험DB184개 추가. 루트0문제/0이벤트/2운전자/0초안 유지. 기존validation삭제0 |
+| 일반 private | 16개 중12개 byte동일. 변경4개는 암호화인증·heartbeat·암호화issue캐시·설치표시. 인증state/캐시파일은 존재하며 전후백업 유지. 캐시 ciphertext7,178→7,512byte. 일반UI자동화금지에 따라 내용을 복호화 비교하지 않아 **계정/캐시내용 완전동일은 미검증** |
+| validation private | 354개 중348개 동일/변경6개(같은계정재확인·heartbeat·시험pointer2·fixture캡처·설치표시). 기존 portable캐시86개는 byte동일. 신규실모델결과는 별도sidecar에서 복호화 재조회 성공 |
+| 서명·서버 | 같은키 update/uninstall0·Keystore교체0. Firebase로그아웃0·서버원장/Secret/DO초기화0·정책변경0. 사용량은 승인된 실제시도3회를 반영 |
+
+### 남은 최소 확인
+
+1. 사용자가 원할 때 일반 CARITDA에서 **운전자 확정 → 홈 → 음성 대화·설정·이력 → 음성 설정**의 필요한 옵션과 마이크 권한을 한 번 선택한다. AI 새 요청 없이 음성만 확인하려면 Gemini 전송은 끈다. 홈 복귀 후 실제 ‘음성 대기 중’이 표시되는30초 안에 ‘카잇다’, ‘말씀하세요’ 뒤 증상을 말한다. 이번에는 사용자가 발화 시험을 보류했으므로 다시 요청하지 않았다.
+2. 기존 AI 설명은 해당 문제의 AI 화면/음성 대화 이력에서 재생한다. 새 음성 입력·후속 질문의 실마이크 검증은 남아 있다. 이번 유료승인3회는 소진했으므로 에이전트가 네 번째 요청을 하지 않는다.
+3. 일반 앱의 기존 계정/저장 설명은 사람이 해당 화면에서 확인해야 한다. 위읽음 이벤트 생성주체와 암호화파일의 의미변경 여부는 로그만으로 확정할 수 없다. 시스템 비서 선택/PTT/외부Gleo·실차는 별도이며 홈 기능의 필수설정이 아니다.
+
+검증된 명시파일만 GitHub 연결 도구를 통한 게시로 main 이력을 잇는다. 원격 최신HEAD/대상SHA/부모/나머지파일·Aside29개를 재확인하고 최종SHA는 응답에 보고한다. 원본DB/개인캡처/인증·캐시/모델바이너리/로그는 게시하지 않는다.
+
+<details>
+<summary>이전 a9c2b29c 작업 인수 기록 — 이번366개/실모델/배포와 별도</summary>
+
 기준일: 2026-11-12 KST. 시작 main `d27cc79dc3ea70687065107ca5e408dbcb085421`. [구현/파일/계약 상세](CARITDA_AUTOMATION_INTEGRATION.md).
 
 **판정: 앱 코드 구현·격리 통합 검증 완료, 실제 음성+실모델 전체 자동화는 미완료.** 사용자는 실제 STT 발화를 나중에 직접 확인하고 Wrangler 로그인은 직접 복구하기로 했다. 새 배포 0회·새 유료 모델 0회다. 과거 Gemini 성공 1회를 이번 성공으로 계산하지 않는다.
@@ -98,3 +172,5 @@ Worker는 TypeScript 검사와 번들 기반 보안64+기존 issue42+recurring g
 4. **음성 대화 → 대화 이력 보기**, **기록 → 해당 문제**, 운전자 빠른 전환 후 **미확인 인계**에서 내용을 확인한다. 재생 취소·화면 이탈 후 자동 마이크 재시작이 없는지도 확인한다.
 
 Wrangler 로그인 복구는 사용자가 진행 중이다. 프로젝트에 준비한 `infra/gemini-relay/test/deploy-dialogue.mjs --execute`는 기존 Worker 코드만 갱신하며 모델을 호출하지 않는다. 완료 여부는 실제 배포 버전/feature와 인증·binding 사후 검사를 통해 판단한다.
+
+</details>

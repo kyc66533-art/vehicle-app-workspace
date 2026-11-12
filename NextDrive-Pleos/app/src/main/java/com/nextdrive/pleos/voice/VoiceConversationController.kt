@@ -19,6 +19,7 @@ class VoiceConversationController(private val store:ConversationStore,private va
         fun account():String
         fun listen(accepted:(String)->Unit,failed:(String)->Unit)
         fun stopAudio()
+        fun stopStandby(){}
         fun save(token:String,text:String,type:SymptomType):CommitReceipt
         fun analyze(issue:String,revision:Int,turn:String,done:(Result<Reply>)->Unit)
         fun dialogue(issue:String,revision:Int,turn:String,question:String,done:(Result<Reply>)->Unit)
@@ -40,18 +41,21 @@ class VoiceConversationController(private val store:ConversationStore,private va
     private var turns=0
     private var recognition=""
     private var consumed=false
+    private var firstCommandAfterPrompt=false
     private var inflight:Triple<String,String,String>?=null
     private fun active()=sessionId!=null&&ports.valid()&&ports.scope()==frozenScope&&System.currentTimeMillis()-began in 0..300000&&turns<=5&&state !in setOf(State.ENDED,State.STOPPING,State.ERROR_PAUSED)
     fun effectsAllowed()=active()
     private fun transition(next:State,message:String){state=next;sessionId?.let{store.state(it,next.name)};ports.changed(next,message)}
-    fun start(alert:String?=null,announcement:String?=null){
+    fun start(alert:String?=null,announcement:String?=null,firstText:String?=null,prompt:Boolean=false,activation:String?=null){
         if(state !in setOf(State.IDLE,State.ENDED,State.ERROR_PAUSED)||!ports.valid()||!ports.permit().history)return
-        generation++;frozenScope=ports.scope();began=System.currentTimeMillis();turns=0;issueId=null;issueRevision=0;alertId=alert;lastReply="";lastOrigin="LOCAL_RULE"
+        generation++;frozenScope=ports.scope();began=System.currentTimeMillis();turns=0;issueId=null;issueRevision=0;alertId=alert;lastReply="";lastOrigin="LOCAL_RULE";firstCommandAfterPrompt=prompt
         val id=UUID.randomUUID().toString()
         if(!VoiceSessionOwner.claim(id)){ports.changed(state,"다른 음성 대화가 진행 중이에요. 먼저 그 대화를 마쳐 주세요.");return}
         sessionId=id
-        try{store.start(id,ports.owner(),ports.account(),"voice-v1:"+ports.permit().toString(),alert);transition(State.ARMING,"음성 대화를 준비하고 있어요.")
-            if(announcement!=null)reply(Reply(announcement),"attention")else listen()
+        try{store.start(id,ports.owner(),ports.account(),"voice-v1:"+ports.permit().toString(),alert)
+            if(activation!=null)store.appendOnce("activation:$id",id,"USER","ASR_WAKE",activation,0)
+            transition(State.ARMING,"음성 대화를 준비하고 있어요.")
+            if(firstText!=null)accept(firstText,UUID.randomUUID().toString())else if(announcement!=null)reply(Reply(announcement),"attention")else listen()
         }catch(_:Exception){pause("대화 이력을 저장하지 못해 시작하지 않았어요.")}
     }
     private fun listen(){
@@ -70,6 +74,7 @@ class VoiceConversationController(private val store:ConversationStore,private va
             store.appendOnce(turn,sessionId!!,"USER","ASR",text,issueRevision)
             when(val command=VoiceCommandRouter.route(text,ports.permit().record,issueId!=null||alertId!=null)){
                 VoiceCommand.End->end()
+                VoiceCommand.StopListening->{ports.stopStandby();end()}
                 VoiceCommand.Wake->reply(Reply("말씀하세요."),turn)
                 is VoiceCommand.Record->save(turn,command.text,command.type)
                 VoiceCommand.RecordContext->{if(alertId!=null)save(turn,ports.query(command,issueId,alertId),SymptomType.OTHER)else reply(Reply("기록할 증상과 기록해 달라는 말씀을 함께 알려 주세요."),turn)}
@@ -117,7 +122,7 @@ class VoiceConversationController(private val store:ConversationStore,private va
         store.appendOnce(id,session,"ASSISTANT",answer.origin,answer.text,issueRevision,parent);lastReply=answer.text;lastOrigin=answer.origin
         if(!ports.permit().speak){
             transition(State.FOLLOW_UP_WAIT,answer.text)
-            if(ports.permit().followUp)listen()else end()
+            if(ports.permit().followUp||firstCommandAfterPrompt){firstCommandAfterPrompt=false;listen()}else end()
             return
         }
         val run=generation;val delivery="$id:auto"
@@ -126,7 +131,7 @@ class VoiceConversationController(private val store:ConversationStore,private va
             runCatching{store.playback(delivery,session,id,outcome.name)}.onFailure{pause("음성 재생 결과를 저장하지 못했어요.");return@speak}
             if(run!=generation)return@speak
             if(outcome!=PlaybackOutcome.DONE){pause("음성 안내가 중단됐어요. 화면에서 설명을 확인해 주세요.");return@speak}
-            if(active()&&ports.permit().followUp){transition(State.FOLLOW_UP_WAIT,"다음 질문을 기다려요.");listen()}
+            if(active()&&(ports.permit().followUp||firstCommandAfterPrompt)){firstCommandAfterPrompt=false;transition(State.FOLLOW_UP_WAIT,"다음 질문을 기다려요.");listen()}
             else end()
         }
     }

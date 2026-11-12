@@ -44,7 +44,6 @@ class VoiceConversationActivity:Activity(){
     @Volatile private var account=""
     private var settingsOpen=false
     private var historyOpen=false
-    private var anchorUser=""
     private var historyDetails=false
     @Volatile private var recovering=false
     @Volatile private var preparingCloud=false
@@ -63,6 +62,7 @@ class VoiceConversationActivity:Activity(){
     private val output by lazy{SpeechOutput(this){valid()}}
     private val playback by lazy{WholeExplanationPlayback({valid()},{text,done->output.speakOutcome(text,done){ }},{output.stop()})}
     private val bridge by lazy{VoiceAiBridge(this,{valid()&&permit().cloud&&(recovering||preparingCloud||::controller.isInitialized&&controller.effectsAllowed())},{repo.issue(it)},{aiSession})}
+    private val issueContext by lazy{VoiceIssueContext(service,conversations,raw,low,attention,{valid()},{owner},{account},{controller},{bridge},{intent.getStringExtra("attention_kind")})}
     private fun permit()=settings.read(owner,account)
     private fun authReady()=aiSession !is FirebasePortableSession||FirebaseSessionProvider.configState!="READY"||FirebaseSessionProvider.initialized
     private fun valid()=visible&&::gate.isInitialized&&gate.state==EditingState.ALLOWED&&service.confirmed()&&service.driver().id==owner&&authReady()&&aiSession.subject.orEmpty()==account
@@ -98,28 +98,11 @@ class VoiceConversationActivity:Activity(){
                 speech.listen({message=it;body.findViewWithTag<TextView>("voice_status")?.text=it},accepted)
             }
             override fun stopAudio(){speech.stop();playback.cancel();bridge.cancel()}
-            override fun save(token:String,text:String,type:SymptomType):CommitReceipt{
-                check(valid());check(service.draft()==null){"DRAFT_ALREADY_EXISTS"}
-                val now=System.currentTimeMillis();val draft=JournalDraft(UUID.nameUUIDFromBytes(token.toByteArray()).toString(),owner,service.driver().label,"RECORD",type=type,body=text,foundAt=now,updatedAt=now)
-                val command=DraftCommit(token,draft)
-                conversations.stageLink(controller.sessionId!!,token,command.digest,owner,draft.id)
-                service.saveDraft(draft);check(valid());val receipt=service.commitDraft(command);anchorUser=token.substringAfterLast(':');controller.alertId?.let{attention.link(it,receipt.issueId,receipt.revision)};return receipt
-            }
-            override fun analyze(issue:String,revision:Int,turn:String,done:(Result<VoiceConversationController.Reply>)->Unit){
-                val selected=service.issue(issue);check(selected.revision==revision)
-                bridge.request(selected,turn,null,emptyList(),done)
-            }
-            override fun dialogue(issue:String,revision:Int,turn:String,question:String,done:(Result<VoiceConversationController.Reply>)->Unit){
-                val selected=service.issue(issue);check(selected.revision==revision)
-                // Previous assistant inference is projected explicitly, never as sensor facts.
-                val messages=conversations.messages(controller.sessionId!!,owner,account)
-                val anchorIndex=messages.indexOfFirst{it.id==anchorUser}.coerceAtLeast(0)
-                val pairs=messages.drop(anchorIndex).windowed(2).filter{it[0].role=="USER"&&it[1].role=="ASSISTANT"&&it[0].id!=turn&&it[1].revision==revision}
-                // Approved projection: first complete paragraph of prior AI advice, never silent character clipping.
-                val context=pairs.takeLast(2).flatMap{it.map{m->IssueDialogueContract.Turn(m.role,if(m.role=="ASSISTANT")m.text.substringBefore("\n\n")else m.text)}}
-                bridge.request(selected,turn,question,context,done)
-            }
-            override fun query(command:VoiceCommand,issue:String?,alert:String?)=localAnswer(command)
+            override fun stopStandby(){settings.write(owner,account,permit().copy(autoWait=false))}
+            override fun save(token:String,text:String,type:SymptomType)=issueContext.save(token,text,type)
+            override fun analyze(issue:String,revision:Int,turn:String,done:(Result<VoiceConversationController.Reply>)->Unit)=issueContext.analyze(issue,revision,turn,done)
+            override fun dialogue(issue:String,revision:Int,turn:String,question:String,done:(Result<VoiceConversationController.Reply>)->Unit)=issueContext.dialogue(issue,revision,turn,question,done)
+            override fun query(command:VoiceCommand,issue:String?,alert:String?)=issueContext.query(command)
             override fun speak(text:String,done:(PlaybackOutcome)->Unit){val alert=if(firstAttentionPlayback&&intent.getBooleanExtra("auto_attention",false))intent.getStringExtra("attention_id")else null;firstAttentionPlayback=false
                 playback.play(text){outcome->alert?.let{attention.finishSpeech(it,outcome.name)};done(outcome)}
             }
@@ -143,15 +126,6 @@ class VoiceConversationActivity:Activity(){
             controller.start(id,if(kind=="EV_SOC")"배터리가 설정한 기준보다 낮아졌어요. 고장 판정은 아니에요."else"차량에서 ${fresh.title} 안내를 받았어요. 차량 표시와 함께 확인해 주세요.")
         }else attention.finishSpeech(id,"SKIPPED")
     }
-    private fun localAnswer(command:VoiceCommand):String=when(command){
-        VoiceCommand.Soc->{val v=raw.mostRecent("EV_SOC");if(v!=null&&DriveCheck.accepted(v)&&System.currentTimeMillis()-v.receivedAt!! in 0 until 600000)"최근 SDK로 확인한 배터리 잔량은 ${v.raw}%예요. 수신 시각 ${java.time.Instant.ofEpochMilli(v.receivedAt).atZone(java.time.ZoneId.of("Asia/Seoul")).toLocalTime().withNano(0)}예요."else"최근 유효한 배터리 값을 확인하지 못했어요. 차량 상태 화면에서 새로 확인해 주세요."}
-        VoiceCommand.Attention->{val checks=VehicleAttention.list({raw.mostRecent(it)},{raw.mostRecent(it,true)},low.policy());if(checks.isEmpty())"현재 받은 값에서 확인 필요 안내가 없어요. 차량 전체가 정상이라는 뜻은 아니에요."else checks.joinToString(" "){it.title+". "+it.reason}}
-        VoiceCommand.Recent->service.issues().firstOrNull()?.let{"최근 기록은 ${it.situation}. 현재 ${it.status.label} 상태예요."}?:"저장된 문제 기록이 없어요."
-        VoiceCommand.Handover->service.issues().filter{service.needsAcknowledgement(it)}.take(3).let{if(it.isEmpty())"아직 확인하지 않은 다른 운전자의 기록이 없어요."else"다른 운전자가 남긴 미확인 기록이에요. "+it.joinToString(" "){i->i.situation}}
-        VoiceCommand.RecordContext->DriveCheck.draftText(intent.getStringExtra("attention_kind")?:"EV_SOC")
-        is VoiceCommand.FollowUp->"이 안내는 사용자 기준에 따른 차량 정보예요. 차량의 표시와 사용 설명서를 확인하고, 충전이 필요하면 안전하게 정차한 뒤 충전 계획을 세워 주세요. 고장 진단은 아니에요."
-        else->"차량 상태나 기록에 대해 다시 말씀해 주세요."
-    }
     private fun startConversation(){
         if(!valid()||recovering||preparingCloud)return
         if(!permit().history){settingsOpen=true;message="대화 보관 범위와 필요한 자동화 기능을 먼저 선택해 주세요.";render();return}
@@ -159,7 +133,7 @@ class VoiceConversationActivity:Activity(){
         if(checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO),912);return}
         controller.start(intent.getStringExtra("attention_id"))
     }
-    override fun onRequestPermissionsResult(code:Int,names:Array<out String>,results:IntArray){super.onRequestPermissionsResult(code,names,results);if(code==912){if(results.firstOrNull()==PackageManager.PERMISSION_GRANTED)startConversation()else{message="마이크 권한을 허용하지 않았어요. 기존 기록과 설명은 그대로예요.";render()}}}
+    override fun onRequestPermissionsResult(code:Int,names:Array<out String>,results:IntArray){super.onRequestPermissionsResult(code,names,results);if(code==912){if(results.firstOrNull()==PackageManager.PERMISSION_GRANTED)startConversation()else{message="마이크 권한을 허용하지 않았어요. 기존 기록과 설명은 그대로예요.";render()}};if(code==913){message=if(results.firstOrNull()==PackageManager.PERMISSION_GRANTED)"마이크를 허용했어요. 홈으로 돌아가면 선택한 범위에서 짧게 호출을 기다려요."else"마이크 권한을 허용하지 않아 홈에서 듣지 않아요. 기존 기록은 그대로예요.";render()}}
     private fun recover(pending:ConversationStore.Pending){
         if(!valid()||recovering||!permit().cloud)return
         val selected=repo.issue(pending.issue)
@@ -201,20 +175,22 @@ class VoiceConversationActivity:Activity(){
         body.addView(ui.text("앱이 보이는 정차 상태에서 한 번에 최대 5분·5개 질문을 받아요. 듣는 중 ‘카잇다’라고 부를 수 있어요. 앱 밖 호출은 지원하지 않아요. 말하는 동안에는 화면의 끝내기를 이용해 주세요.",20))
         body.addView(ui.action(if(settingsOpen)"음성 설정 접기"else"음성 설정","voice_settings",ActionStyle.QUIET,valid()){settingsOpen=!settingsOpen;render()})
         if(settingsOpen){
-            val p=permit();val values=listOf(p.record,p.cloud,p.speak,p.followUp,p.history,p.alerts)
-            val labels=listOf("명확한 차량 증상을 자동 기록해요","저장한 증상과 후속 질문을 Gemini로 보내요","준비된 설명을 자동으로 읽어요","설명 후 다음 질문을 자동으로 들어요","최종 문장과 대화 본문을 30일 보관해요","새 차량 안내를 한 번 음성으로 알려요")
+            val p=permit();val values=listOf(p.record,p.cloud,p.speak,p.followUp,p.history,p.alerts,p.autoWait)
+            val labels=listOf("명확한 차량 증상을 자동 기록해요","저장한 증상과 후속 질문을 Gemini로 보내요","준비된 설명을 자동으로 읽어요","설명 후 다음 질문을 자동으로 들어요","최종 문장과 대화 본문을 30일 보관해요","새 차량 안내를 한 번 음성으로 알려요","홈에서 자동으로 호출을 기다려요")
             val boxes=labels.mapIndexed{i,label->CheckBox(this).apply{text=label;textSize=22f;setTextColor(ui.colors.text);minHeight=ui.dp(76);isChecked=values[i];isEnabled=valid();tag="voice_permit_$i"}.also{body.addView(it)}}
+            body.addView(ui.text("홈에서 호출을 기다리고, ‘카잇다’라고 말씀하시면 대화를 시작해요. 기기 내 호출 기능을 사용할 수 없으면 최대 30초씩, 화면을 연 동안 3회까지만 대기해요. 앱 밖에서는 듣지 않아요.",20))
             body.addView(ui.text("AI 전송: 선택한 증상 종류·본문, 지금 질문, 같은 문제의 최근 질문·AI 답변 최대 두 쌍이에요. 차량 수치·위치·이름·메모·다른 기록은 보내지 않아요. 일 5회·월 100회·서비스 월 300회와 기존 비용 한도를 함께 써요. 매번 버튼을 누르지 않아도 유료 요청이 이어질 수 있어요. 개인정보가 있거나 길면 전송하지 않아요.\n음성 원본은 저장하지 않아요. 대화는 앱에서 암호화하며 운전자와 AI 계정별로 보여요. 운전자 선택은 비밀번호 인증이 아니므로 민감한 내용은 말씀하지 마세요.",20))
             body.addView(ui.action("선택한 범위 저장","voice_permits_save",ActionStyle.SECONDARY,valid()&&!preparingCloud){
                 if(!valid())return@action
                 try{
-                controller.end();val next=VoiceSettings.Permit(boxes[0].isChecked,boxes[1].isChecked,boxes[2].isChecked,boxes[3].isChecked,boxes[4].isChecked,boxes[5].isChecked)
+                controller.end();val next=VoiceSettings.Permit(boxes[0].isChecked,boxes[1].isChecked,boxes[2].isChecked,boxes[3].isChecked,boxes[4].isChecked,boxes[5].isChecked,boxes[6].isChecked)
                 if(p.cloud&&!next.cloud){VoicePrivacy.forgetDialogue(this,account,conversations.dialogueTurns(owner,account));conversations.withdrawCloud(account,owner)}
                 if(p.history&&!next.history){VoicePrivacy.forgetDialogue(this,account,conversations.dialogueTurns(owner,account));conversations.forgetHistory(owner,account)}
-                settings.write(owner,account,next);message="음성 설정을 저장했어요. 대화 시작을 누를 때만 마이크를 켜요."
+                settings.write(owner,account,next);message=if(next.autoWait)"음성 설정을 저장했어요. 홈으로 돌아가면 호출을 기다려요."else"음성 설정을 저장했어요. 대화 시작을 누를 때만 마이크를 켜요."
                 if(next.cloud){preparingCloud=true;message="증상 설명과 후속 대화의 전송 동의를 확인하고 있어요. 분석은 요청하지 않아요.";render()
-                    bridge.prepareConsents{result->preparingCloud=false;message=result.fold({remaining->"AI 전송 준비를 마쳤어요. 현재 새 요청 잔여 $remaining 회예요. 대화 시작을 눌러 주세요."},{error->(error as? PortableFailure)?.displayMessage()?:"AI 준비를 마치지 못했어요. AI 계정·기기·전송 동의를 확인하거나 AI 전송을 끄고 로컬 대화를 이용해 주세요."});render()}
+                    bridge.prepareConsents{result->preparingCloud=false;message=result.fold({remaining->"AI 전송 준비를 마쳤어요. 현재 새 요청 잔여 $remaining 회예요. "+if(next.autoWait)"홈에서 ‘카잇다’라고 말씀해 주세요."else"대화 시작을 눌러 주세요."},{error->(error as? PortableFailure)?.displayMessage()?:"AI 준비를 마치지 못했어요. AI 계정·기기·전송 동의를 확인하거나 AI 전송을 끄고 로컬 대화를 이용해 주세요."});render()}
                 }else render()
+                if(next.autoWait&&checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO),913)
                 }catch(_:Exception){preparingCloud=false;message="이전 요청을 정리하는 중이거나 설정을 저장하지 못했어요. 잠시 뒤 다시 저장해 주세요. 기존 기록은 남아 있어요.";render()}
             })
             body.addView(ui.action("AI 계정·기기·전송 동의","voice_ai_account",ActionStyle.QUIET,valid()){

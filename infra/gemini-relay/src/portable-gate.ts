@@ -124,7 +124,18 @@ export class BudgetGate extends LegacyGate {
    return {legacy_total:s.legacyCheckpoint,portable_attempts:s.used,combined_total:s.legacyCheckpoint+s.used,quota_mode:p.recurring?'recurring':'legacy',global_total:p.recurring?.service_monthly??p.global_total,remaining:p.recurring?recurringRemaining(s,p.recurring,uid,d!.id,now):Math.max(0,Math.min(p.global_total-s.legacyCheckpoint-s.used,u.total-counter(s,'uid:'+uid),u.daily-counter(s,'day:'+uid+':'+new Date(now+9*3600000).toISOString().slice(0,10)),u.device_total-counter(s,'device:'+d!.id))),model_enabled:this.env.MODEL_ENABLED==='true',uncertain_block:s.operations.some(o=>o.state==='UNKNOWN')};
   }
   reject(o&&o.created>=now-86400000,'OPERATION_EXPIRED',410);
-  if(purpose==='READ'){reject(granted(d!,o.consent||SOC_CONSENT),'CONSENT_REQUIRED',403);c.used=true;if(o.state==='RESERVED')return {dispatch:true,operation_id:o.id};return {operation_id:o.id,state:o.state,result:o.result||null,code:o.code||null};}
+  if(purpose==='READ'){
+   // A rate-limited request has not bound a contract or reserved/used a model yet.
+   // Signature, account and device ownership have already been checked above.
+   // Return EMPTY metadata only; do not require the unrelated legacy SOC consent.
+   if(o.state==='ISSUED'){
+    reject(o.attempts===0&&!o.hash&&!o.consent,'LEDGER_OPERATION_INVALID',503);c.used=true;
+    return {operation_id:o.id,state:'ISSUED',result:null,code:null};
+   }
+   reject(granted(d!,o.consent||SOC_CONSENT),'CONSENT_REQUIRED',403);c.used=true;
+   if(o.state==='RESERVED')return {dispatch:true,operation_id:o.id};
+   return {operation_id:o.id,state:o.state,result:o.result||null,code:o.code||null};
+  }
   let facts:any;try{facts=JSON.parse(payload);}catch{throw new ApiError(400,'INVALID_JSON');}if(dialogueRequest)validateDialogue(facts);else if(issueRequest)validateIssue(facts);else{validateAnalysis(facts);reject(facts.source==='PLEOS_EMULATOR_SDK','REAL_VEHICLE_NOT_APPROVED',403);}reject(this.env.MODEL_ENABLED==='true'&&typeof this.env.GEMINI_API_KEY==='string'&&this.env.GEMINI_API_KEY.length>0,'MODEL_DISABLED',503);
   reject(!s.operations.some(o=>['DISPATCHING','UNKNOWN','RESERVED'].includes(o.state)),'CONCURRENCY_LIMIT',429);
   const day=new Date(now+9*3600000).toISOString().slice(0,10),global=s.legacyCheckpoint+s.used;

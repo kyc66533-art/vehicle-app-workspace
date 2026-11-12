@@ -1,3 +1,6 @@
+import java.io.File
+import java.security.MessageDigest
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -24,11 +27,36 @@ val generalFirebase=firebasePublicConfig(file("google-services.json"),"com.nextd
 val validationConfigFile=file("src/validation/google-services.json").takeIf{it.isFile}?:file("google-services.json")
 val validationFirebase=firebasePublicConfig(validationConfigFile,"com.nextdrive.pleos.validation")
 
+// Independent Korean wake recognition remains experimental: actual user wake tests failed.
+// The shipping/Studio default uses bounded Pleos standby. Opt-in only for engine validation.
+// Neither path downloads during a build.
+val homeWakeFolder=rootProject.file("../.tools/home-wake-engine")
+val homeWakeManifest=File(homeWakeFolder,"manifest.json")
+val homeWakeEngine=providers.gradleProperty("caritdaHomeWakeEngine").getOrElse("false").toBooleanStrict()
+if(homeWakeEngine){
+    val manifestFile=homeWakeManifest
+    require(manifestFile.isFile){"Run scripts/Prepare-HomeWakeEngine.mjs --download first."}
+    val manifest=groovy.json.JsonSlurper().parse(manifestFile) as Map<*,*>
+    require(manifest["complete"]==true){"Home wake assets are incomplete."}
+    for(entry in manifest["files"] as List<*>){
+        val item=entry as Map<*,*>;val name=item["name"] as String
+        require(name in setOf("vosk-android-0.3.47.aar","jna-5.13.0.aar","vosk-model-small-ko-0.22.zip"))
+        val asset=File(homeWakeFolder,(if(item["model"]==true) "assets/" else "")+name)
+        val digest=MessageDigest.getInstance("SHA-256");asset.inputStream().use{stream->val b=ByteArray(65536);while(true){val n=stream.read(b);if(n<0)break;digest.update(b,0,n)}}
+        require(digest.digest().joinToString(""){"%02x".format(it)}==item["sha256"]){"Home wake asset digest mismatch."}
+    }
+}
+
 android {
     useLibrary("android.car")
     namespace = "com.nextdrive.pleos"
     compileSdk = 34
     buildToolsVersion = "35.0.0"
+    sourceSets.getByName("main").java.srcDir(if(homeWakeEngine) "src/homeWake/java" else "src/noHomeWake/java")
+    if(homeWakeEngine){
+        sourceSets.getByName("main").assets.srcDir(rootProject.file("../.tools/home-wake-engine/assets"))
+        sourceSets.getByName("main").assets.srcDir("src/homeWake/assets")
+    }
 
     defaultConfig {
         applicationId = "com.nextdrive.pleos"
@@ -70,6 +98,9 @@ kotlin {
 }
 
 dependencies {
+    // The preserved Pleos dependency graph already supplies JNA 5.13.0.
+    // Adding its downloaded AAR a second time creates duplicate native/classes.
+    if(homeWakeEngine)implementation(files(File(homeWakeFolder,"vosk-android-0.3.47.aar")))
     // Email/password Auth only. Public FirebaseOptions are supplied separately; no AI key.
     // Auth 25.0.0 is Kotlin metadata 2.4; the preserved Kotlin 2.2.21 compiler rejects it.
     // Official 24.2.0 (also mapped by BoM 34.19.0) is the compatibility candidate to verify.

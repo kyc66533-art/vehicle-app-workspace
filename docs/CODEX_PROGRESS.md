@@ -1,5 +1,20 @@
 # Codex 개발 진행 기록
 
+## 2026-11-12 16:30 +09:00 — 홈 음성 대기·Gemini 대화 운영 배포·실모델 검증
+
+- 시작 main a9c2b29c66ccff3b5a0bd2381113834e731eb5a2/tree3f36ad26, 공통285파일 일치·원격314blob/전용연구29개 보존. 기존자동화/DBv4/receipt/Gleo/SDK/B안/503보호를 재사용했다. 독립호출·실제발화·실모델·일반앱·외부Gleo/실차를 구분하며 전체음성완료라고 판정하지 않는다.
+- Main 홈에서 운전자확정/autoWait동의 후 기존 음성제어기를 직접 시작한다. 기본OFF·운전자/계정별7번째bit·30초/전면최대3창·침묵/오류재시작없음·5분/5발화대화별도. 실제started표시·wake final+ended→prompt실제DONE→증상→원자commit→기존AI→전체TTS→후속STT. 화면/운전자/계정/권한/안전/포커스/OFF로종료. 수동화면·설정/이력유지, 전체UI재개편없음.
+- 공식AmbientAi wake설정은AAR PrivilegedApi/호출0, 실제Android on-deviceRecognizer=false. 사용자승인Vosk한국어82MB/Apache2 프로젝트다운로드·오프라인모델/AudioRecord수신성공. 실제첫발화무반응/두번째180초2,883,200sample·35segment·match0으로독립호출FAIL. optional=true실험만남기고 일반/Studio기본false·APK모델/libvosk제외. 이후Pleos실발화는사용자‘이번발화시험은나중에’로마이크시작전보류. 기본대체경로의사람발화NOT_TESTED.
+- Cloudflare제어API는CodexSandboxOffline/EACCES, 사용자정상CMD의기존OAuth로guard배포3회완료. 활성fb39412c→b0f65833→최종37c6cab1-deb8-42ab-a0db-baa3614e44ae. 최종bundle4643c387…98ca19/99,641byte. 동일Secret/binding/BUDGET/Firebase/모델ON/일5월100서비스300/비용예약검증. 실제에뮬HTTPS health200·기존분석401·신규dialogue401/404해결. 인증복사/재로그인반복요구/원장리셋0.
+- 실제RATE_LIMIT뒤unbound ISSUED의READ가SOC동의를요구한버그를최소수정했다. 서명/기기/계정/소유권검증뒤attempts0/hash·consent없는operation에빈메타데이터만반환한다. 같은operation복구중실제Gemini후속이MODEL_CONTEXT_INVALID로실패해응답validator유지/공급자schema에실제assistant인덱스enum·min/maxItems를추가했다. 503은실제재발하지않아공급자설정변경0.
+- 실모델총3회=최초분석성공1/첫후속검증실패1/사용자추가명시승인후새후속성공1. 최초2회guard불변/별도추가1회guard·거부회귀. ASR는명시fixture, SQLite/신규Gemini/전체TTS는실제. 같은issue/revision1/암호화session·실제답변2개·전체DONE3개를새프로세스에서재조회했다. 세번째질문은실제저장문맥의계약만검사/모델0. 실제attempts8→11/잔여3→0/uncertain=false, 네번째요청0.
+- 로컬SOC/차량Q/A를이전AI문맥에서제외하는공유VoiceIssueContext회귀를추가했다. 차량/위치/이름/메모/다른기록전송0, 이전AI는추론/facts빈배열·기존3500byte계약유지. 최근Firebase확인은공식같은계정reauthenticate로처리/비밀번호저장·로그아웃0.
+- 최종Debug/Validation/ValidationAndroidTest/Lint/Unit작업 BUILD SUCCESSFUL2m20s, Lint0오류67경고·UnitNO-SOURCE. 선택Android성공366 assertion(홈29·핵심72·수동17·STT40·실제TTS3·B29·DB19·Gleo37·단일AI56·인계35+cold4·플랫폼7·Relay4·영속5·사용량1·추가실모델8),별도추가승인거부1. Worker관련222/TypeScript/결정적bundle통과. 기존477/198무조건재실행·합계재사용0.
+- 일반APK기존서명동일install-r/설치내용SHA a3ebd79f1857769aaab46dbe0de2b0bc24dccadb540655ac234775d0ee598cee대조·MainCOLD/resumed성공/일반UI자동조작0. 새백업총841원본DB/14,815행비교에서일반문제25·운전자10·초안0/원문·상태유지. strict행동일검사는기존문제updated_at1개변경으로FAIL:16:04:40읽음event1건동일시각/revision2·일반설치16:23:54이전·생성주체미확인/되돌림0. 이1개를정확한키·event로별도감사한원본내용/나머지14,814행·schema/integrity/FK는PASS. 이벤트99→100/기존DB추가366행/신규일반DB0.
+- validation기존12,941행유지/추가391행·새고유DB184/루트0·0·2·0. 일반private12/16byte동일/인증·heartbeat·issue캐시·설치표시4변경;암호화상태존재/전후백업유지, 일반계정·캐시내용복호화동일성은미검증. validation348/354동일/기존portable캐시86동일. AVD/기존DB/백업삭제·초기화0. 일반새문제0/인증·캐시완전불변으로확대하지않는다.
+- 수정:Main/VoiceConversation/PortableAi Activity·VoiceSettings/Controller/Router·ConversationStore·PortableAnalysis/FirebaseSessionProvider,새HomeVoiceRuntime/VoiceIssueContext/Focus/Detector와기본·실험factory,선택build설정/라이선스/다운로드도구·격리검사. Worker gate/dialogue·대화보안/guard배포검사. 기존보고서2개와본기록/루트지침만갱신,Aside미수정. [최신판정/보존예외](CARITDA_VOICE_AUTOMATION_ACCEPTANCE.md),[파일/배포/지원한계](CARITDA_AUTOMATION_INTEGRATION.md).
+- 남음:기본Pleos홈대기의실제사람호출·연속STT,일반계정/이전캐시화면확인·읽음생성주체,물리전화/PTT/시스템비서선택/외부Gleo/실차. SOC18/45성공은이전기준이며이번inline fixture를신규SDK성공으로세지않는다. GitHub연결도구를통한게시로최신HEAD/부모/명시파일/나머지·AsideSHA를확인하며최종커밋은응답에서보고한다.
+
 ## 2026-11-12 12:49 +09:00 — 자체 음성 자동화·대화 계약·차량 안내 통합
 
 - 기준 main d27cc79dc3ea70687065107ca5e408dbcb085421/tree b0ec74ef, 로컬249파일 일치·원격 전용 연구29개 보존. Aside 음성 feasibility/architecture/13단계 plan을 전체 검토하고 실제 최신 코드에 통합했다. 미게시 503 수정은 없었으며 기존 공급자/Relay 오류·UNKNOWN 보호를 재사용했다. 연구는 수정하지 않았다.

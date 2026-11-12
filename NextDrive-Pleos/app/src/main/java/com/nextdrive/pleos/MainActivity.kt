@@ -43,6 +43,19 @@ class MainActivity : Activity() {
     private lateinit var attentionObserver:PleosAttentionObserver
     private var deferredAttention:ObservationRef?=null
     private var removeVoiceAuth:(()->Unit)?=null
+    private var homeVoice:com.nextdrive.pleos.voice.HomeVoiceRuntime?=null
+    private var homeVoiceLastIssue:String?=null
+    private fun paintHomeVoice(){
+        val voice=homeVoice?:return
+        root.findViewWithTag<TextView>("home_voice_status")?.text=voice.title
+        root.findViewWithTag<TextView>("home_voice_detail")?.text=voice.detail
+        root.findViewWithTag<Button>("home_voice_toggle")?.apply{
+            visibility=if(voice.autoEnabled)View.VISIBLE else View.GONE
+            text=if(voice.active)"음성 대기 끄기"else"다시 대기"
+        }
+        val saved=voice.controller?.issueId
+        if(saved!=null&&saved!=homeVoiceLastIssue){homeVoiceLastIssue=saved;notice="음성으로 말씀하신 문제를 기록했어요.";root.post{if(visible&&screen==Screen.HOME)draw()}}
+    }
     private fun receiveAttention(ref:ObservationRef){
         val event=attentionEvents.accept(ref,lowSoc)?:return
         if(event.phase!="ACTIVE")return
@@ -52,6 +65,13 @@ class MainActivity : Activity() {
         val permit=com.nextdrive.pleos.voice.VoiceSettings(this,fixturePrefix?.let{"$it-settings"}?:"voice-automation-v1").read(owner,account)
         val fresh=DriveCheck.assess(event.kind,observations.mostRecent(event.kind),observations.mostRecent(event.kind,true),lowSoc.policy()).attention
         val eligible=fresh&&visible&&canWrite()&&screen==Screen.HOME&&service.draft()==null&&!speechInput.busy&&!speechOutput.busy&&permit.alerts&&permit.speak&&permit.history
+        if(homeVoice?.autoEnabled==true){
+            val ready=eligible&&homeVoice?.controller?.effectsAllowed()!=true
+            if(!attentionEvents.claimSpeech(event.id,ready))return
+            val text=if(event.kind=="EV_SOC")"배터리가 설정한 기준보다 낮아졌어요. 고장 판정은 아니에요."else"차량에서 ${DriveCheck.assess(event.kind,observations.mostRecent(event.kind),observations.mostRecent(event.kind,true),lowSoc.policy()).title} 안내를 받았어요. 차량 표시와 함께 확인해 주세요."
+            if(homeVoice?.announce(event,event.kind,text)!=true)attentionEvents.finishSpeech(event.id,"SKIPPED")
+            return
+        }
         if(!attentionEvents.claimSpeech(event.id,eligible))return
         startActivity(android.content.Intent(this,VoiceConversationActivity::class.java).putExtra("driver_id",owner)
             .putExtra("validation_fixture",fixturePrefix).putExtra("attention_id",event.id).putExtra("attention_kind",event.kind).putExtra("auto_attention",true))
@@ -102,7 +122,7 @@ class MainActivity : Activity() {
     private val fixturePrefix by lazy { intent.getStringExtra("validation_fixture")?.takeIf {
         packageName=="com.nextdrive.pleos.validation" && Regex("gleo-ui-[a-f0-9-]{36}").matches(it)
     } }
-    private fun stopAssistance(){speechOutput.stop();speechInput.stop();locationReader.stop()
+    private fun stopAssistance(){homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
         if(navigation.busy)navigationEvents=navigation.events+InspectionNavigation.Event("NAVI_MONITOR_STOPPED",System.currentTimeMillis())
         navigation.stop();permissionAction=null}
     private fun locationStore()=IssueLocationStore(this,fixturePrefix?.let{it+"-locations.db"}?:"caritda-issue-location.db")
@@ -293,10 +313,12 @@ class MainActivity : Activity() {
                 }
                 draw()
             }
-            if(state!=EditingState.ALLOWED){stopAssistance();pleos.stop();stopSocWatch("안전 상태 변경으로 자동 확인을 멈췄어요.")} else {consumeAiHome();maybeAutomaticRead();maybeSocWatch()}
+            if(state!=EditingState.ALLOWED){stopAssistance();pleos.stop();stopSocWatch("안전 상태 변경으로 자동 확인을 멈췄어요.")} else {if(visible)homeVoice?.resume();consumeAiHome();maybeAutomaticRead();maybeSocWatch()}
         }
         service = CaritdaService(repository, { safety.state == EditingState.ALLOWED })
         service.restoreConfiguration((lastNonConfigurationInstance as? RetainedSession)?.driverId)
+        homeVoice=com.nextdrive.pleos.voice.HomeVoiceRuntime(this,fixturePrefix,service,repository,observations,lowSoc,attentionEvents,
+            {visible&&canWrite()&&screen==Screen.HOME&&!speechInput.busy&&!speechOutput.busy},{paintHomeVoice()})
         journal = runCatching { service.draft() }.getOrElse { notice="초안을 복원하지 못했습니다. 기존 초안은 보존됩니다.";null }
         lastDraft = journal
         pendingDriver = journal?.ownerId ?: repository.currentDriver()?.id
@@ -347,6 +369,7 @@ class MainActivity : Activity() {
         visible=true
         removeVoiceAuth=com.nextdrive.pleos.ai.auth.FirebaseSessionProvider.observe{
             if(visible&&com.nextdrive.pleos.ai.auth.FirebaseSessionProvider.initialized){val deferred=deferredAttention;deferredAttention=null;if(deferred!=null)runCatching{receiveAttention(deferred)}}
+            homeVoice?.evaluate()
         }
         captureDraft()
         displayedSafety = EditingState.UNKNOWN
@@ -354,9 +377,10 @@ class MainActivity : Activity() {
         safety.start()
         reconcileSnapshots()
         freshnessHandler.removeCallbacks(freshnessTick);freshnessHandler.post(freshnessTick)
+        homeVoice?.resume()
     }
     override fun onStop() { visible=false;removeVoiceAuth?.invoke();removeVoiceAuth=null;deferredAttention=null;stopAssistance();if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop();stopSocWatch("앱이 보이지 않아 자동 확인을 멈췄어요. 관측 공백이 있어요."); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
-    override fun onDestroy() { aiConsent?.revoke();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();attentionEvents.close();super.onDestroy() }
+    override fun onDestroy() { homeVoice?.close();aiConsent?.revoke();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();attentionEvents.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putStringArrayList("expandedSections",ArrayList(expandedSections));outState.putBoolean("showHealth",showHealth);outState.putBoolean("showUnavailable",showUnavailable);outState.putBoolean("hiddenSnapshots",hiddenSnapshots);outState.putBoolean("socTechnical",socTechnical);outState.putInt("socHistoryLimit",socHistoryLimit)
@@ -498,6 +522,9 @@ class MainActivity : Activity() {
         help.addView(ui.action("사용법 보기","help",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HELP)}})
         help.addView(ui.action("처음 안내 다시 보기","replay_guide",ActionStyle.QUIET,canEdit()){edit{guideReplay=true;openScreen(Screen.WELCOME)}});right.addView(help)
         val privacy=panel();privacy.addView(ui.sectionTitle("AI·개인정보"));privacy.addView(label("AI는 저장한 문제에서 선택해요. 전송 전에 내용과 동의를 확인하며, 동의 철회도 같은 화면에서 할 수 있어요.",22))
+        privacy.addView(ui.action("AI 계정 확인","ai_account_check",ActionStyle.QUIET,canEdit(),HmiIcon.PERSON){edit{
+            stopAssistance();startActivity(android.content.Intent(this,PortableAiActivity::class.java).putExtra("account_reauth",true).putExtra("validation_fixture",fixturePrefix))
+        }})
         privacy.addView(label("기록은 이 기기의 운전자끼리 확인해요. 휴대폰이나 다른 차량으로 자동 전송하지 않아요.",20));right.addView(privacy)
         val about=panel();about.addView(ui.sectionTitle("앱 정보"));about.addView(label("CARITDA · 카잇다\n차량 기록을 다음 운전자에게 이어요.\n상표 검증 전 잠정 명칭이에요.",20));right.addView(about)
         about.addView(ui.action("지원·수신 기술 정보","app_technical",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.LOAD_DETAIL)}})
@@ -566,6 +593,7 @@ class MainActivity : Activity() {
             body.addView(label("기록을 불러오지 못했습니다. 기존 데이터는 보존됩니다.",24,true))
             body.addView(button("다시 확인하기","retry"){draw()})
         }
+        homeVoice?.evaluate();paintHomeVoice()
     }
     private fun themeSetting(body:LinearLayout){
         val preference=CaritdaTheme.preferences(this,fixturePrefix).getString("theme","light")
@@ -612,11 +640,20 @@ class MainActivity : Activity() {
             card.addView(label(vehicleDisplay.time(first.reading.receivedAt!!)+(if(checks.size>1)" · 그 밖에 ${checks.size-1}개 항목"else""),20))
             card.addView(ui.action("차량 안내 확인하기","open_vehicle_check",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE){positions[Screen.VEHICLE]=0}}});primary.addView(card)
         }
+        if(service.confirmed()){
+            val voice=homeVoice
+            val voiceCard=panel();voiceCard.addView(label(voice?.title?:"음성 대기 꺼짐",24,true).apply{tag="home_voice_status";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE})
+            voiceCard.addView(label(voice?.detail?:"음성 설정에서 홈 자동 대기를 선택할 수 있어요.",20).apply{tag="home_voice_detail"})
+            if(voice?.autoEnabled==true)voiceCard.addView(ui.action(if(voice.active)"음성 대기 끄기"else"다시 대기","home_voice_toggle",ActionStyle.QUIET,canEdit()){
+                if(voice.active)voice.disable()else voice.retry();draw()
+            })
+            primary.addView(voiceCard)
+        }
         if(service.draft()!=null)draftBanner(primary)else{
             val create=panel();create.addView(ui.sectionTitle("어떤 문제가 있었나요?",HmiIcon.PLUS))
             create.addView(label("말하거나 직접 적은 뒤 저장해 주세요.",22))
             create.addView(ui.action("문제 남기기","new_issue",if(unread.isEmpty()&&checks.isEmpty())ActionStyle.PRIMARY else ActionStyle.SECONDARY,canEdit(),HmiIcon.PLUS){edit{beginRecord()}})
-            create.addView(ui.action("음성으로 기록·질문","voice_conversation",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){
+            create.addView(ui.action("음성 대화·설정·이력","voice_conversation",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){
                 if(canWrite()&&service.draft()==null){stopAssistance();startActivity(android.content.Intent(this,VoiceConversationActivity::class.java).putExtra("driver_id",service.driver().id).putExtra("validation_fixture",fixturePrefix))}
             });primary.addView(create)
         }

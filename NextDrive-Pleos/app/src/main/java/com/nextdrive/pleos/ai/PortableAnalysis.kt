@@ -47,7 +47,8 @@ class PortableFailure(raw:String):IllegalStateException("AI_REQUEST_FAILED") {
     val code=raw.takeIf{Regex("[A-Z_]{1,64}|(?:AUTH_KEYS_HTTP|MODEL_HTTP)_[1-5][0-9]{2}").matches(it)}?:"AI_REQUEST_FAILED"
     fun displayMessage()="${userMessage()}\n확인 코드: $code"
     fun userMessage()=when(code){
-        "AUTH_SIGN_IN_REQUIRED","AUTH_CREDENTIALS","AUTH_RELOGIN","RECENT_LOGIN_REQUIRED"->"로그아웃 후 다시 로그인해 주세요. 기존 차량 기록은 그대로예요."
+        "AUTH_SIGN_IN_REQUIRED","AUTH_CREDENTIALS","AUTH_RELOGIN"->"로그아웃 후 다시 로그인해 주세요. 기존 차량 기록은 그대로예요."
+        "RECENT_LOGIN_REQUIRED"->"AI 계정·이용 정보에서 현재 계정 확인을 갱신해 주세요. 로그아웃하지 않고 기존 기록과 설명을 유지할 수 있어요."
         "AUTH_TOKEN_TIMEOUT","AUTH_NETWORK"->"계정 확인 응답이 늦어지고 있어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요."
         "UID_NOT_APPROVED"->"이 계정의 AI 이용 승인이 필요해요. 관리자에게 문의해 주세요."
         "DEVICE_LIMIT","DEVICE_REVOKED","DEVICE_NOT_REGISTERED","DEVICE_KEY_MISSING"->"이 기기의 AI 등록을 확인해 주세요. 기존 차량 기록은 그대로예요."

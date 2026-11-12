@@ -49,6 +49,7 @@ class PortableAiActivity:Activity(){
     private var resultText=""
     private var resultOrigin=""
     private var accountDetails=false
+    private var reauthOpen=false
     private var issueResult:IssueAnalysisService.Result?=null
     private val spoken by lazy{com.nextdrive.pleos.integration.SpeechOutput(this){allowed()}}
     private val playback by lazy{com.nextdrive.pleos.integration.ExplanationPlayback({allowed()},
@@ -64,12 +65,13 @@ class PortableAiActivity:Activity(){
     private var previewOpen=false
     private var usageRefreshAttempted=false
     override fun onCreate(saved:Bundle?){super.onCreate(saved)
+        accountDetails=intent.getBooleanExtra("account_reauth",false);reauthOpen=accountDetails
         autoConsumed=saved?.getBoolean("auto_consumed")?:false
         excerpt=saved?.getString("issue_excerpt")
         previewOpen=saved?.getBoolean("preview_open")?:intent.getBooleanExtra("issue_after_save",false)
         usageRefreshAttempted=saved?.getBoolean("usage_refreshed")?:false
         vehicleDetails=saved?.getBoolean("vehicle_details")?:false
-        accountDetails=saved?.getBoolean("account_details")?:false
+        accountDetails=saved?.getBoolean("account_details")?:intent.getBooleanExtra("account_reauth",false)
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val dark=CaritdaTheme.dark(this,fixturePrefix)
         ui=CaritdaComponents(this,CaritdaPalette.of(dark))
@@ -266,6 +268,20 @@ class PortableAiActivity:Activity(){
         accountViews.forEach{body.removeView(it)}
         body.addView(ui.expandable("계정·이용 정보","portable_account_details",accountDetails,allowed()&&!busy){accountDetails=!accountDetails;render()})
         if(accountDetails){
+            body.addView(ui.action("현재 계정 확인 갱신","portable_reauth_open",ActionStyle.SECONDARY,allowed()&&!busy&&!FirebaseSessionProvider.busy,HmiIcon.PERSON){reauthOpen=!reauthOpen;render()})
+            if(reauthOpen){
+                body.addView(ui.text("새 기기 등록에는 최근 계정 확인이 필요해요. 현재 계정의 비밀번호를 Firebase에서 확인하며 로그아웃하거나 기존 AI 설명을 지우지 않아요.",20))
+                val secret=input("portable_reauth_password","현재 계정 비밀번호",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD);body.addView(secret)
+                body.addView(ui.action("이 계정으로 확인","portable_reauth_submit",ActionStyle.PRIMARY,allowed()&&!busy&&!FirebaseSessionProvider.busy){
+                    if(!allowed()||busy)return@action
+                    val value=secret.text.toString();secret.text.clear();val run=generation
+                    FirebaseSessionProvider.reauthenticate(value){result->if(visible&&run==generation){
+                        message=when(result.code){"AUTH_REAUTHENTICATED"->"현재 계정 확인을 갱신했어요. 기존 기록과 AI 설명은 그대로예요.";"AUTH_CREDENTIALS"->"비밀번호를 다시 확인해 주세요. 현재 로그인은 유지돼요.";else->PortableFailure(result.code).displayMessage()}
+                        if(result.code=="AUTH_REAUTHENTICATED")reauthOpen=false
+                        render()
+                    }}
+                })
+            }
             body.addView(ui.text("로그아웃하면 이 계정의 기기 내 AI 저장 결과를 지워요. 차량 기록은 남으며 동의 철회는 별개예요.",20))
             accountViews.forEach{body.addView(it)}
         }

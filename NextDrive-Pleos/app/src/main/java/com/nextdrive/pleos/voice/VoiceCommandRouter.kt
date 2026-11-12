@@ -7,13 +7,20 @@ sealed class VoiceCommand {
     data class FollowUp(val question:String):VoiceCommand()
     data object Wake:VoiceCommand();data object Soc:VoiceCommand();data object Attention:VoiceCommand()
     data object Handover:VoiceCommand();data object Recent:VoiceCommand();data object Repeat:VoiceCommand()
-    data object RecordContext:VoiceCommand();data object End:VoiceCommand();data object Clarify:VoiceCommand()
+    data object RecordContext:VoiceCommand();data object End:VoiceCommand();data object Clarify:VoiceCommand();data object StopListening:VoiceCommand()
 }
 /** Deliberately narrow local router. No model is allowed to decide a SQLite write. */
 object VoiceCommandRouter {
+    /** Orthographic whitespace only; no unverified phonetic aliases. */
+    fun afterWake(raw:String):String?{
+        val text=raw.trim()
+        val wake=Regex("""^카\s*[잇있]\s*다(?:[,.!?，。\s]+|$)""").find(text)?:return null
+        return text.substring(wake.value.length).trim()
+    }
     fun route(raw:String,autoSymptoms:Boolean,anchored:Boolean):VoiceCommand {
-        val text=raw.trim().replace(Regex("^카[잇있]다[,.!，。 ]*"),"").trim()
+        val text=afterWake(raw)?:raw.trim()
         val flat=text.replace(Regex("[\\s,.!?。]"),"")
+        if(flat in setOf("음성대기꺼줘","음성대기꺼주세요","마이크꺼줘","마이크꺼주세요","청취중지","그만들어","듣지마","듣지마세요"))return VoiceCommand.StopListening
         if(raw.length>1000||Regex("[\"“”‘’]|(?:하지|주지|시키지)\\s*마|저장하지|기록하지|(?:기록|저장).{0,8}취소|라고\\s*(했|말)|예를\\s*들|만약").containsMatchIn(raw))return VoiceCommand.Clarify
         if(flat.isEmpty())return VoiceCommand.Wake
         if(Regex("^(그만(할게|해|할래|할게요)?|종료(해줘)?|대화종료|나중에다시볼게)$").matches(flat))return VoiceCommand.End

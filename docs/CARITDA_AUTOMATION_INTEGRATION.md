@@ -1,5 +1,76 @@
 # CARITDA 음성 자동화 통합
 
+## 2026-11-12 16:30 +09:00 — 잔여 통합 결과
+
+이번 기준은 main `a9c2b29c66ccff3b5a0bd2381113834e731eb5a2`이다. 로컬 공통285파일과 원격314 blob을 대조했으며 원격 전용 연구29개를 보존한다. 아래 과거 보고의 배포0/모델0은 이전 작업의 결과다.
+
+**신규 대화 API 운영 배포, 실제 신규 Gemini 분석·새 후속 답변, 실제 전체 TTS와 영속 재조회는 완료했다. 홈 자동 대기 경로는 구현·격리 검증했지만 실제 호출어 인식까지 이어지는 사람 발화 시험은 완료하지 못했다.** 독립 Vosk 호출어 실험은 실제 발화에서 실패했으므로 일반 APK에서 제외했다. 전체 버튼 없는 음성 자동화 완료로 판정하지 않는다.
+
+### 홈에서 시작하는 경로
+
+운전자 확정 → 홈 → 사전에 허용한 음성 대기 → ‘카잇다’의 final+실제 ended → ‘말씀하세요’의 실제 TTS DONE → 증상 입력 → 기존 원자 commit/receipt → 기존 분석 서비스 → 전체 TTS → 후속 STT다. 음성 Activity를 열거나 시작 버튼을 누르는 과정은 홈 경로의 필수 단계가 아니다. 기존 화면은 **음성 대화·설정·이력**이라는 수동 대체 경로로 유지한다.
+
+- 운전자·Firebase 계정별 VoiceSettings에 `autoWait`만 일곱 번째 bit로 추가했다. 기존 여섯 선택과 동의 범위를 바꾸지 않았으며 모두 기본 OFF다. 마이크 권한, 보관, 자동 기록, 전송, 읽기, 후속 질문, 차량 안내는 각각 선택한다.
+- 일반 APK와 Android Studio 기본 빌드는 공개 Pleos STT의 **30초 대기창**이다. 침묵·오류·호출어 불일치 뒤 자동 재시작하지 않는다. 한 전면 진입에서 자동창 최대3개이며 정상 대화 종료 시 다음 창을 사용할 수 있다. 시간 종료 후에는 ‘다시 대기’가 필요하다. 이것은 상시 독립 호출어가 아니다.
+- 대화의 기존5분/5발화 제한은 대기창과 별개다. 실제 SDK started/마이크 상태가 확인돼야 ‘음성 대기 중’으로 표시한다. ‘음성 대기 꺼 줘’는 설정 자체를 OFF로 저장한다.
+- 화면 이탈·백그라운드·운전자/계정 변경·권한/안전 제한·오디오 포커스 상실은 종료한다. TTS와 입력은 오디오 소유권을 넘겨 사용하며 타이머로 DONE을 만들지 않는다. 포커스가 돌아와도 자동 청취를 재개하지 않는다.
+- 공개 STT AAR의 AmbientAi 호출어 설정은 `@PrivilegedApi`다. 호출하지 않았다. 실제 Android on-device SpeechRecognizer 제공 여부는 false였다. 기본 비서 역할은 제공true/보유false, 현재 OS 비서는 `ai.umos.ambientai`였다. 시스템 전체 호출어·PTT·외부 Gleo는 미검증이다.
+
+### 독립 호출어 실험의 실제 한계
+
+사용자 승인으로 공식 Vosk0.3.47와 한국어 small0.22 모델 약82MB를 프로젝트에만 받았다. 공식 Apache2 라이선스/고지, APK 배포 가능 범위, checksum과 오프라인 AudioRecord16k mono를 확인했다. 원본 음성 파일은 저장하지 않는다. 다운로드 도구는 `scripts/Prepare-HomeWakeEngine.mjs`이며 빌드 중 다운로드하지 않는다.
+
+실제 마이크·native 모델 초기화·PCM 수신·해제는 성공했다. 그러나 첫 발화에서 사용자가 ‘말했지만 안내가 없었음’이라고 확인했다. 모델 사전에 ‘카잇다’가 없어 지원 단어 ‘카/잇다/있다’ 조합을 제한적으로 시험했지만 두 번째180초 시험도 2,883,200sample/582,228nonzero/35segment/호출매치0이었다. 임의 발음 별칭으로 성공을 만들지 않았다. CPU/전력 효율·인식률·실차 성능은 미검증이다. 선택 빌드에는16KiB native 정렬 경고도 남는다.
+
+따라서 `-PcaritdaHomeWakeEngine=true`는 검증용 실험이고 기본false다. 일반 설치 APK에는 모델·libvosk가 없음을 별도 확인했다. 이후 공개 Pleos 대체 경로의 실제 사람 발화는 사용자가 ‘이번 발화 시험은 나중에’를 선택해 마이크 시작 전에 중단했다. 독립 호출어 FAIL과 대체 경로 사람 발화 NOT_TESTED를 구분한다.
+
+### 이번 Kotlin 변경
+
+공통 경로는 `NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/`다. 기존 기능 전체를 재작성하지 않았다.
+
+| 수정/추가 파일 | 이번 변경 |
+|---|---|
+| `MainActivity.kt` | 홈 inline 음성 상태/중지/재대기, 운전자·인증·안전·수명주기 연결, 차량 안내의 기존 사건을 같은 홈 제어기로 전달 |
+| `voice/HomeVoiceRuntime.kt` | 기존 Controller/AIbridge/SpeechInput/Output를 홈에 연결, 대기 수명·포커스·generation·실제 마이크 상태 |
+| `voice/VoiceIssueContext.kt` | 기존 음성 화면의 저장/분석/대화/로컬 조회 어댑터를 공유. 로컬 차량 답변을 Gemini 문맥에서 제외 |
+| `voice/VoiceSettings.kt`, `VoiceConversationActivity.kt` | 기본OFF 자동 대기 옵션·마이크 권한·기존 수동 시작/이력/계정 경로 |
+| `voice/VoiceConversationController.kt`, `VoiceCommandRouter.kt` | 완료된 호출을 기존 대화로 전달, prompt DONE 후 증상 입력, 명시 청취OFF·한국어 띄어쓰기 처리 |
+| `voice/VoiceListeningFocus.kt`, `HomeWakeDetector.kt` | 공개 오디오 포커스·선택 detector 경계. 기본 factory는 detector를 만들지 않음 |
+| `data/ConversationStore.kt` | 호출문 출처 ASR_WAKE 허용. 기존 DB v4/암호화 sidecar 스키마·보관 정책 유지 |
+| `PortableAiActivity.kt`, `ai/auth/FirebaseSessionProvider.kt`, `ai/PortableAnalysis.kt` | 기존 계정의 최근 확인만 갱신. 로그아웃/키교체 없이 공식 Firebase reauthenticate, 비밀번호 저장/로그 없음 |
+| `src/homeWake/...VoskHomeWakeDetector.kt`, `HomeWakeDetectorFactory.kt`, `src/noHomeWake/...HomeWakeDetectorFactory.kt` | 선택 실험/기본 빌드 분리, 무음/실패를 성공으로 만들지 않음 |
+
+검증은 새 HomeVoiceChecks/Platform/Microphone/Recovery/ModelResult/VoiceReauth와 기존 runner/VoiceAutomationUiChecks/VoiceRealModelChecks/VoiceRelayChecks를 변경했다. build.gradle.kts의 선택 엔진 설정 이외 기존 SDK 버전·서명·Firebase 설정·Manifest/Gleo 코드는 유지했다. `SpeechInput`, `SpeechOutput`, `VoiceAiBridge`, `IssueDialogueContract/Service`는 이번에 재작성하지 않았다.
+
+### 실제 Worker와 모델
+
+Codex는 `CodexSandboxOffline` 계정이며 Cloudflare 제어 API는 EACCES였다. 사용자의 정상 CMD OAuth 인증을 복사하거나 재로그인을 반복 요구하지 않았다. 사용자가 같은 기존 인증으로 검증된 배포 도구를 실행했다. 세 번 모두 버전/번들 SHA/같은 binding·Secret·DO·모델ON·한도 지문을 검사한 기존 Worker의 코드 배포다.
+
+| 배포 | 실제 활성 버전 | 목적 |
+|---|---|---|
+| 1 | `fb39412c-11f2-4080-b30f-b4751d71731f` | 기존 분석을 유지하며 `/v2/issues/dialogue` 노출 |
+| 2 | `b0f65833-546d-4e5c-9a0c-4a5071f45ce7` | 예약 전 RATE_LIMIT의 unbound ISSUED 메타데이터 READ 복구 |
+| 3·최종 | `37c6cab1-deb8-42ab-a0db-baa3614e44ae` | 모델 context_refs schema를 실제 이전 assistant 인덱스로 제한 |
+
+최종 번들 SHA256 `4643c387ccce7a9056f12a3874a23abf3a75eea79e68779994c94b600498ca19`/99,641byte다. 실제 에뮬레이터 HTTPS health200·모델ON·기존 분석401·신규 대화401을 확인했다. 신규404는 해결됐다. 배포 도구 자체는 모델을 호출하지 않는다.
+
+READ 수정은 인증·서명·기기·operation 소유권 확인 뒤 attempts0/hash없음/consent없음인 ISSUED에 빈 메타데이터만 돌려준다. 이미 묶인 결과의 동의 보호는 유지한다. 후속 답변 수정은 검증기를 완화하지 않고 공급자 schema의 context_refs를 실제 assistant 인덱스 enum으로 제한했다. [공식 structured output의 enum/minItems/maxItems](https://aistudio.google.com/docs/structured-output#json-schema-support)를 사용한다.
+
+실모델은 최초 승인2회와 추가 명시 승인1회를 사용했다. 첫 신규 분석은 성공했고 자동 전체 TTS DONE이었다. 첫 후속은 분당 제한/READ 오류를 수정해 같은 operation으로 이어갔지만 공급자 응답이 MODEL_CONTEXT_INVALID여서 표시하지 않았다. 새 schema 배포 뒤 추가 승인1회로 **같은 문제/revision·질문·이전 AI를 사용한 새 Gemini 답변과 전체 실제 TTS DONE**을 확인했다. 첫 설명 재생으로 대체하지 않았다. 공급자 시도는 총3회이며 성공 설명2개다. ASR 입력은 명시된 fixture였다. 추가 승인1회는 별도 원장이고 기존2회 원장은 변경하지 않았다.
+
+실제 계정 상태는 portable attempts8→11, 잔여3→0, uncertain=false다. 원장·예약·일5/월100/서비스300/비용 정책은 초기화하거나 늘리지 않았다. 추가1회 계획 비용은 약US$0.0075/예약US$0.01로 안내했으며 실제 청구서를 확인한 금액은 아니다. [공식 모델 단가](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite)와 기존 비용 보호를 유지한다. 더 이상 유료 요청을 실행하지 않는다.
+
+### 전송과 영속 보관
+
+같은 문제의 증상 종류/본문·현재 질문·최대2쌍의 이전 **검증된 AI** Q/A만 전송한다. 이전 AI는 추론이고 facts는 빈 배열이다. 중간 SOC/차량 로컬 질문·답변은 문맥에서 제외하는 회귀를 추가했다. 차량·위치·이름·메모·다른 기록을 추가하지 않는다. 네 수동 상태·원문·receipt·기존 캐시/pending/UNKNOWN을 유지한다.
+
+새 프로세스에서 같은 미해결 문제1건/revision1, 암호화된 실제 AI 답변2개, 성공 operation2개, prompt/분석/후속의 전체 TTS DONE을 다시 읽었다. ‘정비소에 가야 할까?’는 이 실제 저장 문맥으로 3500byte 계약만 검사했고 네 번째 모델 요청을 하지 않았다. 최초 실패와 새 성공 이력을 함께 남겼다.
+
+이번 선택 Android 검사·일반 업데이트·841DB 보존과 예외·남은 실제 발화는 [최신 인수 결과](CARITDA_VOICE_AUTOMATION_ACCEPTANCE.md)를 따른다. SOC18/45 실제 callback·추가 Safety 지원 결과는 이전 작업의 근거를 유지하며 이번 fixture를 새 SDK 성공으로 세지 않는다.
+
+<details>
+<summary>이전 작업 기록 — a9c2b29c 게시 당시 결과(이번 검증과 별도)</summary>
+
 작성 기준: 2026-11-12 KST. 개발 기준 main `d27cc79dc3ea70687065107ca5e408dbcb085421`. Aside 연구 3개를 전체 검토하고 실제 최신 소스에 맞춰 구현했다. 기존 B 라이트 화면·수동 입력·AI 설명·Gleo 경로를 유지한다.
 
 **앱 코드와 격리 통합 시험은 구현했다. 신규 Worker 대화 API의 운영 배포 및 실제 모델 대화는 아직 완료하지 못했다. 실제 STT 발화는 사용자가 나중에 직접 확인하기로 했다.** 따라서 전체 실사용 자동화 완료로 판정하지 않는다. 상세 결과는 [인수 보고서](CARITDA_VOICE_AUTOMATION_ACCEPTANCE.md)를 따른다.
@@ -107,3 +178,5 @@
 | 11 능동 음성 | 홈의 허용된 새 SOC사건→실제 TTS→로컬 조회/기록 연결 통과; 이어지는 STT는 fixture |
 | 12 오류/Gleo | 503/Relay/네트워크/UNKNOWN/캐시/공유lock 회귀, 기존 내부 Actions37 통과; 외부 실행 미검증 |
 | 13 최종 통합 | 빌드/Lint/계측/일반 업데이트/원본보존·GitHub 게시 대상 준비. 전체 실모델/실제발화 완료로 판정하지 않음 |
+
+</details>

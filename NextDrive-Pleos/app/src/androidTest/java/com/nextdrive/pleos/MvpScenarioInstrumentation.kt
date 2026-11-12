@@ -34,6 +34,16 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("voiceUsageReadOnly")=="true"){val lines=VoiceRelayChecks(this).usage();result.putString("stream","CARITDA_VOICE_USAGE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("homeVoiceExtraOneOnly")=="true"){val lines=HomeVoiceRecoveryChecks(this).run(argumentsBundle?.getString("voiceExtraModelApproval").orEmpty(),true);result.putString("stream","CARITDA_HOME_EXTRA_ONE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("homeVoiceResumeOriginalOnly")=="true"){val lines=HomeVoiceRecoveryChecks(this).run(argumentsBundle?.getString("voiceRealModelApproval").orEmpty());result.putString("stream","CARITDA_HOME_ORIGINAL_RECOVERY_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("homeVoiceResultReadOnly")=="true"){val lines=HomeVoiceModelResultChecks(this).run();result.putString("stream","CARITDA_HOME_MODEL_READBACK_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("homeVoiceMicrophoneOnly")=="true"||argumentsBundle?.getString("homeVoiceRealOnly")=="true"||argumentsBundle?.getString("homeVoiceRealInputOnly")=="true"){val lines=HomeVoiceMicrophoneChecks(this).run(argumentsBundle?.getString("homeVoiceRealOnly")=="true"||argumentsBundle?.getString("homeVoiceRealInputOnly")=="true",argumentsBundle?.getString("voiceRealModelApproval").orEmpty(),argumentsBundle?.getString("homeVoiceRealInputOnly")=="true");result.putString("stream","CARITDA_HOME_MICROPHONE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("voiceRealPrepareOnly")=="true"){val lines=VoiceRealModelChecks(this).run(argumentsBundle?.getString("voiceRealModelApproval").orEmpty(),true);result.putString("stream","CARITDA_VOICE_REAL_PREPARE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("voiceReauthOnly")=="true"){val lines=VoiceReauthChecks(this).run();result.putString("stream","CARITDA_VOICE_REAUTH_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("voiceRelayAuthOnly")=="true"){val lines=VoiceRelayChecks(this).authProbe();result.putString("stream","CARITDA_VOICE_AUTH_PROBE_PASS checks=0\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("homeVoiceOnly")=="true"){val lines=HomeVoiceChecks(this).run();result.putString("stream","CARITDA_HOME_VOICE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
+            if(argumentsBundle?.getString("homeVoicePlatformOnly")=="true"){val lines=HomeVoicePlatformChecks(this).run();result.putString("stream","CARITDA_HOME_PLATFORM_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("voiceAutomationOnly")=="true"){val lines=VoiceAutomationChecks(this).run();result.putString("stream","CARITDA_VOICE_AUTOMATION_PASS checks=${lines.size}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("voiceAutomationUiOnly")=="true"){val lines=VoiceAutomationUiChecks(this).run();result.putString("stream","CARITDA_VOICE_AUTOMATION_UI_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("voiceAutomationLiveOnly")=="true"){val lines=VoiceAutomationLiveChecks(this).run();result.putString("stream","CARITDA_VOICE_AUTOMATION_LIVE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
@@ -122,7 +132,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
             finish(Activity.RESULT_OK, result)
         } catch (failure: Throwable) {
             result.putString("stream", "CARITDA_MVP_FAIL checks=$checks\n$output\n${failure.stackTraceToString()}")
-            result.putString("shortMsg", failure.message ?: failure.javaClass.name)
+            result.putString("shortMsg", (failure as? com.nextdrive.pleos.ai.PortableFailure)?.code?:failure.message?:failure.javaClass.name)
             finish(Activity.RESULT_CANCELED, result)
         }
     }

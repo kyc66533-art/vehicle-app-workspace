@@ -1,13 +1,11 @@
 # NextDrive — Codex 작업 지침 (AGENTS.md)
 
-## 현재 작업 — B안 라이트 전체 UI
-- REDESIGN_20261111 승인 B·Kotlin View·라이트 기본/다크 선택·76dp를 유지한다. 연구는 수정하지 않는다. docs/B_LIGHT_UI_ACCEPTANCE.md·B_LIGHT_UI_SCREEN_MATRIX.md·B_LIGHT_UI_GALLERY.md를 따른다.
-- 홈은 운전자→미확인 인계→유효 확인 항목→작성/초안→차량·기록이다. 정상 수치·지난 SOC 사건·4전역탭을 되살리지 않는다. 하위는 이전/제목/홈, 이름 관리는 설정이다. 숨은 더미 버튼을 만들지 않는다. 초안/검색/스크롤·작성자/네 상태/이력을 보존한다.
-- 값/단위·시각/출처/실패·오래됨을 유지하고 문·등화 원시값은 그룹/상세로 둔다. DriveCheck는 선택 초안→명시 저장이다. SOC 사용자 기준·차량 안내를 구분하고 타이어 기준/등화ON을 고장으로 추정하지 않는다. 자동 안내와 그래프는 별도다.
-- STT ON_DEVICE/request/Locale.KOREA·final+실제ended·CANCELLED stop/release/generation을 유지한다. 수동EOF/부분문장/타이머 성공은 금지다. 음성 패널은 표시만 바꾼다. AVD/DB/백업/오디오 설정을 초기화하지 않는다.
-- Vehicle2.3.2/Navi3.0.5/Fused1.1.3/STT·TTS3.3.1·Maven필터를 유지한다. 위치는 동의 후 append/마지막 확인 위치이며 Navi 기존 경로를 취소하지 않는다. SDK 등록/실제 수신·fixture/외부Gleo/실차를 구분한다.
-- Gemini/Firebase/Keystore·캐시/pending/UNKNOWN·모델ON·일5/월100/서비스300/비용 예약을 보존한다. 저장 후 명시 요청/전송동의와 전체결과TTS를 분리한다. 차량·위치·이름·메모를 증상 AI에 자동 추가하지 않는다. 이번 신규 유료 요청/배포0이다.
-- 계측은 validation 고유fixture/prepare전 조기분기만 사용하며 기존validation도 삭제하지 않는다. 일반앱 UI자동화 금지, 원본수를 매번 새 백업/비교한다. fixture/실제SDK/일반앱/이해도는 별도다. 아래 GitHub 연결 도구·Aside 보호 규칙을 유지한다.
+## 현재 작업 — 음성 자동화·대화·차량 안내
+- 최신 자동화 지시가 아래 과거 수동/유료0 절보다 우선한다. docs/CARITDA_VOICE_AUTOMATION_ACCEPTANCE.md·CARITDA_AUTOMATION_INTEGRATION.md를 따른다. B View/라이트기본·다크선택/76dp·홈순서·초안/검색/스크롤·기존수동/Gleo를 보존한다. 연구/4전역탭/더미버튼은 변경·복원하지 않는다.
+- 확정운전자·범위동의 후 commit/receipt→AI→전체TTS→후속STT다. journal v4/암호화sidecar·원문/작성자/네상태/인계를 보존하며 개인대화는 자동공유하지 않는다. STT ON_DEVICE/request/Locale.KOREA·final+실제ended·stop/release/generation을 유지하고 TTS 실제DONE만 후속STT를 허용한다.
+- 앱가시·CarSafetyGate ALLOWED·5분/5발화·종료버튼을 유지한다. 무한STT/백그라운드감시/특권우회는 금지다. 듣는중/독립/앱밖호출을 구분한다. Vehicle2.3.2/Navi3.0.5/Fused1.1.3/STT·TTS3.3.1·Maven필터·위치append/기존경로를 유지한다. 확인/회복/해결·SOC사용자기준/고장을 구분한다.
+- Firebase/Keystore/모델ON·캐시/pending/UNKNOWN·일5/월100/서비스300/비용예약을 보존한다. 별도대화scope도 같은예산이다. 차량·위치·이름·메모는 AI에 자동추가하지 않는다. 이번전체 실모델최대2/기존Worker비파괴배포는 승인됐고 현재실제0/배포0이다. 새작업에 무제한 재사용하지 않는다.
+- 실제STT는 사용자가 나중에,Wrangler로그인은 직접복구한다. fixture/SDKcallback/TTS/모델/일반앱/Gleo/실차를 구분한다. validation 고유fixture/prepare전조기분기만 사용한다. 일반UI자동화/기존validation삭제/AVD·DB·백업·오디오초기화는 금지다. 새전체백업/원본비교·GitHub연결도구·Aside보호를 유지한다.
 
 ## 현재 작업 — 시계열 분석·인사이트·SOC 현재/이전 구분
 - 최근 SOC는 ObservationStore의 실제 최신 시각/유효성으로 표시하고 LowSocStore 사건의 last 값과 혼동하지 않는다. 사건은 last_at 순서·한 사건 한 카드/진입·해제 근거를 유지한다. 기존 문제/관측/스냅샷/안내 원본과 네 수동 상태는 보존한다.

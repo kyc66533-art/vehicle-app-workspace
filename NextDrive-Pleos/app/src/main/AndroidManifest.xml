@@ -34,6 +34,13 @@
         android:theme="@style/Theme.Caritda">
         <uses-library android:name="android.car" android:required="false" />
         <!-- No distractionOptimized declaration. AAOS restrictions and CarSafetyGate remain in force. -->
+        <service android:name=".voice.CaritdaVoiceInteractionService" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/voice_interaction" />
+        </service>
+        <service android:name=".voice.CaritdaVoiceSessionService" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
         <activity android:name=".CaritdaActionActivity" android:exported="true" android:resizeableActivity="true">
             <intent-filter>
                 <action android:name="QUERY_CARITDA_CONTEXT" />
@@ -43,6 +50,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".PortableAiActivity" android:exported="false"
+            android:windowSoftInputMode="adjustResize" android:resizeableActivity="true" />
+        <activity android:name=".VoiceConversationActivity" android:exported="false"
             android:windowSoftInputMode="adjustResize" android:resizeableActivity="true" />
         <activity
             android:name=".MainActivity"

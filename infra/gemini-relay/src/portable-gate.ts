@@ -2,6 +2,7 @@ import {BudgetGate as LegacyGate} from './index.ts';
 import {ApiError,reject,keys,response,bodyJson,publicKey,verifyProof,ORIGIN,b64,digest,uuid} from './portable-common.ts';
 import {validateAnalysis,explain} from './portable-analysis.ts';
 import {validateIssue,explainIssue,ISSUE_CONSENT} from './portable-issue.ts';
+import {validateDialogue,explainDialogue,DIALOGUE_CONSENT} from './portable-dialogue.ts';
 const SOC_CONSENT='soc-explanation-v1';
 const granted=(d:Device,scope:string)=>d.consent===scope||!!d.consents?.includes(scope);
 import {validateRecurring,recurringRemaining,reserveRecurring,type Recurring} from './recurring-quota.ts';
@@ -70,7 +71,7 @@ export class BudgetGate extends LegacyGate {
  }
  private async route(path:string,i:any,s:State,p:Policy,now:number):Promise<any>{
   const uid=i.principal.uid,u=p.users[uid],b=i.body;
-  const device=()=>{const d=s.devices.find(d=>d.id===i.device&&d.uid===uid);reject(d?.active&&d.version===i.version&&(granted(d,SOC_CONSENT)||granted(d,ISSUE_CONSENT)),'DEVICE_NOT_REGISTERED',403);return d;};
+  const device=()=>{const d=s.devices.find(d=>d.id===i.device&&d.uid===uid);reject(d?.active&&d.version===i.version&&(granted(d,SOC_CONSENT)||granted(d,ISSUE_CONSENT)||granted(d,DIALOGUE_CONSENT)),'DEVICE_NOT_REGISTERED',403);return d;};
   if(path==='/portable/challenge'){
    keys(b,['purpose','device_id','client_intent_id','jwk']);reject(['REGISTER','EXPLAIN','READ','REVOKE'].includes(b.purpose));
    let d:Device|undefined,k:any,op='-';
@@ -91,8 +92,9 @@ export class BudgetGate extends LegacyGate {
    return {challenge_id:c.id,nonce:c.nonce,expires_at:c.expires,binding_id:b.purpose==='REGISTER'?c.id:d!.id,operation_id:op,key_version:d?.version||1};
   }
   const issueRequest=path==='/portable/issue-explain',issueRevoke=path==='/portable/issue-revoke';
-  const isExplain=path==='/portable/explain'||issueRequest;
-  const scope=issueRequest?ISSUE_CONSENT:SOC_CONSENT;
+  const dialogueRequest=path==='/portable/dialogue-explain',dialogueRevoke=path==='/portable/dialogue-revoke';
+  const isExplain=path==='/portable/explain'||issueRequest||dialogueRequest;
+  const scope=dialogueRequest?DIALOGUE_CONSENT:issueRequest?ISSUE_CONSENT:SOC_CONSENT;
   const d=path==='/portable/register'?undefined:device();
   if(isExplain)reject(granted(d!,scope),'CONSENT_REQUIRED',403);
   keys(b,path==='/portable/register'?['challenge_id','registration_payload','signature']:isExplain?['challenge_id','analysis_payload','signature']:['challenge_id','operation_id','signature']);
@@ -100,7 +102,7 @@ export class BudgetGate extends LegacyGate {
   const purpose=path==='/portable/register'?'REGISTER':isExplain?'EXPLAIN':path==='/portable/read'||path==='/portable/status'?'READ':'REVOKE';
   const payload=purpose==='REGISTER'?b.registration_payload:purpose==='EXPLAIN'?b.analysis_payload:'';
   reject(typeof payload==='string'&&payload.length<=4096&&c.purpose===purpose&&(!d||c.device===d.id),'CHALLENGE_INVALID',403);
-  const proofPath=purpose==='REGISTER'?'/v2/devices/register':purpose==='EXPLAIN'?(issueRequest?'/v2/issues/explanations':'/v2/explanations'):path==='/portable/status'?'/v2/account/status':purpose==='READ'?'/v2/operations/'+b.operation_id:issueRevoke?'/v2/issues/consent/revoke':'/v2/devices/revoke';
+  const proofPath=purpose==='REGISTER'?'/v2/devices/register':purpose==='EXPLAIN'?(dialogueRequest?'/v2/issues/dialogue':issueRequest?'/v2/issues/explanations':'/v2/explanations'):path==='/portable/status'?'/v2/account/status':purpose==='READ'?'/v2/operations/'+b.operation_id:dialogueRevoke?'/v2/issues/dialogue/consent/revoke':issueRevoke?'/v2/issues/consent/revoke':'/v2/devices/revoke';
   reject(!['READ','REVOKE'].includes(purpose)||b.operation_id===c.operation,'OPERATION_MISMATCH',403);
   await verifyProof(c.jwk!,['CARITDA-KEY-PROOF-V1',purpose,uid,purpose==='REGISTER'?c.id:d!.id,c.thumb,'POST',ORIGIN,proofPath,c.operation,await digest(payload),c.nonce,String(c.expires)],b.signature);
   const o=s.operations.find(o=>o.id===c.operation&&o.uid===uid&&o.device===d?.id);
@@ -111,19 +113,19 @@ export class BudgetGate extends LegacyGate {
   reject(!c.used&&c.expires>=now/1000,'CHALLENGE_EXPIRED',403);
   if(purpose==='REGISTER'){
    let r:any;try{r=JSON.parse(payload);}catch{throw new ApiError(400,'REGISTRATION_INVALID');}
-   keys(r,['jwk','consent_version']);reject([SOC_CONSENT,ISSUE_CONSENT].includes(r.consent_version));const k=await publicKey(r.jwk);reject(k.thumb===c.thumb,'KEY_MISMATCH',403);
+   keys(r,['jwk','consent_version']);reject([SOC_CONSENT,ISSUE_CONSENT,DIALOGUE_CONSENT].includes(r.consent_version));const k=await publicKey(r.jwk);reject(k.thumb===c.thumb,'KEY_MISMATCH',403);
    reject(i.principal.authTime>=now/1000-300,'RECENT_LOGIN_REQUIRED',403);
    let registered=s.devices.find(d=>d.uid===uid&&d.thumb===c.thumb);reject(!registered||registered.active,'DEVICE_REVOKED',403);
    if(!registered){reject(s.devices.filter(d=>d.uid===uid&&d.active).length<u.devices,'DEVICE_LIMIT',403);registered={id:crypto.randomUUID(),uid,thumb:c.thumb,jwk:k.jwk,active:true,version:1,consent:r.consent_version};s.devices.push(registered);}registered.consents=[...new Set([registered.consent,...(registered.consents||[]),r.consent_version])].filter(Boolean);c.used=true;return {device_id:registered.id,key_version:registered.version,registered:true};
   }
-  if(purpose==='REVOKE'){const removed=issueRevoke?ISSUE_CONSENT:SOC_CONSENT;d!.consents=[...new Set([d!.consent,...(d!.consents||[])])].filter(x=>x&&x!==removed);if(d!.consent===removed)d!.consent='';c.used=true;return {revoked:true};}
+  if(purpose==='REVOKE'){const removed=dialogueRevoke?DIALOGUE_CONSENT:issueRevoke?ISSUE_CONSENT:SOC_CONSENT;d!.consents=[...new Set([d!.consent,...(d!.consents||[])])].filter(x=>x&&x!==removed);if(d!.consent===removed)d!.consent='';c.used=true;return {revoked:true};}
   if(path==='/portable/status'){
    reject(b.operation_id==='-'&&c.operation==='-','OPERATION_MISMATCH');c.used=true;
    return {legacy_total:s.legacyCheckpoint,portable_attempts:s.used,combined_total:s.legacyCheckpoint+s.used,quota_mode:p.recurring?'recurring':'legacy',global_total:p.recurring?.service_monthly??p.global_total,remaining:p.recurring?recurringRemaining(s,p.recurring,uid,d!.id,now):Math.max(0,Math.min(p.global_total-s.legacyCheckpoint-s.used,u.total-counter(s,'uid:'+uid),u.daily-counter(s,'day:'+uid+':'+new Date(now+9*3600000).toISOString().slice(0,10)),u.device_total-counter(s,'device:'+d!.id))),model_enabled:this.env.MODEL_ENABLED==='true',uncertain_block:s.operations.some(o=>o.state==='UNKNOWN')};
   }
   reject(o&&o.created>=now-86400000,'OPERATION_EXPIRED',410);
   if(purpose==='READ'){reject(granted(d!,o.consent||SOC_CONSENT),'CONSENT_REQUIRED',403);c.used=true;if(o.state==='RESERVED')return {dispatch:true,operation_id:o.id};return {operation_id:o.id,state:o.state,result:o.result||null,code:o.code||null};}
-  let facts:any;try{facts=JSON.parse(payload);}catch{throw new ApiError(400,'INVALID_JSON');}if(issueRequest)validateIssue(facts);else{validateAnalysis(facts);reject(facts.source==='PLEOS_EMULATOR_SDK','REAL_VEHICLE_NOT_APPROVED',403);}reject(this.env.MODEL_ENABLED==='true'&&typeof this.env.GEMINI_API_KEY==='string'&&this.env.GEMINI_API_KEY.length>0,'MODEL_DISABLED',503);
+  let facts:any;try{facts=JSON.parse(payload);}catch{throw new ApiError(400,'INVALID_JSON');}if(dialogueRequest)validateDialogue(facts);else if(issueRequest)validateIssue(facts);else{validateAnalysis(facts);reject(facts.source==='PLEOS_EMULATOR_SDK','REAL_VEHICLE_NOT_APPROVED',403);}reject(this.env.MODEL_ENABLED==='true'&&typeof this.env.GEMINI_API_KEY==='string'&&this.env.GEMINI_API_KEY.length>0,'MODEL_DISABLED',503);
   reject(!s.operations.some(o=>['DISPATCHING','UNKNOWN','RESERVED'].includes(o.state)),'CONCURRENCY_LIMIT',429);
   const day=new Date(now+9*3600000).toISOString().slice(0,10),global=s.legacyCheckpoint+s.used;
   if(p.recurring)reserveRecurring(s,p.recurring,uid,d!.id,now);else reject(global<p.global_total&&counter(s,'uid:'+uid)<u.total&&counter(s,'day:'+uid+':'+day)<u.daily&&counter(s,'device:'+d!.id)<u.device_total,'TOTAL_LIMIT',429);
@@ -140,7 +142,7 @@ export class BudgetGate extends LegacyGate {
    o.state='DISPATCHING';o.owner=owner;o.attempts=1;o.lease=Date.now()+15000;await tx.put(STATE,s);await schedule(tx,s,Date.now());return {...o};
   });
   if(!selected)return response({operation_id:id,state:'PENDING'},202);
-  let result:any,code:string|undefined;try{result=await (selected.consent===ISSUE_CONSENT?explainIssue:explain)(selected.payload!,id,this.env.GEMINI_API_KEY,this.providerFetch);}catch(e){code=e instanceof ApiError?e.code:'MODEL_OUTCOME_UNKNOWN';}
+  let result:any,code:string|undefined;try{result=await (selected.consent===DIALOGUE_CONSENT?explainDialogue:selected.consent===ISSUE_CONSENT?explainIssue:explain)(selected.payload!,id,this.env.GEMINI_API_KEY,this.providerFetch);}catch(e){code=e instanceof ApiError?e.code:'MODEL_OUTCOME_UNKNOWN';}
   const answer=await this.ctx.storage.transaction(async(tx:any)=>{
    const s:State=await tx.get(STATE),o=s.operations.find(o=>o.id===id);if(!o||o.owner!==owner||o.state!=='DISPATCHING')return {operation_id:id,state:'UNKNOWN',code:'MODEL_OUTCOME_UNKNOWN'};
    o.state=result?'SUCCEEDED':code==='MODEL_TIMEOUT'||code==='MODEL_NETWORK'||code==='MODEL_OUTCOME_UNKNOWN'?'UNKNOWN':'FAILED';o.code=code;delete o.payload;if(result)o.result=result;await tx.put(STATE,s);await schedule(tx,s,Date.now());return {operation_id:id,state:o.state,code:code||null};

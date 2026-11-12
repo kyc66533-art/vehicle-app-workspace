@@ -249,6 +249,7 @@ class PortableAiActivity:Activity(){
                 sessionTask {api->
                     val revoked=runCatching{api.revoke()}.isSuccess
                     api.withdrawLocal()
+                    session.subject?.let{subject->com.nextdrive.pleos.voice.VoicePrivacy.withdrawCloud(this,subject)}
                     if(revoked)"동의를 철회했어요. 서버의 이 기기 동의와 로컬 AI 결과를 지웠어요. 이미 전송된 요청은 되돌릴 수 없어요."
                     else "이 앱의 동의를 철회했어요. 서버에는 연결하지 못했어요. 관리자에게 기기 동의 해제를 요청해 주세요. 이미 전송된 요청은 되돌릴 수 없어요."
                 };resultText="";issueResult=null;playback.cancel()

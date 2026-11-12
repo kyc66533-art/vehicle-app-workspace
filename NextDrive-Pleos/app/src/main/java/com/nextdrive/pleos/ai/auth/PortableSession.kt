@@ -12,6 +12,7 @@ interface PortableSession {
     fun matches(uid:String):Boolean
     fun acquire(done:(String?,String?,String?)->Unit)
     fun client(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String?,record:String?):PortableAiClient
+    fun dialogueClient(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String,record:String):PortableAiClient = error("DIALOGUE_SESSION_UNAVAILABLE")
 }
 
 class FirebasePortableSession(private val context:Context):PortableSession {
@@ -21,4 +22,6 @@ class FirebasePortableSession(private val context:Context):PortableSession {
     override fun acquire(done:(String?,String?,String?)->Unit)=FirebaseSessionProvider.withSession(done)
     override fun client(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String?,record:String?)=
         PortableAiClient(store,DeviceKeyStore("caritda.portable.${context.packageName}"),uid,bearer,allowed,issueJob=job,issueRecord=record)
+    override fun dialogueClient(store:PortableAiStore,uid:String,bearer:String,allowed:()->Boolean,job:String,record:String)=
+        PortableAiClient(store,DeviceKeyStore("caritda.portable.${context.packageName}"),uid,bearer,allowed,issueJob=job,issueRecord=record,dialogue=true)
 }

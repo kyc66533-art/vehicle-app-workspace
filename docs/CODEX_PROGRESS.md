@@ -1,5 +1,18 @@
 # Codex 개발 진행 기록
 
+## 2026-11-12 12:49 +09:00 — 자체 음성 자동화·대화 계약·차량 안내 통합
+
+- 기준 main d27cc79dc3ea70687065107ca5e408dbcb085421/tree b0ec74ef, 로컬249파일 일치·원격 전용 연구29개 보존. Aside 음성 feasibility/architecture/13단계 plan을 전체 검토하고 실제 최신 코드에 통합했다. 미게시 503 수정은 없었으며 기존 공급자/Relay 오류·UNKNOWN 보호를 재사용했다. 연구는 수정하지 않았다.
+- 음성 시작/종료·한국어 명령·확정 운전자 원자 commit/receipt·저장직후 분석·전체 TTS 실제DONE→후속 STT·암호화 대화 이력을 Kotlin View에 연결했다. B 라이트/76dp·기존 수동STT/AI/TTS·네상태·인계·Gleo3 Action은 유지했다. 세션은 앱가시/안전허용·5분/5발화이며 독립/앱밖 호출어 성공을 주장하지 않는다.
+- 별도 IssueDialogueContract/Service + Worker /v2/issues/dialogue/scope를 구현했다. 같은 증상·후속질문·최근Q/A두쌍만 전송, AI추론/facts 구분·3500byte/원래wire4KiB·구조검증·같은 인증/기기/BUDGET/일5월100서비스300/비용예약/UNKNOWN. 설정→음성→홈 복귀/자동읽기OFF 후속입력도 확인했다. 캐시 전체작업 lock·늦은callback 무효화·운전자별 보관철회를 추가했다. 차량/위치/이름/메모 자동전송0.
+- 실제SDK SOC100→18→반복18→45→100으로 홈/자동실제TTS/중복/명시음성기록/회복을 연결했다. SDK100/P/0 복원2검사 통과. 추가 Safety POWER_DOWN=false GET/CALLBACK1, 워셔/오일/브레이크액3은 실제미지원. 등록과callback/확인과회복과문제해결을 구분했다. 차량알림만으로 Gemini를 호출하지 않는다.
+- 최종 Debug/Validation/ValidationAndroidTest/Lint BUILD SUCCESSFUL(최종2m32s), 시험연결 수정 AndroidTest1m6s. Lint0오류67경고, Unit NO-SOURCE. 새113+기존364=477 assertion, 별도SDK복원2, Worker 오프라인198 통과. 실제Activity/SQLite/Keystore와 ASR/provider/playback fixture를 구분하고 실제SDK/TTS/HTTPS 결과를 별도 기록했다.
+- APP_FACTS 배열비교·인증복원 중 자동TTS 종료를 수정했다. STT stop 생략은 회귀로 되돌렸다. Android System has crashed 중단분187을 기존AVD 정상복귀 후 재검사했다. SOC45 대기 실패는 시험용 별도SDK 해제를 제거/기존연결 GET 재사용 후13개 재통과했다. 최초실패 기록과 SDK100 복원근거를 보존했다.
+- 일반APK 같은서명 install-r/설치SHA대조·COLD/resumed/실제B 운전자선택 화면 확인, 일반UI자동조작0. APK SHA256 eaba72678134888a7c10b51bcb6a119922439c4904703c9474ebee90ac5b012e. 일반25/99/10/0 불변,전체581DB/12,839원본행·schema·integrity/FK 보존. 일반 SDK/파생70행/새sidecar1,validation고유258DB 추가. 인증/동의/기존캐시동일,private변화는heartbeat/설치프로필/시험포인터·캡처만이다.
+- 실제STT는 사용자 ‘나중에 직접 확인’, Wrangler는 ‘로그인을 직접 복구하겠음’ 답변을 반영했다. CLI의 최초Not logged in 및 현호스트 접근/fetch failed로 배포미완료, 실제에뮬레이터HTTPS modelON/기존401/신규dialogue404. 승인된 전체최대2 실모델 validator와 기존Worker 비파괴배포/보호도구는 준비했으나 신규모델0·배포0이다. 이번 실제Gemini/연속AI 완료로 보고하지 않는다.
+- 주요 수정: Main/VoiceConversation/PortableAi Activity,voice 제어·명령·AIbridge·동의/개인정보·재생,SpeechInput/Output/ExplanationPlayback,commit/repository/service/ConversationStore,AI별도대화/공유lock/auth,AttentionStore/Observer,Manifest/XML,격리검증8파일,Worker3파일·검증/배포4도구,루트지침·본기록·새보고서2개/안전한TEST캡처3개. [기능별 인수/검사/보존](CARITDA_VOICE_AUTOMATION_ACCEPTANCE.md),[파일·계약·13단계 연결](CARITDA_AUTOMATION_INTEGRATION.md).
+- 남음: 사용자의 실제발화,Cloudflare로그인/배포 후 제한내 신규모델 초기1+후속1,외부Gleo/독립hotword/PTT/실차. role제공true/앱선택false이며 범위를 우회하지 않는다. 검증된 명시파일만 GitHub 연결 도구를 통한 게시,최신HEAD/부모/대상/나머지·Aside SHA 확인; 최종커밋은 응답에서 보고한다.
+
 ## 2026-11-11 22:54 +09:00 — B안 전체 화면 구현·native 검증·일반 앱 반영
 
 - 단계1 cc825855/단계2 ee39d6f1을 이어 기존22+AI2/신규 인계25scene을 실제 Kotlin View로 정리했다. B 라이트 기본/다크 선택·white header/1.4:1/76dp/32·24·20·40sp·큰 글씨/짧은 창 스크롤,위치/관리/기술 상세 접기와 원래 서비스 경로를 유지했다.

@@ -14,15 +14,23 @@ object FirebaseSessionProvider {
     private var auth:FirebaseAuth?=null
     private var revision=0
     private var stateReady=false
+    private var application:Context?=null
+    private var previousSubject:String?=null
     private val observers=linkedSetOf<()->Unit>()
     fun observe(callback:()->Unit):()->Unit {observers.add(callback);return {observers.remove(callback);Unit}}
     private fun changed(){observers.toList().forEach{it()}}
-    private val authListener=FirebaseAuth.AuthStateListener {stateReady=true;changed()}
+    private val authListener=FirebaseAuth.AuthStateListener {
+        stateReady=true
+        val next=subject()
+        previousSubject?.takeIf{it!=next}?.let{old->application?.let{context->runCatching{com.nextdrive.pleos.voice.VoicePrivacy.withdrawCloud(context,old)}}}
+        previousSubject=next;changed()
+    }
     val initialized get()=auth!=null&&stateReady
     var busy=false;private set
     var configState="MISSING";private set
     data class Result(val code:String,val signedIn:Boolean=false,val tokenAvailable:Boolean=false,val expiresAtSeconds:Long?=null,val issuedAtSeconds:Long?=null)
     fun prepare(context:Context):Result {
+        application=context.applicationContext
         configState=context.getString(R.string.caritda_firebase_state)
         if(configState!="READY")return Result("AUTH_CONFIG_$configState")
         if(context.getString(R.string.caritda_firebase_package)!=context.packageName)return Result("AUTH_PACKAGE_MISMATCH")

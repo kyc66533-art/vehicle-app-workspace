@@ -1,0 +1,6 @@
+import assert from 'node:assert/strict';import {validatePreserved,bindingFingerprint} from './deploy-dialogue.mjs';
+const before={resources:{bindings:[{name:'BUDGET',type:'durable_object_namespace',namespace_id:'fixture-namespace',class_name:'BudgetGate'},{name:'GEMINI_API_KEY',type:'secret_text'},{name:'PORTABLE_POLICY',type:'secret_text'},{name:'MODEL_ENABLED',type:'plain_text',text:'true'},{name:'PORTABLE_ENABLED',type:'plain_text',text:'true'},{name:'RECURRING_POLICY',type:'plain_text',text:JSON.stringify({user_daily:5,user_monthly:100,service_monthly:300,reserve_micros:10000,monthly_micros:3000000})}]}};
+let checks=0;validatePreserved(before,structuredClone(before));checks++;
+for(const mutate of [b=>b.resources.bindings[0].namespace_id='different',b=>b.resources.bindings[3].text='false',b=>b.resources.bindings.pop(),b=>b.resources.bindings[1].type='plain_text',b=>b.resources.bindings.push({name:'EXTRA',type:'plain_text',text:'new'})]){const after=structuredClone(before);mutate(after);assert.throws(()=>validatePreserved(before,after));checks++}
+assert.ok(!JSON.stringify(bindingFingerprint(before)).includes('fixture-namespace'));checks++;
+console.log('DIALOGUE_DEPLOYMENT_GUARDS_PASS checks='+checks+' real_deployments=0 real_model_calls=0');

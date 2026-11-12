@@ -44,6 +44,7 @@ class SpeechInput(private val context:Context,private val factory:(()->SpeechBac
     fun listen(progress:(String)->Unit,result:(String)->Unit){
         check(Looper.myLooper()==Looper.getMainLooper())
         if(busy||!allowed()){event("START_REJECTED");return}
+        if(!VoiceAudioOwner.claim(this)){publish(SpeechState(phase=SpeechPhase.FAILED,code="AUDIO_BUSY"));return}
         generation++;val run=generation;main.removeCallbacksAndMessages(null)
         this.progress=progress;this.result=result;stopRequested=false;ended=false;requested=false;finalText=null;failureCode="";lastLevelAt=0L
         publish(SpeechState(phase=SpeechPhase.PREPARING,busy=true));event("PREPARING")
@@ -52,6 +53,7 @@ class SpeechInput(private val context:Context,private val factory:(()->SpeechBac
     }
     private fun initialize(run:Int,fallback:Boolean){
         try{
+            if(!VoiceAudioOwner.claim(this)){fail("AUDIO_BUSY");return}
             val next=if(factory!=null)factory.invoke()else if(fallback)AndroidSpeechBackend(context)else PleosSpeechBackend(context)
             backend=next
             next.initialize({later(run){initialized=true;event("INITIALIZED");request(run)}},{code->later(run){
@@ -73,7 +75,7 @@ class SpeechInput(private val context:Context,private val factory:(()->SpeechBac
             override fun started(){later(run){if(ended)return@later;event("STARTED");publish(state.copy(phase=if(stopRequested)SpeechPhase.PROCESSING else SpeechPhase.LISTENING,microphone=if(stopRequested)MicrophoneState.ENDING else MicrophoneState.ACTIVE))}}
             override fun updated(text:String,complete:Boolean){later(run){
                 if(finalText!=null)return@later
-                val clean=text.trim().take(800)
+                val clean=text.trim()
                 if(complete){finalText=clean;event("FINAL");publish(state.copy(phase=SpeechPhase.PROCESSING,text=clean,finalReceived=true));requestEnd()}
                 else{event("PARTIAL");publish(state.copy(text=clean))}
             }}
@@ -107,12 +109,13 @@ class SpeechInput(private val context:Context,private val factory:(()->SpeechBac
         // Keep the initialized service; detach exactly this listener only after actual end.
         runCatching{backend?.detach()}.onFailure{dispose(false)}
         val accepted=finalText?.takeIf{it.isNotBlank()&&failureCode.isEmpty()}
+        VoiceAudioOwner.release(this)
         if(accepted==null&&failureCode.isEmpty())failureCode="STT_NO_FINAL_RESULT"
         publish(state.copy(phase=if(accepted!=null)SpeechPhase.COMPLETE else SpeechPhase.FAILED,microphone=MicrophoneState.ENDED,busy=false,code=failureCode))
         event(if(accepted!=null)"COMPLETE"else"FAILED_ENDED")
         if(accepted!=null){completions++;result(accepted)}else dispose(false)
     }
-    private fun dispose(stop:Boolean){initialized=false;val old=backend;backend=null;runCatching{if(stop&&!stopRequested)old?.finish()};runCatching{old?.detach()};runCatching{old?.release()}}
+    private fun dispose(stop:Boolean){initialized=false;val old=backend;backend=null;runCatching{if(stop&&!stopRequested)old?.finish()};runCatching{old?.detach()};runCatching{old?.release()};VoiceAudioOwner.release(this)}
     /** Explicit cancellation is never recognition success; original form/draft is untouched. */
     fun cancel(){
         check(Looper.myLooper()==Looper.getMainLooper())

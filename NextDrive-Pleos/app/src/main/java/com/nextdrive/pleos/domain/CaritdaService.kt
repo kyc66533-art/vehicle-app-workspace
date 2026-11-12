@@ -20,6 +20,10 @@ class CaritdaService(
     fun renameDriver(id:String,name:String) { requireEditing();repository.renameDriver(id,name) }
     fun archiveDriver(id:String) { requireEditing();repository.archiveDriver(id) }
     fun draft() = repository.draft()
+    fun commitDraft(command:DraftCommit):CommitReceipt {
+        requireDriver();require(command.draft.ownerId==driver().id){"DRIVER_CHANGED"}
+        return repository.commitDraft(command,clock())
+    }
     fun saveDraft(draft:JournalDraft) {
         val old=repository.draft()
         require(old?.let{it.id==draft.id && it.ownerId==draft.ownerId && it.ownerName==draft.ownerName && it.kind==draft.kind && it.target==draft.target && it.revision==draft.revision} ?: (confirmed() && driver().id==draft.ownerId)) { "초안 작성자를 확인해 주세요." }

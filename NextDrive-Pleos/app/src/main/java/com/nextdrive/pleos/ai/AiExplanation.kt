@@ -55,7 +55,7 @@ class AiRelayClient(private val approvedEndpoint:URL,private val transientAppTok
     /** v2 reuses the bounded HTTPS transport, not the legacy shared-token authorization. */
     internal fun postPortable(path:String,bearer:String,body:String,device:String="",version:Int=1):String {
         require(approvedEndpoint.toString()=="https://caritda-ai-relay-dev.kyc66533.workers.dev")
-        require(Regex("/v2/(devices/(challenge|register|revoke)|account/status|issues/(explanations|consent/revoke)|explanations|operations/o2\\.[0-9]{13}\\.[a-f0-9-]{36})").matches(path))
+        require(Regex("/v2/(devices/(challenge|register|revoke)|account/status|issues/(explanations|consent/revoke|dialogue|dialogue/consent/revoke)|explanations|operations/o2\\.[0-9]{13}\\.[a-f0-9-]{36})").matches(path))
         require(bearer.length in 1..8192&&!bearer.contains('\n')&&!bearer.contains('\r'))
         return postAnalysis(URL(approvedEndpoint.toString()+path),bearer,body.toByteArray(Charsets.UTF_8),mapOf("X-Caritda-Device-Id" to device,"X-Caritda-Key-Version" to version.toString()))
     }

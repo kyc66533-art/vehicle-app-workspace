@@ -15,7 +15,7 @@ object IssueAnalysisService {
             Origin.SAVED->"이전에 저장된 Gemini 설명 · 새 요청 없음"
         }
     }
-    private val lease=AtomicBoolean(false)
+    private val lease=IssueAiLease.busy
 
     fun saved(last:JSONObject):Result {
         val answer=last.getJSONObject("answer")

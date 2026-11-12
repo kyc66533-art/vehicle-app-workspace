@@ -10,6 +10,13 @@ import org.json.JSONObject
 import java.text.Normalizer
 import java.util.Locale
 import java.util.UUID
+import com.nextdrive.pleos.domain.*
+
+object VoiceCommitMigration {
+    fun migrate(db:SQLiteDatabase) { db.execSQL("""CREATE TABLE IF NOT EXISTS draft_commit_receipts(
+        token TEXT PRIMARY KEY NOT NULL,command_digest TEXT NOT NULL,owner_id TEXT NOT NULL,
+        issue_id TEXT NOT NULL REFERENCES issues(id),issue_revision INTEGER NOT NULL,kind TEXT NOT NULL,committed_at INTEGER NOT NULL)""") }
+}
 
 /** Additive v1→v2 migration. SQLiteOpenHelper supplies the upgrade transaction. */
 object DriverMigration {
@@ -53,18 +60,47 @@ object DriverMigration {
 }
 
 class SqliteIssueRepository(context: Context, databaseName: String = "caritda_v01.db") :
-    SQLiteOpenHelper(context.applicationContext,databaseName,null,3), IssueRepository {
+    SQLiteOpenHelper(context.applicationContext,databaseName,null,4), IssueRepository {
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
         DriverMigration.createV1(db)
         db.execSQL("UPDATE settings SET value='' WHERE name='driver'")
         DriverMigration.migrate(db,legacy=false)
         RecordMigration.migrate(db)
+        VoiceCommitMigration.migrate(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion in 1..2 && newVersion==3) { "지원되지 않는 버전입니다. 기존 기록을 보존합니다." }
+        check(oldVersion in 1..3 && newVersion==4) { "지원되지 않는 버전입니다. 기존 기록을 보존합니다." }
         if(oldVersion==1)DriverMigration.migrate(db)
-        RecordMigration.migrate(db)
+        if(oldVersion<3)RecordMigration.migrate(db)
+        VoiceCommitMigration.migrate(db)
+    }
+    override fun receipt(token:String):CommitReceipt? = readableDatabase.rawQuery("SELECT * FROM draft_commit_receipts WHERE token=?",arrayOf(token)).use { c ->
+        if(!c.moveToFirst())null else CommitReceipt(c.string("token"),c.string("command_digest"),c.string("owner_id"),c.string("issue_id"),c.getInt(c.getColumnIndexOrThrow("issue_revision")),c.number("committed_at"))
+    }
+    override fun commitDraft(command:DraftCommit,now:Long):CommitReceipt {
+        val db=writableDatabase;db.beginTransaction()
+        try {
+            val d=command.draft
+            receipt(command.token)?.let { r ->
+                check(r.digest==command.digest && r.ownerId==d.ownerId){"COMMIT_CONFLICT"}
+                db.setTransactionSuccessful();return r
+            }
+            check(currentDriver()?.let{it.id==d.ownerId && !it.archived}==true){"DRIVER_CHANGED"}
+            val stored=draft()?:error("DRAFT_MISSING")
+            check(stored.id==d.id && DraftCommit(command.token,stored).digest==command.digest){"DRAFT_CHANGED"}
+            require(d.body.isNotBlank()&&d.body.length<=1000 && d.memo.length<=2000 && d.foundAt in 0..now+60000)
+            check(issue(d.id,true)==null){"ISSUE_ID_CONFLICT"}
+            val issue=VehicleIssue(d.id,d.type,d.body,d.foundAt,now,Driver(d.ownerId,d.ownerName),d.memo)
+            create(issue,IssueEvent(EventKind.CREATED,issue.reporter,now,"허용한 음성 명령으로 기록했습니다.",1,draftId=d.id))
+            db.insertOrThrow("draft_commit_receipts",null,ContentValues().apply{
+                put("token",command.token);put("command_digest",command.digest);put("owner_id",d.ownerId)
+                put("issue_id",issue.id);put("issue_revision",1);put("kind",d.kind);put("committed_at",now)
+            })
+            check(issue(issue.id)==issue && events(issue.id).count{it.kind==EventKind.CREATED}==1)
+            val result=receipt(command.token)?:error("COMMIT_READBACK_FAILED")
+            db.setTransactionSuccessful();return result
+        } finally {db.endTransaction()}
     }
     override fun drivers(includeArchived: Boolean): List<Driver> = readableDatabase.rawQuery(
         "SELECT * FROM drivers ${if(includeArchived) "" else "WHERE archived=0"} ORDER BY rowid",null).use { c ->

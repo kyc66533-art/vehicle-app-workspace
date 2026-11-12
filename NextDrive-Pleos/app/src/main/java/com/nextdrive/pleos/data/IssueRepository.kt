@@ -3,6 +3,8 @@ package com.nextdrive.pleos.data
 import com.nextdrive.pleos.model.*
 
 interface IssueRepository : AutoCloseable {
+    fun commitDraft(command:com.nextdrive.pleos.domain.DraftCommit,now:Long):com.nextdrive.pleos.domain.CommitReceipt = error("ATOMIC_COMMIT_UNAVAILABLE")
+    fun receipt(token:String):com.nextdrive.pleos.domain.CommitReceipt? = null
     fun currentDriver(): Driver?
     fun drivers(includeArchived: Boolean = false): List<Driver>
     fun registerDriver(name: String): Driver

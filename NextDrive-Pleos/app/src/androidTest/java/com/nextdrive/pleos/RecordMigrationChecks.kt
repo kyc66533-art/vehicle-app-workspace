@@ -46,7 +46,7 @@ object RecordMigrationChecks {
             verify(db.version==2 && tables.all{columns(db,it)==cols[it] && rows(db,it,cols.getValue(it))==before[it]},"v3 upgrade failure rolls back schema version and every original scalar")
         }
         var repo=SqliteIssueRepository(context,name)
-        verify(repo.readableDatabase.version==3 && tables.all{rows(repo.readableDatabase,it,cols.getValue(it))==before[it]},"production backup copy v2 to v3 preserves all original rows fields IDs and relationships")
+        verify(repo.readableDatabase.version==4 && tables.all{rows(repo.readableDatabase,it,cols.getValue(it))==before[it]},"production backup copy v2 to v4 preserves all original rows fields IDs and relationships")
         verify(repo.issues().all{it.deletedAt==null && it.deletedById==null},"migration does not mark any existing record deleted")
         repo.writableDatabase.beginTransaction();try{RecordMigration.migrate(repo.writableDatabase);repo.writableDatabase.setTransactionSuccessful()}finally{repo.writableDatabase.endTransaction()}
         repo.close();repo=SqliteIssueRepository(context,name)
@@ -59,7 +59,7 @@ object RecordMigrationChecks {
         val before=SQLiteDatabase.openDatabase(context.getFileStreamPath("source-v2.db").path,null,SQLiteDatabase.OPEN_READONLY)
         val after=SQLiteDatabase.openDatabase(context.getFileStreamPath("production-after-v3.db").path,null,SQLiteDatabase.OPEN_READONLY)
         try {
-            check(before.version==2 && after.version==3)
+            check(before.version==2 && after.version==4)
             for(table in tables)check(rows(before,table,columns(before,table))==rows(after,table,columns(before,table))){"Production field changed: $table"}
             check(after.rawQuery("SELECT COUNT(*) FROM issues WHERE deleted_at IS NOT NULL OR deleted_by_id IS NOT NULL",null).use{it.moveToFirst();it.getInt(0)==0})
             check(after.rawQuery("PRAGMA foreign_key_check",null).use{!it.moveToFirst()})

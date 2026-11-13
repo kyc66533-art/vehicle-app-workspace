@@ -42,13 +42,14 @@ class VoiceConversationController(private val store:ConversationStore,private va
     private var recognition=""
     private var consumed=false
     private var firstCommandAfterPrompt=false
+    private var awaitingWakeConfirmation=false
     private var inflight:Triple<String,String,String>?=null
     private fun active()=sessionId!=null&&ports.valid()&&ports.scope()==frozenScope&&System.currentTimeMillis()-began in 0..300000&&turns<=5&&state !in setOf(State.ENDED,State.STOPPING,State.ERROR_PAUSED)
     fun effectsAllowed()=active()
     private fun transition(next:State,message:String){state=next;sessionId?.let{store.state(it,next.name)};ports.changed(next,message)}
-    fun start(alert:String?=null,announcement:String?=null,firstText:String?=null,prompt:Boolean=false,activation:String?=null){
+    fun start(alert:String?=null,announcement:String?=null,firstText:String?=null,prompt:Boolean=false,activation:String?=null,confirmWake:Boolean=false){
         if(state !in setOf(State.IDLE,State.ENDED,State.ERROR_PAUSED)||!ports.valid()||!ports.permit().history)return
-        generation++;frozenScope=ports.scope();began=System.currentTimeMillis();turns=0;issueId=null;issueRevision=0;alertId=alert;lastReply="";lastOrigin="LOCAL_RULE";firstCommandAfterPrompt=prompt
+        generation++;frozenScope=ports.scope();began=System.currentTimeMillis();turns=0;issueId=null;issueRevision=0;alertId=alert;lastReply="";lastOrigin="LOCAL_RULE";firstCommandAfterPrompt=prompt||confirmWake;awaitingWakeConfirmation=confirmWake
         val id=UUID.randomUUID().toString()
         if(!VoiceSessionOwner.claim(id)){ports.changed(state,"다른 음성 대화가 진행 중이에요. 먼저 그 대화를 마쳐 주세요.");return}
         sessionId=id
@@ -72,6 +73,19 @@ class VoiceConversationController(private val store:ConversationStore,private va
             if(!active())return end()
             turns++;transition(State.INTERPRETING,"말씀하신 내용을 확인하고 있어요.")
             store.appendOnce(turn,sessionId!!,"USER","ASR",text,issueRevision)
+            if(awaitingWakeConfirmation){
+                awaitingWakeConfirmation=false
+                // The uncertain wake and even a symptom-shaped reply cannot create a record.
+                // The original router remains responsible only after a separate confirmed prompt.
+                when(VoiceCommandRouter.route(text,false,false)){
+                    VoiceCommand.StopListening->{ports.stopStandby();end()}
+                    VoiceCommand.End->end()
+                    else->if(VoiceCommandRouter.confirmsWake(text)){
+                        firstCommandAfterPrompt=true;reply(Reply("말씀하세요."),turn)
+                    }else end()
+                }
+                return
+            }
             when(val command=VoiceCommandRouter.route(text,ports.permit().record,issueId!=null||alertId!=null)){
                 VoiceCommand.End->end()
                 VoiceCommand.StopListening->{ports.stopStandby();end()}

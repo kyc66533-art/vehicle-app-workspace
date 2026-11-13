@@ -2,7 +2,7 @@
 
 ## 현재 작업 — 홈 음성 대기·실제 Gemini 연결
 - 최신 자동화 지시와 docs/CARITDA_VOICE_AUTOMATION_ACCEPTANCE.md·CARITDA_AUTOMATION_INTEGRATION.md를 따른다. B View/라이트기본·다크선택/76dp·홈순서·초안/검색/스크롤·기존수동/Gleo/Aside를 보존한다.
-- 확정운전자·범위동의 후 홈에서 기존 commit/receipt→AI→전체TTS→후속STT를 공유한다. autoWait도 기본OFF/운전자·계정별이다. 기본은30초/전면진입최대3창이며 침묵·오류로 재시작하지 않는다. 대화5분/5발화와 구분한다. Vosk는명시opt-in실험/실제호출실패/일반APK제외다. 실제Pleos발화는사용자보류다.
+- 확정운전자·범위동의 후 홈에서 기존 commit/receipt→AI→전체TTS→후속STT를 공유한다. autoWait도 기본OFF/운전자·계정별이다. 기본은30초/전면진입최대3창이며 침묵·오류로 재시작하지 않는다. 대화5분/5발화와 구분한다. Vosk는명시opt-in실험/실제호출실패/일반APK제외다. 실제발화A→B→A를TEST에서확인했고,가있다는음성확인후증상을받는다.
 - journal v4/암호화sidecar·원문/작성자/네상태/인계를 유지하고 개인대화를 자동공유하지 않는다. STT ON_DEVICE/request/Locale.KOREA·final+실제ended·stop/release/generation,전체TTS실제DONE,앱가시·CarSafetyGate ALLOWED·오디오소유권을 지킨다. 무한STT/백그라운드감시/특권우회는 금지다.
 - Firebase/Keystore/모델ON·캐시/pending/UNKNOWN·일5/월100/서비스300/비용예약을 보존한다. 대화도같은예산/차량·위치·이름·메모자동전송금지/로컬SOC답변은AI문맥제외다. 승인2회+추가명시1회=실모델3회소진/잔여0이다. 신규승인없이재호출금지. 기존Worker비파괴3배포완료/활성37c6cab1이다.
 - validation고유fixture/prepare전분기만사용한다. 일반UI자동화/기존validation삭제/AVD·DB·백업·오디오초기화금지. 최신841DB원본비교에서일반읽음1건/updated_at변경과암호화파일차이를별도기록했다. 완전동일로확대하지않는다. SDK/Gleo/실차를구분하며GitHub연결도구·Aside보호를유지한다.
@@ -93,6 +93,7 @@
 - 실제 데이터 수신 전에는 테스트 화면에 '연결 전/지원 미확인/미수신'을 표시한다. SDK 의존성 설정, 다운로드, 컴파일, 실제 연결, Capability 응답, 실차 검증을 각각 구분한다.
 
 ## 개발 기록과 GitHub 공유
+- **병행 작업 우선:** main을 직접 변경하지 않고 작업 브랜치와 PR로 게시한다. 사용자의 새 지시 전까지 아래 main 게시 규칙보다 우선한다.
 - **상시 승인:** 사용자는 매 작업 완료 후 별도 업로드 프롬프트 없이 검증된 결과를 `kyc66533-art/vehicle-app-workspace`의 `main`에 자동 커밋·게시하도록 요청했다. 정상적인 완료 작업의 명시적 변경 파일과 보고서를 게시할 때 반복 확인을 요청하지 않는다. 설치·최초 인증·권한 확대·파괴적 작업은 별도 승인 대상이다.
 - **게시 경로 확정:** 현재는 이미 인증된 `codex_apps.github` 연결 도구를 사용한다. 로컬 Git 연결·GCM 설정·clone·push·443 포트 재시도·루트 `.git` 접근 시도는 중단한다. 사용자가 로컬 연결 재개를 명시적으로 요청하기 전에는 같은 방식으로 다시 시도하거나 인증 승인을 반복 요청하지 않는다.
 - 작업 시작 시 연결 도구로 원격 main의 HEAD·트리와 변경 대상 파일 SHA를 읽고, 로컬 파일 내용 및 기존 사용자 변경을 대조한다. 로컬 Git 상태 조회를 선행 조건으로 삼지 않는다.

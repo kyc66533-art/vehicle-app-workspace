@@ -155,10 +155,13 @@ class HomeVoiceRuntime(
         generation++;waiting=false;wake.stop();focus.release()
         if(VoiceCommandRouter.route(text,false,false)==VoiceCommand.StopListening){disable();return}
         val remaining=VoiceCommandRouter.afterWake(text)
-        if(remaining==null){blocked=true;detail="호출어를 확인하지 못해 청취를 멈췄어요.";changed();return}
+        val confirmWake=remaining==null&&VoiceCommandRouter.needsWakeConfirmation(text)
+        if(remaining==null&&!confirmWake){blocked=true;detail="호출어를 확인하지 못해 청취를 멈췄어요.";changed();return}
         try{
-            val c=ensureController();val onlyWake=remaining.isBlank()
-            if(onlyWake)c.start(announcement="말씀하세요.",prompt=true,activation=text)else c.start(firstText=text)
+            val c=ensureController()
+            if(confirmWake)c.start(announcement="카잇다를 부르셨나요? 맞으면 네라고 말씀해 주세요.",prompt=true,activation=text,confirmWake=true)
+            else if(remaining.orEmpty().isBlank())c.start(announcement="말씀하세요.",prompt=true,activation=text)
+            else c.start(firstText=text)
         }catch(_:Exception){block("대화 준비를 마치지 못했어요. 기존 기록은 그대로예요.")}
     }
     private fun stopEffects(){generation++;waiting=false;main.removeCallbacksAndMessages(null);pendingReturn=false;controller?.end();detector?.stop{changed()};wake.stop();input.stop();focus.release();playback.cancel();bridge.cancel()}

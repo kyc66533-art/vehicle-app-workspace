@@ -1,5 +1,90 @@
 # STT 자동 종료·취소 안정화
 
+## 2026-11-12 23:38 +09:00 — 실제 수동 입력 복구와 홈 호출 확인
+
+기준 main `7f913a466490664171706029a3235885558a7584`. 원격330blob/로컬 공통301파일 일치·원격 전용 연구29개 보존. 이번 실제 사용자 발화로 **수동 A → 홈 B → 수동 A**를 확인했다. 아래 과거 성공과 합산하지 않는다. 이번 Gemini 요청·Worker 배포0회.
+
+### 환경과 직접 원인
+
+| 확인 대상 | 실제 결과 | 경계 |
+| --- | --- | --- |
+| Windows 일반 사용자 PCM | 기본 입력252800bytes/RMS0.016347/peak7682, 통신용124800bytes/RMS0.017216/peak6597. open/start/close 성공·error0 | CodexSandboxOffline의 OPEN error1은 별도 계정의 접근 실패. 기본 물리 endpoint와 친숙한 장치명의 대응은 미확정 |
+| 접근·라우팅 | Windows 사용자/NonPackaged/시스템 마이크 Allow. Android RECORD_AUDIO foreground/allow, microphoneMuted=false, isClientSilenced=false, MIC/VOICE_RECOGNITION routed type15 | 권한·장치 목록만으로 파형 성공을 보증하지 않음 |
+| 복구 전 Android | 사용자가 TEST 버튼을 직접 눌러 발화했으나 PCM16/16kHz/mono160000bytes, RMS0.000014/peak2. read 음수 오류 없음 | 타이밍을 놓친 앞선 측정은 실제 발화 시험에서 제외 |
+| 에뮬레이터 설정 | hostmicon OK/hw.audioInput=yes였지만 실행 인자에 allow-host-audio 없음 | 명령 수락과 실제 음성 전달은 별도 |
+| 동일 AVD 정상 재실행 후 | allow-host-audio 옵션 명시·config SHA 동일. 실제 동일 발화 RMS0.033866/peak14958,160000bytes, silenced=false | 옵션과 장치 재초기화 각각의 기여는 분리하지 않음. 내부 결함까지 확정하지 않음 |
+| 수동 STT 복구 | Kotlin 변경 전에 실제 한국어 진단 연속2회와 Main 작성 화면 자동 반영 성공 | 피크 증가를 STT 성공으로 대신하지 않음 |
+| 남은 홈 실패 | 실제 ‘카잇다’ 발화에 최종 ‘가 있다’가 반복 수신. 기존 엄격한 호출 패턴이 거부 | 별도 어휘 인식 문제. 세션 충돌의 증거가 아님 |
+
+host audio 기본 차단·시작 옵션·토글 재시작 경계는 [Android 공식 안내](https://developer.android.com/studio/releases/emulator#improvements-for-host-audio-behavior), 캡처 정책의 무음은 [isClientSilenced 계약](https://developer.android.com/reference/android/media/AudioRecordingConfiguration#isClientSilenced()), Windows 실제 캡처는 [waveInOpen](https://learn.microsoft.com/en-us/windows/win32/api/mmeapi/nf-mmeapi-waveinopen)과 대조했다. 단순 피크 미터를 캡처 성공으로 간주하지 않았으며 원본 음성은 저장하지 않았다.
+
+### A/B 코드 관계·공유 자원
+
+| 경로 | 호출 관계 | 정상 완료/해제 |
+| --- | --- | --- |
+| A 수동 기록 | MainActivity → SpeechControls → Main 전용 SpeechInput → PleosSpeechBackend → SpeechDraftDelivery → 원래 초안 | final+실제 ended 후 동일 listener detach. 취소/이탈/오류는 generation 무효화·stop/removeListener/release |
+| B 홈 대기 | MainActivity → HomeVoiceRuntime → wake 전용 SpeechInput → activate → VoiceConversationController → 대화 전용 SpeechInput/WholeExplanationPlayback | wake 해제·focus 반환 후 TTS. 실제 전체 DONE 후 다음 STT. 홈 이탈/onStop/운전자·계정·권한·안전/OFF에서 stopEffects |
+| 수동 대화 화면 | VoiceConversationActivity → 별도 SpeechInput/같은 Controller·서비스 | onStop의 controller.end·음성/AI 해제, onDestroy의 저장소/worker 닫기 |
+
+각 SpeechInput/Backend는 별도 객체·listener다. 실제 AAR에서도 SpeechToText별 ViewModel/ServiceManager/OnDeviceStt 생성과 callback 등록/해제를 확인했다. 기반 CAAS 서비스와 물리 마이크는 공유한다. 기존 VoiceAudioOwner는 앱 프로세스 내 수동/홈/TTS 반이중 점유와 자기 소유자 해제를 보장하고 VoiceSessionOwner는 대화 중복을 막는다. 홈은 AndroidVoiceListeningFocus의 transient assistant focus를 사용하며 TTS는 SpeechOutput의 기존 focus를 쓴다. 수동 경로에 새 focus/AudioRecord를 추가하지 않았다. 다른 앱까지 잠그는 전역 소유권은 아니다.
+
+c424ec25/a9c2b29/7f913a4의 SpeechInput을 비교했다. 초기 자동화 때 owner claim/release가 추가됐고 a9 이후 홈 도입 구간에는 수동 SpeechInput 변경이 없었다. 이번 실제 교차 실행에서 충돌은 재현되지 않았다. 유사 코드·동일 SDK만으로 충돌을 확정하지 않았으며 모든 외부 전화/내비 경합이 없다는 뜻도 아니다.
+
+### 원인 확인 후 최소 수정
+
+원인과 대상3파일을 수정 전에 사용자에게 알렸다. MainActivity·SpeechInput/Backend/Output·VoiceAudioOwner·수동 초안 전달·SQLite/AI 정책은 수정하지 않았다.
+
+- VoiceCommandRouter: 관측된 **전체 문장 ‘가 있다’**만 확인 질문 후보로 구분. 정확한 카잇다/카있다 패턴 유지. ‘다 있다’·문장 일부 유사음·가 있다+증상은 자동 호출로 인정하지 않음.
+- HomeVoiceRuntime: 후보이면 “카잇다를 부르셨나요? 맞으면 네라고 말씀해 주세요.”로 기존 제어기에 연결.
+- VoiceConversationController: 실제 final+ended의 네/예/맞아요 뒤 “말씀하세요.”를 읽고 실제 DONE 후 **별도 증상**을 받음. 부정·모호한 답·확인 대신 말한 증상은 기록/AI 없이 종료. 5분/5발화·취소·generation 유지.
+- 새 HomeWakeConfirmationChecks와 runner의 prepare 전 분기: 위 경계14개를 격리 검사. 일반 앱에 측정 UI/새 엔진을 넣지 않음.
+
+이는 **전면의 제한된 Pleos STT 대기와 음성 확인**이다. SDK 호출어 어휘 자체를 수정한 것이 아니며 독립 엔진·백그라운드 호출·외부 Gleo 성공이 아니다.
+
+### 실제 발화·자동 검사 구분
+
+| 검사 | 결과 | 범위 |
+| --- | --- | --- |
+| 실제 한국어 진단 연속2회 | PASS | PLEOS_ON_DEVICE READY→STARTED/PARTIAL→ENDED→FINAL→COMPLETE. 두 번째 요청은 SDK 재사용 |
+| 실제 Main 수동 자동 반영 | PASS | 홈 대기 OFF·사용자 발화/자동 종료/입력란 확인. 짧은 결과와 다음 전체 문장은 별도 입력 |
+| 수정 전 실제 홈 호출 | FAIL | 최종 가 있다/엄격한 패턴 불일치, 새 문제0 |
+| 수정 후 홈 호출→확인→증상→저장 | PASS | 첫 답 ‘그래’는 저장 없이 종료. 다시 가 있다→네→말씀하세요→실제 증상→1건/receipt1. 같은 운전자/revision1/UNRESOLVED·사용자 청취 확인 |
+| 실제 TTS→후속 STT | PASS | 실제 전체 DONE 뒤 다음 READY. 홈 대화 playback DONE4 |
+| 실제 “음성 대기 꺼 줘” | NOT_TESTED | 사용자 종료 응답은 있으나 해당 final은 없고 RECOGNITION_TIMEOUT/END_UNCONFIRMED. 음성 OFF 성공으로 계산하지 않음 |
+| 설정 OFF·화면 이동 후 해제 | PASS | TEST 설정 OFF·AppOp running=false·CARITDA focus 없음·CAAS 마지막 캡처 stop. 다른 UID의 시스템 ai.umos.ambientai HOTWORD_TAP은 별도로 구분 |
+| 마지막 A 재실행 | PASS | 같은 Main/UUID에서 실제 한국어 final+ended/COMPLETE·입력란 사용자 확인. 미저장 입력은 초안으로 보존 |
+| 확인 분기14+관련 기존318 | PASS | 합계332 assertion, 합성과 실제 SDK를 아래 구분 |
+| 일반 앱 이번 사용자 발화 | NOT_TESTED | 사람 시험은 별도 validation의 같은 Main/SDK 소스에서 실행 |
+| 물리 전화/내비 포커스·주행·권한 철회·실차 | NOT_TESTED | 상태/포커스/권한/안전 fixture 성공으로 대체하지 않음 |
+
+관련318 = STT상태40+홈29+자동화72+실제 SDK READY/취소/재연결 UI6+실제 전체 TTS3+음성 UI17+DB19+Gleo 내부37+단일AI56+인계35/cold4. 합성 callback을 사용한 항목을 실제 발화/실모델로 세지 않는다. Gleo 내부 계약과 외부 실행도 별도다. 전체477/Worker198 무조건 반복은 하지 않았다.
+
+Debug/Validation/ValidationAndroidTest/Lint/Unit 작업 BUILD SUCCESSFUL2분31초, TEST 이름만 바로잡은 AndroidTest 재빌드1분4초. Lint0오류67경고. Unit NO-SOURCE는 성공 건수가 아니다. 무발화 독립 SDK 진단은 INITIALIZED→LISTENER_ADDED→REQUEST→READY→STOP, 오류NONE/final·ended없음으로 별도 기록했다. [공식 listener](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/SpeechToText/result-listeners)·[request/stop](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/SpeechToText/start-and-stop)·[한국어 locale](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/SpeechToText/set-locale) 계약과 대조했으며 타이머/stop으로 임의 final·ended·DONE을 만들지 않는다.
+
+### 데이터 보존
+
+시작 일반44DB/2667행+validation981DB/14356행=**1025DB/17023원본행**. 종료 사본과 원본행 다중집합·schema/index/view/trigger·version·integrity/FK를 전수 비교해 보존했다. 일반 문제25/이벤트100/운전자10/초안0 불변. 일반 업데이트 전에는125행, 업데이트/실행 후 최종 사본은 관측128·스냅샷5·파생 인사이트10·SOC평가13/공백3, 총159행 추가다. 기존 행 변경은 없지만 DB 전체 바이트 동일이라고 주장하지 않는다.
+
+validation 기존981DB/14356행 변경0·새 고유 fixture DB50개. 실제 사용자 시험 UUID에 수동 저장1/자동 저장1과 마지막 수동 초안이 있다. 홈 세션2개 최종 ENDED·issue/receipt/암호화 본문 보존·Gemini operation0. 일반 files/prefs는 업데이트 전17개 동일, 최종15개 동일/2개 변경(Firebase heartbeat·설치 표시)이다. 기존 인증/AI 캐시 파일은 동일하다. validation419개 동일/6개 변경(heartbeat·진단/fixture 포인터·격리 AI 캐시·설치 표시). 백업/개인 로그/SDK 원문/DB는 공유하지 않는다.
+
+일반 APK는 기존 인증서 일치를 확인한 뒤 install-r로 교체했다. 설치 내용 SHA256 `263b11576c6c1aeea4a67e97cefa1a4950f098c90797866c52d3260ea27ed7ef`와 빌드 산출물이 일치하고 Main 실행/resumed가 성공했다. 일반 UI 버튼 자동 조작0/새 문제0, 실제 사람 발화는 TEST 결과로만 보고한다. Vosk 모델/lib는 일반 APK에 없다.
+
+설치 직후 **가동 중 tar 사본**에서는 observations_recent 인덱스 무결성 검사가 실패했다. 원본을 수리/재색인하지 않고 일반 앱의 쓰기를 중단한 뒤 새 사본을 만들자 전체1025DB의 원본행·무결성 검사가 통과했다. DB와 WAL의 비원자 복사 영향으로 판단하며 실패 사본도 보존했다. 이 실패를 조용히 성공 처리하거나 원본 DB 손상으로 확정하지 않는다.
+
+검증된 명시11파일의 GitHub 연결 도구 게시 시도는 `user cancelled MCP tool call`로 중단했다. 새 main 커밋은 없으며 이후 원격 `7f913a466490664171706029a3235885558a7584` 불변을 읽기 확인했다. 같은 요청을 재시도하거나 다른 게시 경로로 우회하지 않았다. 로컬 수정/문서와 일반 APK 업데이트는 보존된다.
+
+### 공식 자료 선택 재검토·제출 위험
+
+이전 웹 원문 snapshot이 없어 ‘오늘 변경’으로 확정하지 않는다. 현재 공식 내용과 구현의 차이를 다음처럼 재확인했다.
+
+1. [개발 안내](https://appdevchallenge.auto-hmg.io/guide/development)의 Android API28+/Gradle8+/Kotlin·Java와 현재 min28/Gradle8.11.1이 맞는다. [Vehicle 공식 샘플 가이드](https://document.pleos.ai/docs/pleos-only/tutorial/vehicle-sdk-sample-app)의 min23은 공모전 조건을 낮추는 근거가 아니다. SDK2.3.2/AVD2.1은 실제 프로젝트와 대조했다.
+2. [공식 release note](https://document.pleos.ai/docs/pleos-only/release-note/sdk-release-note)의 STT/TTS3.3.1과 initialize listener/ErrorType/Locale 사용이 일치한다. 영문/국문 표 Fused1.1.2/1.1.3 차이는 있으나 표만 보고 현재1.1.3을 내리지 않았다. [Vehicle](https://github.com/Pleos-Playground/pleos-sample-vehicle-app)·[Navi](https://github.com/Pleos-Playground/pleos-sample-navi-app)·[Fused](https://github.com/Pleos-Playground/pleos-sample-fusedlocation-app) 공식 샘플의 의존성·권한·초기화 분리를 비교했으며 STT 공식 샘플이라고 보고하지 않는다.
+3. [STT 소개](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/SpeechToText/intro)의 ON_DEVICE는 기기 내 음성 변환이다. 호출/저장/명령 판단은 앱 책임이다. [Playground](https://developers.pleos.ai/playground)의 Gleo 소개는 일반 APK 독립 호출어 권한의 승인이 아니다. 새 일반 앱용 wake API는 확인하지 못했고 특권 API를 호출하지 않았다.
+4. [제출 안내](https://appdevchallenge.auto-hmg.io/guide/submission)·[FAQ](https://appdevchallenge.auto-hmg.io/faq)·[규정](https://appdevchallenge.auto-hmg.io/guide/rules)의 접수 마감은 **2026-11-15 23:59**다. 서명 신청서/기획서가 필요하며 1차 영상/GitHub/APK 선택 평가 자료와 이후 실행 앱 의무를 구분한다. APK 제출 시 안내된 release 경로·SHA와 심사자 접근 조건을 준비해야 한다. README의 Debug/Release 미완료 표시는 맞으며 이번 변경의 Release 서명·제출본 검증은 하지 않았다. 공개 전환 또는 대체 다운로드 조건도 공식 안내를 따라야 한다.
+5. [심사 기준](https://appdevchallenge.auto-hmg.io/guide/judging-awards)의 차량 필요성·운전자 불편·구현성 관점에서, 공동 운전자 인계/수정·점검 이력/실제 SDK 관측 연결이 CARITDA의 차량 활용 근거다. 단순 Gemini 대화만으로 상용 비서 대비 우월성을 입증한 것은 아니다. 기획의 시동/종료 후 감시·원격 가족 공유·자동 고장 판정은 현재 정차/전면/로컬 범위와 다르므로 실제 시연 성과에 포함하지 않는다.
+
+접수 전 **P0**: 같은 AVD host audio 실행 확인, 수동 대체 경로 유지, 홈의 제한 대기/확인 질문·실제 OFF 동작 구분, 기획서/영상과 검증 범위 일치, Release/심사 접근 준비. **P1**: 외부 Gleo/PTT·독립 장시간 호출어·전화/내비 경합·실차. 안정 시연 가능성은 확인된 정차·전면·수동/확인형 홈으로 한정한 엔지니어링 판단이며 심사 결과 보장이 아니다.
+
 ## 2026-11-11 15:46 +09:00 — 일반 앱 음성 초안 자동 반영
 
 공식 ON_DEVICE/request/Locale.KOREA와 자동 종료 수명주기는 그대로 유지했습니다. MainActivity의 인식 후 확인 AlertDialog만 제거하고 `SpeechDraftDelivery`로 최종/실제 ended 이후 원래 입력란에 한 번 추가합니다. 직접 수정·명시적 기록 저장은 유지합니다. 취소/빈 문장/다른 초안·작성자/동시 편집/늦은 callback은 원문을 덮어쓰지 않습니다.

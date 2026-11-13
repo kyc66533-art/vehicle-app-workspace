@@ -151,6 +151,8 @@ class DriveCheckP0Checks(private val inst:Instrumentation){
         val nav=main{InspectionNavigation(a,{created++;fake},30000){true}}
         try{
             click("driver_${author.id}");click("start_driving");click("all_issues");click("issue_${issue.id}");click("issue_summary")
+            verify(main{a.window.decorView.findViewWithTag<Button>("repair_nearby_search")?.isEnabled==true},
+                "P042 nearby repair lookup is the primary explicit action on the actual consultation View")
             main{a.javaClass.getDeclaredField("navigation\$delegate").apply{isAccessible=true}.set(a,lazy{nav})}
             click("inspection_navigation")
             main{dialog().window!!.decorView.findViewWithTag<EditText>("navigation_name").setText("직접 확인한 장소");dialog().window!!.decorView.findViewWithTag<EditText>("navigation_latitude").setText("NaN");dialog().window!!.decorView.findViewWithTag<EditText>("navigation_longitude").setText("127.0");dialog().getButton(AlertDialog.BUTTON_POSITIVE).performClick()}

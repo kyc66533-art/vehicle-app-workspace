@@ -8,11 +8,12 @@ import android.view.View
 object ValidationUiActions {
     fun reveal(inst:Instrumentation,a:Activity,key:String){
         ValidationEnvironment.requireIsolated(inst.targetContext)
+        // The B light UI has no hidden menu/nav_* Views: routes follow the visible buttons (BLightTestNavigation).
+        if(key !in setOf("memo","select_snapshot","discovered_at"))BLightTestNavigation.prepare(inst,a,key)
         inst.runOnMainSync {
             if(a.window.decorView.findViewWithTag<View>(key)!=null)return@runOnMainSync
             val opener=when(key){
                 "memo","select_snapshot","discovered_at"->"record_extras"
-                "my_issues","auto_snapshots","help","change_driver","vehicle_settings","nav_ISSUES","nav_VEHICLE"->"menu"
                 else->null
             }
             opener?.let{

@@ -19,7 +19,13 @@ class AnalyticsChecks(private val inst:Instrumentation){
     private fun <T> main(f:()->T):T{var v:T?=null;var err:Throwable?=null;inst.runOnMainSync{try{v=f()}catch(t:Throwable){err=t}};err?.let{throw it};@Suppress("UNCHECKED_CAST")return v as T}
     private fun await(s:String,seconds:Int=30,f:()->Boolean){val end=System.currentTimeMillis()+seconds*1000;while(System.currentTimeMillis()<end){if(f())return;Thread.sleep(100)};error(s)}
     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
-    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error(k);check(v.isEnabled);v.performClick()};inst.waitForIdleSync()}
+    private fun click(a:MainActivity,k:String){
+        // The B light UI has no hidden nav_*/menu Views: BLightTestNavigation follows the real visible buttons instead.
+        val routed=BLightTestNavigation.prepare(inst,a,k);inst.waitForIdleSync()
+        if(routed)return
+        // The local JSON preview tool lives on the app-information (LOAD_DETAIL) screen inside a folded section: follow the real buttons there.
+        if(k=="analysis_ai"&&main{tag(a,k)==null}){click(a,"nav_VEHICLE");click(a,"load_details");if(main{tag(a,"analysis_preview_tool")==null})click(a,"developer_info");if(main{tag(a,k)==null})click(a,"analysis_preview_tool")}
+        main{val v=tag(a,k)?:error(k);check(v.isEnabled);v.performClick()};inst.waitForIdleSync()}
     private fun nodes(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{nodes(v.getChildAt(it))}else emptyList()
     private fun text(a:MainActivity)=main{nodes(a.window.decorView).filterIsInstance<TextView>().joinToString("\n"){it.text.toString()}}
     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
@@ -95,9 +101,9 @@ class AnalyticsChecks(private val inst:Instrumentation){
         click(activity,"nav_VEHICLE");val count=raw.refs().size;click(activity,"soc_notices")
         verify(text(activity).contains("최근 충전량")&&main{tag(activity,"soc_current_value")!=null&&tag(activity,"soc_history")!=null},"UI latest actual SOC separate from collapsed historical episodes")
         click(activity,"back");click(activity,"vehicle_analytics");await("automatic worker report"){main{tag(activity,"analysis_statistics")!=null}}
-        verify(main{tag(activity,"analysis_chart")?.contentDescription?.isNotBlank()==true}&&text(activity).contains("AI 모델 응답이 아니에요"),"UI actual SDK chart has text alternative and honest local explanation")
+        verify(main{tag(activity,"analysis_chart")?.contentDescription?.isNotBlank()==true}&&text(activity).contains("AI가 쓴 글이 아니에요"),"UI actual SDK chart has text alternative and honest local explanation")
         click(activity,"analysis_ODOMETER");await("ODO chart"){text(activity).contains("최근 수신 누적거리")};verify(text(activity).contains("0 km"),"UI real valid zero-distance is not missing data")
-        click(activity,"analysis_EV_SOC");click(activity,"analysis_ai");verify(text(activity).contains("외부로 전송하지 않아요")&&main{tag(activity,"ai_payload_preview")!=null},"UI AI preview discloses payload and unavailable actual connection")
+        click(activity,"analysis_EV_SOC");click(activity,"analysis_ai");verify(text(activity).contains("밖으로 보내지 않아요")&&main{tag(activity,"ai_payload_preview")!=null},"UI AI preview discloses payload and unavailable actual connection")
         click(activity,"ai_consent");click(activity,"ai_cancel");verify(raw.refs().size==count,"UI consent cancel and chart navigation never trigger SDK reads")
         shot("chart-light");main{activity.getPreferences(0).edit().putString("theme","dark").commit()};click(activity,"nav_VEHICLE");click(activity,"vehicle_analytics");await("dark chart"){main{tag(activity,"analysis_chart")!=null}};shot("chart-dark")
         matrix(activity)

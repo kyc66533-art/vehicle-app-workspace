@@ -34,6 +34,7 @@ class MvpScenarioInstrumentation : Instrumentation() {
         val result = Bundle()
         try {
             ValidationEnvironment.requireIsolated(targetContext)
+            if(argumentsBundle?.getString("readabilityUiOnly")=="true"){val lines=ReadabilityUiChecks(this).run();result.putString("stream","CARITDA_READABILITY_UI_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("inspectionSearchRouteOnly")=="true"){val lines=InspectionSearchLiveChecks(this).watchSelectedRoute(argumentsBundle?.getString("inspectionSearchShop").orEmpty());result.putString("stream","CARITDA_INSPECTION_SEARCH_ROUTE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("inspectionSearchOnly")=="true"){val lines=InspectionSearchChecks(this).run();result.putString("stream","CARITDA_INSPECTION_SEARCH_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}
             if(argumentsBundle?.getString("inspectionSearchLiveOnly")=="true"){val lines=InspectionSearchLiveChecks(this).run();result.putString("stream","CARITDA_INSPECTION_SEARCH_LIVE_PASS checks=${lines.count{it.startsWith("PASS ")}}\n${lines.joinToString("\n")}");finish(Activity.RESULT_OK,result);return}

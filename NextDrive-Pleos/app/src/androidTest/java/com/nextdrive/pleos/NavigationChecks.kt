@@ -22,7 +22,7 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
     private fun finish(a:MainActivity){main{a.finish()};instrumentation.waitForIdleSync()}
     private fun tag(a:MainActivity,key:String):View?=a.window.decorView.findViewWithTag(key)
-    private fun click(a:MainActivity,key:String){ValidationUiActions.reveal(instrumentation,a,key);main{val view=tag(a,key)?:error("Missing $key");check(view.isEnabled){"Disabled $key"};check(view.performClick())};instrumentation.waitForIdleSync()}
+    private fun click(a:MainActivity,key:String){val routed=BLightTestNavigation.prepare(instrumentation,a,key);instrumentation.waitForIdleSync();if(routed)return;main{val view=tag(a,key)?:error("Missing $key");check(view.isEnabled){"Disabled $key"};check(view.performClick())};instrumentation.waitForIdleSync()}
     private fun select(a:MainActivity,id:String){await("driver $id input allowed"){main{tag(a,"driver_$id")?.isEnabled==true}};click(a,"driver_$id");click(a,"start_driving")}
     private fun text(a:MainActivity)=main{
         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
@@ -62,12 +62,15 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
         val scroll=main{tag(a,"screen_scroll") as ScrollView}
         main{scroll.fullScroll(View.FOCUS_DOWN)};instrumentation.waitForIdleSync()
         val oldY=main{scroll.scrollY};val homeY=main{tag(a,"nav_HOME")!!.getLocationOnScreen(IntArray(2)).let{tag(a,"nav_HOME")!!.top}}
-        verify(main{var parent=tag(a,"navigation_bar")!!.parent;var nested=false;while(parent is View){if(parent is ScrollView)nested=true;parent=parent.parent};!nested&&tag(a,"nav_HOME")!!.getGlobalVisibleRect(Rect())},"N09 home navigation remains visible outside scrolling body")
+        // B light record list: the header scrolls with the long list by design; it must be inside the body and visible again at the top.
+        main{scroll.scrollTo(0,0)};instrumentation.waitForIdleSync()
+        verify(main{var parent=tag(a,"navigation_bar")!!.parent;var nested=false;while(parent is View){if(parent is ScrollView)nested=true;parent=parent.parent};nested&&(tag(a,"nav_HOME")?:tag(a,"settings_help"))!!.getGlobalVisibleRect(Rect())},"N09 record list header scrolls with the list and is visible again at the top")
+        main{scroll.scrollTo(0,oldY)};instrumentation.waitForIdleSync()
         click(a,"issue_${target.id}");click(a,"back")
         await("previous list scroll restored"){main{(tag(a,"screen_scroll") as ScrollView).scrollY==oldY}}
         verify(main{(tag(a,"record_search") as EditText).text.toString()=="꼬리검색" && (tag(a,"filter_ALL") as Button).text.startsWith("✓") && tag(a,"nav_HOME")!!.top==homeY},"N10 detail previous restores search filter and scroll without moving fixed home")
         search(a,"절대없는검색어")
-        verify(text(a).contains("결과 0건")&&text(a).contains("조건에 맞는 기록이 없어요")&&!text(a).contains("아직 남긴 기록이 없어요"),"N11 zero query results are distinct from an empty database")
+        verify(text(a).contains("0건 · 검색")&&text(a).contains("조건에 맞는 기록이 없어요")&&!text(a).contains("아직 남긴 기록이 없어요"),"N11 zero query results are distinct from an empty database")
         click(a,"reset_conditions")
         verify(main{(tag(a,"record_search") as EditText).text.isEmpty()&&tag(a,"issue_${other.id}")!=null},"N12 reset clears query and status scope together")
         click(a,"issue_${target.id}");click(a,"help");click(a,"nav_HOME")
@@ -149,7 +152,7 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
                     root.layoutParams=root.layoutParams.apply{this.width=(width*a.resources.displayMetrics.density).toInt();height=(320*a.resources.displayMetrics.density).toInt()};root.requestLayout()
                 };instrumentation.waitForIdleSync()
                 click(a,"help");click(a,"nav_HOME");instrumentation.waitForIdleSync()
-                main{check(tag(a,"nav_HOME")!!.getGlobalVisibleRect(Rect()));check((tag(a,"screen_scroll") as ScrollView).height>0)}
+                main{check((tag(a,"nav_HOME")?:tag(a,"settings_help"))!!.getGlobalVisibleRect(Rect()));check((tag(a,"screen_scroll") as ScrollView).height>0)}
             }
             verify(true,"N28 fixed home and usable scroll remain in six low-height width font combinations")
         }finally{

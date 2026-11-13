@@ -12,8 +12,8 @@ data class VehicleAnalysis(val kind:String,val since:Long,val until:Long,val poi
     val delta:Double? get()=points.takeLast(2).takeIf{it.size==2&&it[0].segment==it[1].segment}?.let{it[1].number-it[0].number}
     val stale get()=latest?.let{until-it.at>=600000}?:true
     val unit get()=if(kind=="EV_SOC")"%"else"km"
-    val textSummary:String get()=if(points.isEmpty())"분석할 수 있는 수신값이 없어요."else
-        "유효 관측 ${points.size}개 · 처음 ${fmt(values.first())}$unit · 최근 ${fmt(values.last())}$unit\n최소 ${fmt(values.min())}$unit · 최대 ${fmt(values.max())}$unit · 관측값 평균 ${fmt(values.average())}$unit"
+    val textSummary:String get()=if(points.isEmpty())"그래프로 그릴 값이 아직 없어요."else
+        "받은 값 ${points.size}개 · 처음 ${fmt(values.first())}$unit · 최근 ${fmt(values.last())}$unit\n가장 낮은 값 ${fmt(values.min())}$unit · 가장 높은 값 ${fmt(values.max())}$unit · 받은 값 평균 ${fmt(values.average())}$unit"
     companion object {fun fmt(n:Double)=java.math.BigDecimal.valueOf(n).setScale(2,java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()}
 }
 
@@ -50,17 +50,17 @@ object VehicleAnalytics {
             if(discontinuity){count("비교 불가·관측 공백");segment++;changed=null;run.clear()}
             val p=AnalysisPoint(ref,at,n,segment);points.add(p)
             if(now-at>=GAP_MS)count("오래된 수신 이력")
-            if(discontinuity&&old!=null)emit("GAP",old,p,"비교하기 어려운 구간이 있어요.","세션·출처가 다르거나 관측이 중단됐어요. 선을 이어 변화로 해석하지 않아요.","수신 시각과 출처를 확인해 주세요.")
+            if(discontinuity&&old!=null)emit("GAP",old,p,"이어서 비교하기 어려운 부분이 있어요.","받는 중간에 끊겼거나 받은 곳이 달랐어요. 그래서 선을 이어 변화라고 보지 않아요.","언제, 어디서 받은 값인지 확인해 주세요.")
             val prev=if(!discontinuity)old else null
             if(prev!=null){
                 val d=n-prev.number
                 if(d==0.0)count("같은 값 반복 수신") else {
                     val base=changed?:prev
-                    emit("CHANGE",base,p,"이전 수신값보다 ${if(d>0)"높아졌어요."else"낮아졌어요."}","${VehicleAnalysis.fmt(prev.number)} → ${VehicleAnalysis.fmt(n)} ${if(kind=="EV_SOC")"%"else"km"} · 변화 ${VehicleAnalysis.fmt(d)}${if(kind=="EV_SOC")"%p"else"km"}","최근 값과 실제 차량 표시를 함께 확인해 주세요.",d)
-                    if(kind=="EV_SOC"&&abs(d)>=SOC_CHANGE_CANDIDATE)emit("LARGE_CHANGE",base,p,"큰 수치 변화가 관측됐어요.","${VehicleAnalysis.fmt(d)}%p 차이예요. 20%p 이상이라는 탐색 기준이며 고장 기준이 아니에요.","에뮬레이터 조작·수신 공백·실제 상태 변화 여부를 확인해 주세요.",d)
+                    emit("CHANGE",base,p,"바로 전에 받은 값보다 ${if(d>0)"높아졌어요."else"낮아졌어요."}","${VehicleAnalysis.fmt(prev.number)} → ${VehicleAnalysis.fmt(n)} ${if(kind=="EV_SOC")"%"else"km"} · 변화 ${VehicleAnalysis.fmt(d)}${if(kind=="EV_SOC")"%p"else"km"}","차에 보이는 표시와 함께 확인해 주세요.",d)
+                    if(kind=="EV_SOC"&&abs(d)>=SOC_CHANGE_CANDIDATE)emit("LARGE_CHANGE",base,p,"수치가 많이 바뀌었어요.","${VehicleAnalysis.fmt(d)}%p 차이예요. 20%p 이상 차이를 알리는 비교 기준이며 고장 판정은 아니에요.","테스트 조작이나 값을 못 받은 시간 때문인지, 실제로 바뀐 건지 확인해 주세요.",d)
                     if(run.size>=2&&(run.last().number-run[run.lastIndex-1].number)*d<0)run.clear()
                     if(run.isEmpty())run.add(prev);run.add(p)
-                    if(run.size>=3)emit("TREND",run.first(),p,"연속 수신값이 ${if(d>0)"올라갔어요."else"내려갔어요."}","서로 비교 가능한 세 값 이상이 같은 방향이에요. 운행 효율이나 고장 추정은 아니에요.","관측 기간과 출처를 확인해 주세요.",p.number-run.first().number)
+                    if(run.size>=3)emit("TREND",run.first(),p,"연달아 받은 값이 ${if(d>0)"올라갔어요."else"내려갔어요."}","비교할 수 있는 값 세 개 이상이 같은 방향이에요. 연비나 고장을 말하는 건 아니에요.","언제, 어디서 받은 값인지 확인해 주세요.",p.number-run.first().number)
                     changed=p
                 }
             }

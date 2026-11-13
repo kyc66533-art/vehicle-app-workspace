@@ -24,7 +24,7 @@ class DesignChecks(private val inst:Instrumentation){
     private fun <T> main(f:()->T):T{var value:T?=null;var failure:Throwable?=null;inst.runOnMainSync{try{value=f()}catch(t:Throwable){failure=t}};failure?.let{throw it};@Suppress("UNCHECKED_CAST")return value as T}
     private fun await(label:String,f:()->Boolean){val end=System.currentTimeMillis()+25000;while(System.currentTimeMillis()<end){if(f())return;Thread.sleep(80)};error(label)}
     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
-    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled);check(v.performClick())};inst.waitForIdleSync()}
+    private fun click(a:MainActivity,k:String){val routed=BLightTestNavigation.prepare(inst,a,k);inst.waitForIdleSync();if(routed)return;main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled);check(v.performClick())};inst.waitForIdleSync()}
     private fun nodes(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{nodes(v.getChildAt(it))}else emptyList()
     private fun text(a:MainActivity)=main{nodes(a.window.decorView).filterIsInstance<TextView>().filter{it.visibility==View.VISIBLE}.joinToString("\n"){it.text.toString()}}
     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
@@ -39,20 +39,21 @@ class DesignChecks(private val inst:Instrumentation){
         var a=launch();await("input allowed"){main{tag(a,"driver_A")?.isEnabled==true}}
         click(a,"driver_A");click(a,"start_driving")
         await("real entry SDK complete"){obs.latest(3).size==3&&snapshots.latest()!=null}
-        verify(main{listOf("metric_EV_SOC","metric_ODOMETER","attention_card","all_issues","new_issue").all{tag(a,it)!=null}},"PX01 home has separate metrics one attention region and two main actions")
-        verify(main{tag(a,"change_driver")==null&&tag(a,"help")==null}&&!text(a).contains("Capability")&&!text(a).contains("세션 ID")&&!text(a).contains("스냅샷"),"PX02 technical details and name administration do not occupy home")
+        verify(main{listOf("vehicle_health","all_issues","new_issue","voice_conversation").all{tag(a,it)!=null}&&tag(a,"metric_EV_SOC")==null},"PX01 home has three plain entry cards (vehicle status, records, new problem) and no raw metric rows")
+        verify(main{tag(a,"help")==null}&&!text(a).contains("Capability")&&!text(a).contains("세션 ID")&&!text(a).contains("스냅샷"),"PX02 technical details and name administration do not occupy home")
         val count=obs.refs().size
         repeat(3){click(a,"nav_HOME")}
         Thread.sleep(1200)
         verify(obs.refs().size==count,"PX03 rendering and fixed home never fetch another SDK batch")
         screenshot("home-light")
         click(a,"menu")
-        verify(main{listOf("change_driver","help","my_issues","auto_snapshots").all{tag(a,it)!=null}},"PX04 secondary destinations are explicit menu items")
-        click(a,"menu");click(a,"nav_VEHICLE")
+        verify(main{listOf("manage_drivers","vehicle_settings","help","replay_guide","app_technical").all{tag(a,it)!=null}},"PX04 secondary destinations are explicit settings rows")
+        click(a,"nav_VEHICLE")
         await("refresh enabled"){main{tag(a,"read_vehicle")?.isEnabled==true}}
         verify(text(a).contains("배터리 충전량")&&text(a).contains("누적 주행거리")&&text(a).contains("에뮬레이터에서 받은 값")&&!text(a).contains("Capability"),"PX05 vehicle overview shows actual meaning unit time and source without raw code")
         repeat(4){click(a,"read_vehicle");await("manual SDK batch complete"){main{tag(a,"read_vehicle")?.isEnabled==true}}}
         val latest=snapshots.latest()!!
+        click(a,"auto_snapshots") // query history now lives on its own screen behind the vehicle screen button
         verify(main{nodes(a.window.decorView).count{it.tag?.toString()?.matches(Regex("snapshot_[0-9a-f-]{36}"))==true}==3},"PX06 initial history preview is limited to three real query rows")
         verify(text(a).contains("같은 값 다시 확인"),"PX07 unchanged real reads are described as repeat queries not physical failure")
         click(a,"all_vehicle_history")
@@ -70,7 +71,7 @@ class DesignChecks(private val inst:Instrumentation){
         verify(main{tag(a,"memo")==null&&tag(a,"select_snapshot")==null&&tag(a,"save_issue")!=null&&tag(a,"type_NOISE")!=null},"PX11 basic symptom input does not require optional metadata")
         main{(tag(a,"situation") as EditText).setText("새 소음이 들려요.")};val id=repo.draft()!!.id
         click(a,"save_issue")
-        verify(repo.issue(id)?.situation=="새 소음이 들려요."&&main{tag(a,"change_status")!=null&&(tag(a,"feedback") as TextView).text.contains("저장되었습니다")},"PX12 short input commits once and opens a clear detail with persistent success")
+        verify(repo.issue(id)?.situation=="새 소음이 들려요."&&main{tag(a,"issue_actions")!=null&&(tag(a,"feedback") as TextView).text.contains("저장되었습니다")},"PX12 short input commits once and opens a clear detail with persistent success")
         screenshot("record-detail")
         click(a,"nav_HOME");click(a,"new_issue");click(a,"type_VIBRATION")
         main{(tag(a,"situation") as EditText).setText("저속에서 떨림이 느껴져요.")}
@@ -82,8 +83,8 @@ class DesignChecks(private val inst:Instrumentation){
         verify(main{tag(a,"linked_snapshot")!=null}&&snapshots.linked(draft.id)?.id==selected,"PX14 local consultation still includes the immutable evidence link")
         click(a,"nav_HOME");click(a,"all_issues")
         main{(tag(a,"record_search") as EditText).setText("핸들")};click(a,"apply_search")
-        click(a,"issue_${issue.id}");click(a,"help");click(a,"close_help");click(a,"back")
-        verify(main{(tag(a,"record_search") as EditText).text.toString()=="핸들"&&tag(a,"issue_${issue.id}")!=null},"PX15 help and previous restore the search context")
+        click(a,"issue_${issue.id}");click(a,"back")
+        verify(main{(tag(a,"record_search") as EditText).text.toString()=="핸들"&&tag(a,"issue_${issue.id}")!=null},"PX15 previous restores the search context")
         click(a,"nav_HOME");click(a,"new_issue");main{(tag(a,"situation") as EditText).setText("안전 제한 동안 보존할 초안")}
         val before=repo.issues().size;val oldSave=main{tag(a,"save_issue")!!}
         main{inst.callActivityOnStop(a);oldSave.performClick()}
@@ -118,7 +119,9 @@ class DesignChecks(private val inst:Instrumentation){
             views.filterIsInstance<TextView>().filter{it.layout!=null}.forEach{v->for(i in 0 until v.layout.lineCount)check(v.layout.getEllipsisCount(i)==0){"Ellipsis ${v.tag}"}}
             check((tag(a,"screen_scroll")?.height?:0)>=76*a.resources.displayMetrics.density){"No usable scroll viewport"}
             val nav=tag(a,"navigation_bar")!!;val before=Rect();nav.getGlobalVisibleRect(before)
-            (tag(a,"screen_scroll") as ScrollView).scrollTo(0,5000);val after=Rect();nav.getGlobalVisibleRect(after);check(before==after){"Navigation scrolls away"}
+            (tag(a,"screen_scroll") as ScrollView).scrollTo(0,5000);val after=Rect();nav.getGlobalVisibleRect(after);val scrolls=generateSequence(nav.parent){it.parent}.any{it is ScrollView};val shortWindow=(tag(a,"screen_scroll")!!.parent as View).height/a.resources.displayMetrics.density<480||a.resources.configuration.fontScale>=1.5f
+            // By design the header scrolls with the body only on short windows (and record/list screens); elsewhere it must stay put.
+            check(before==after||(scrolls&&(shortWindow||tag(a,"record_search")!=null||tag(a,"situation")!=null))){"Navigation scrolls away"}
         };renders++}
         try{
             for(mode in listOf("light","dark"))for(scale in listOf(1f,1.5f,2f))for(width in listOf(320,600,1024)){
@@ -145,7 +148,7 @@ class DesignChecks(private val inst:Instrumentation){
             root.layoutParams=root.layoutParams.apply{width=oldWidth;height=oldHeight};root.requestLayout()
         }}
         inst.waitForIdleSync();click(a,"nav_HOME")
-        verify(main{tag(a,"test_banner")!=null&&tag(a,"nav_HOME")!=null},"PX19 TEST identity and app home survive every tested layout")
+        verify(main{tag(a,"test_banner")!=null&&tag(a,"settings_help")!=null},"PX19 TEST identity and app home survive every tested layout")
         try{
             for(mode in listOf("light","dark")){
                 main{check(prefs.edit().putString("theme",mode).commit())}

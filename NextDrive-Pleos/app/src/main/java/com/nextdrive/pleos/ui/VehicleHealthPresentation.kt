@@ -9,6 +9,11 @@ object VehicleHealthPresentation {
         "차량 안내·페달" to listOf("ENGINE_OIL","BRAKE_FLUID","WASHER_LOW","POWER_DOWN","BRAKE_PEDAL"),
         "타이어 안내 기준" to listOf("TIRE_LIMIT_FL","TIRE_LIMIT_FR","TIRE_LIMIT_RL","TIRE_LIMIT_RR"))
     fun quality(q:ReadingQuality)=when(q){ReadingQuality.CURRENT->"수신됨";ReadingQuality.STALE->"오래된 정보";ReadingQuality.UNSUPPORTED->"미지원";ReadingQuality.PERMISSION_DENIED->"권한 필요";ReadingQuality.FAILED->"수신 실패";ReadingQuality.INVALID->"확인하지 못함";ReadingQuality.NOT_RECEIVED->"미수신"}
+    /** One line for a collapsed group heading, e.g. "4개 · 모두 오래된 정보". */
+    fun summary(list:List<DriveCheckReading>):String {
+        val qualities=list.map{it.quality}.distinct()
+        return "${list.size}개 · "+if(qualities.size==1)"모두 "+quality(qualities.first())else"눌러서 보기"
+    }
     fun compact(v:DriveCheckReading):String {
         val value=when{
             v.receivedAt==null->""

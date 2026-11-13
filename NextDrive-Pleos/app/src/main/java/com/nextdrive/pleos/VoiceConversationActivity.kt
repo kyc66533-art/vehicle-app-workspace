@@ -177,7 +177,7 @@ class VoiceConversationActivity:Activity(){
         if(settingsOpen){
             val p=permit();val values=listOf(p.record,p.cloud,p.speak,p.followUp,p.history,p.alerts,p.autoWait)
             val labels=listOf("명확한 차량 증상을 자동 기록해요","저장한 증상과 후속 질문을 Gemini로 보내요","준비된 설명을 자동으로 읽어요","설명 후 다음 질문을 자동으로 들어요","최종 문장과 대화 본문을 30일 보관해요","새 차량 안내를 한 번 음성으로 알려요","홈에서 자동으로 호출을 기다려요")
-            val boxes=labels.mapIndexed{i,label->CheckBox(this).apply{text=label;textSize=22f;setTextColor(ui.colors.text);minHeight=ui.dp(76);isChecked=values[i];isEnabled=valid();tag="voice_permit_$i"}.also{body.addView(it)}}
+            val boxes=labels.mapIndexed{i,label->CheckBox(this).apply{text=label;textSize=28f;setTextColor(ui.colors.text);minHeight=ui.dp(76);isChecked=values[i];isEnabled=valid();tag="voice_permit_$i"}.also{body.addView(it)}}
             body.addView(ui.text("홈에서 호출을 기다리고, ‘카잇다’라고 말씀하시면 대화를 시작해요. 기기 내 호출 기능을 사용할 수 없으면 최대 30초씩, 화면을 연 동안 3회까지만 대기해요. 앱 밖에서는 듣지 않아요.",20))
             body.addView(ui.text("AI 전송: 선택한 증상 종류·본문, 지금 질문, 같은 문제의 최근 질문·AI 답변 최대 두 쌍이에요. 차량 수치·위치·이름·메모·다른 기록은 보내지 않아요. 일 5회·월 100회·서비스 월 300회와 기존 비용 한도를 함께 써요. 매번 버튼을 누르지 않아도 유료 요청이 이어질 수 있어요. 개인정보가 있거나 길면 전송하지 않아요.\n음성 원본은 저장하지 않아요. 대화는 앱에서 암호화하며 운전자와 AI 계정별로 보여요. 운전자 선택은 비밀번호 인증이 아니므로 민감한 내용은 말씀하지 마세요.",20))
             body.addView(ui.action("선택한 범위 저장","voice_permits_save",ActionStyle.SECONDARY,valid()&&!preparingCloud){

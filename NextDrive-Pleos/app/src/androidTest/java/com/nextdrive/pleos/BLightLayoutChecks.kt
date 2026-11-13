@@ -180,7 +180,8 @@ class BLightLayoutChecks(private val inst:Instrumentation){
                     configure(screen,width,height,font,dark)
                     h.main{h.set(screen,"ui",CaritdaComponents(screen,CaritdaPalette.of(dark)));h.render(screen)};inst.waitForIdleSync()
                     inspect(screen,if(issueMode)"AI_ISSUE"else"AI_SOC",width,height,font,dark)
-                    if(!smoke&&width==1024&&!portrait&&font==1f&&!dark)h.capture(screen,if(issueMode)"ai-light.png"else"ai-soc-light.png")
+                    // Preserve FLAG_SECURE; AI bounds are inspected without exporting the secure window.
+                    if(!smoke&&width==1024&&!portrait&&font==1f&&!dark&&screen.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE==0)h.capture(screen,if(issueMode)"ai-light.png"else"ai-soc-light.png")
                 }
             }finally{h.main{restore(screen,config);screen.finish()};inst.waitForIdleSync()}
         }

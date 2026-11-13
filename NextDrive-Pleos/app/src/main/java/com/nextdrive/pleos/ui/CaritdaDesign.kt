@@ -16,7 +16,7 @@ data class CaritdaPalette(val background:Int,val surface:Int,val inset:Int,val t
     companion object {
         private fun c(s:String)=Color.parseColor(s)
         fun of(dark:Boolean)=if(dark)CaritdaPalette(c("#101D27"),c("#192C39"),c("#203F43"),c("#F1F6F9"),c("#BACBD6"),c("#9BE4D5"),c("#102C2B"),c("#8299A8"),c("#FFB4B4"),c("#506776"),c("#FFDA8C"),c("#44351E"))
-        else CaritdaPalette(c("#F4F7F9"),c("#FFFFFF"),c("#E0EFF0"),c("#142D3D"),c("#4E6473"),c("#12596A"),c("#FFFFFF"),c("#718492"),c("#A72C39"),c("#C0CCD4"),c("#805000"),c("#FFF2D5"))
+        else CaritdaPalette(c("#F4F7F9"),c("#FFFFFF"),c("#E0EFF0"),c("#000000"),c("#33414C"),c("#12596A"),c("#FFFFFF"),c("#718492"),c("#A72C39"),c("#C0CCD4"),c("#805000"),c("#FFF2D5"))
     }
 }
 
@@ -39,9 +39,11 @@ object CaritdaTokens {
     const val SUBTITLE=24
     const val EMPHASIS=26
     const val METRIC=40
+    /** Readable base text, with wrap-content buttons and responsive grids rather than shrinking labels. */
+    const val BOOST=6
 }
 enum class ActionStyle { PRIMARY, SECONDARY, QUIET, DANGER }
-enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, FUEL, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK }
+enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, FUEL, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK, SUN, MOON, AUTO, MIC, HELP, SHIELD, INFO, SOUND, SHAKE, WARN, MORE }
 data class AttentionContent(val title:String,val preview:String,val explanation:String)
 
 /** Original consistent 24-unit outline symbols. No OEM or third-party icon data. */
@@ -64,6 +66,17 @@ class CaritdaIcon(private val icon:HmiIcon,private val tint:Int):Drawable(){
             HmiIcon.PERSON->{canvas.drawCircle(12f,7f,4f,p);canvas.drawArc(4f,13f,20f,26f,180f,180f,false,p)}
             HmiIcon.CHECK->path(4f,12f,10f,18f,20f,6f)
             HmiIcon.CLOCK->{canvas.drawCircle(12f,12f,9f,p);path(12f,6f,12f,12f,16f,14f)}
+            HmiIcon.SUN->{canvas.drawCircle(12f,12f,4.5f,p);path(12f,2f,12f,5f);path(12f,19f,12f,22f);path(2f,12f,5f,12f);path(19f,12f,22f,12f);path(4.9f,4.9f,7f,7f);path(17f,17f,19.1f,19.1f);path(4.9f,19.1f,7f,17f);path(17f,7f,19.1f,4.9f)}
+            HmiIcon.MOON->{val a=Path().apply{addCircle(12f,12f,9f,Path.Direction.CW)};val b=Path().apply{addCircle(17.5f,7f,7.5f,Path.Direction.CW)};a.op(b,Path.Op.DIFFERENCE);canvas.drawPath(a,p)}
+            HmiIcon.AUTO->{canvas.drawCircle(12f,12f,9f,p);path(12f,3f,12f,21f);val f=Paint(p).apply{style=Paint.Style.FILL};canvas.drawArc(RectF(3f,3f,21f,21f),90f,180f,true,f)}
+            HmiIcon.MIC->{canvas.drawRoundRect(9f,2f,15f,14f,3f,3f,p);canvas.drawArc(5f,6f,19f,19f,0f,180f,false,p);path(12f,19f,12f,22f);path(8f,22f,16f,22f)}
+            HmiIcon.HELP->{canvas.drawCircle(12f,12f,9f,p);canvas.drawArc(8.5f,7f,15.5f,14f,180f,230f,false,p);path(12f,14f,12f,15.5f);path(12f,17.5f,12f,17.6f)}
+            HmiIcon.SHIELD->{path(12f,3f,20f,6f,20f,12f,12f,21f,4f,12f,4f,6f,12f,3f);path(8.5f,12f,11f,14.5f,15.5f,9.5f)}
+            HmiIcon.INFO->{canvas.drawCircle(12f,12f,9f,p);path(12f,11f,12f,17f);path(12f,7.5f,12f,7.6f)}
+            HmiIcon.SOUND->{path(4f,9f,8f,9f,13f,5f,13f,19f,8f,15f,4f,15f,4f,9f);canvas.drawArc(13f,8f,19f,16f,-50f,100f,false,p);canvas.drawArc(13f,5f,22f,19f,-50f,100f,false,p)}
+            HmiIcon.SHAKE->path(2f,12f,5f,6f,8f,18f,11f,6f,14f,18f,17f,6f,20f,12f,22f,12f)
+            HmiIcon.WARN->{path(12f,3f,22f,20f,2f,20f,12f,3f);path(12f,9f,12f,14f);path(12f,17f,12f,17.1f)}
+            HmiIcon.MORE->{canvas.drawCircle(6f,12f,1.2f,p);canvas.drawCircle(12f,12f,1.2f,p);canvas.drawCircle(18f,12f,1.2f,p)}
         }
         canvas.restoreToCount(save)
     }
@@ -78,7 +91,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     fun column()=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;layoutParams=LinearLayout.LayoutParams(-1,-2)}
     fun shape(color:Int,radius:Int=CaritdaTokens.CARD_RADIUS,stroke:Int?=null)=GradientDrawable().apply{setColor(color);cornerRadius=dp(radius).toFloat();stroke?.let{setStroke(dp(CaritdaTokens.BORDER),it)}}
     fun text(value:String,size:Int=CaritdaTokens.BODY,bold:Boolean=false,secondary:Boolean=false)=TextView(context).apply{
-        text=value;textSize=size.toFloat();setTextColor(if(secondary)colors.secondary else colors.text)
+        text=value;textSize=(size+CaritdaTokens.BOOST).toFloat();setTextColor(if(secondary)colors.secondary else colors.text)
         typeface=Typeface.create("sans-serif",if(bold)Typeface.BOLD else Typeface.NORMAL)
         setLineSpacing(dp(3).toFloat(),1.2f);setPadding(0,dp(6),0,dp(6));layoutParams=LinearLayout.LayoutParams(-1,-2)
     }
@@ -160,7 +173,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     }
     fun loading(value:String)=text(value,22,secondary=true).apply{tag="loading_state";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
     fun action(value:String,key:String,style:ActionStyle=ActionStyle.SECONDARY,enabled:Boolean=true,icon:HmiIcon?=null,click:()->Unit)=Button(context).apply{
-        text=value;tag=key;textSize=CaritdaTokens.BODY.toFloat();isAllCaps=false;maxLines=Int.MAX_VALUE;ellipsize=null;minHeight=dp(CaritdaTokens.TOUCH);minimumHeight=minHeight;minimumWidth=dp(CaritdaTokens.TOUCH)
+        text=value;tag=key;textSize=(CaritdaTokens.BODY+CaritdaTokens.BOOST).toFloat();isAllCaps=false;maxLines=Int.MAX_VALUE;ellipsize=null;minHeight=dp(CaritdaTokens.TOUCH);minimumHeight=minHeight;minimumWidth=dp(CaritdaTokens.TOUCH)
         stateListAnimator=null;elevation=0f
         setPadding(dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.GAP),dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.GAP));setLineSpacing(dp(3).toFloat(),1.05f)
         typeface=Typeface.create("sans-serif-medium",Typeface.NORMAL)
@@ -169,9 +182,12 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
         setTextColor(if(enabled)foreground else colors.secondary)
         background=StateListDrawable().apply{
             addState(intArrayOf(-android.R.attr.state_enabled),shape(colors.inset,CaritdaTokens.BUTTON_RADIUS,colors.border))
+            // Pressed = the normal button plus a translucent wash. Text colour never changes, so labels stay readable.
+            addState(intArrayOf(android.R.attr.state_pressed),android.graphics.drawable.LayerDrawable(arrayOf(
+                shape(fill,CaritdaTokens.BUTTON_RADIUS,when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.QUIET->null;else->colors.border}),
+                shape(if(style==ActionStyle.PRIMARY)Color.argb(40,255,255,255)else Color.argb(if(style==ActionStyle.DANGER)24 else 56,Color.red(colors.accent),Color.green(colors.accent),Color.blue(colors.accent)),CaritdaTokens.BUTTON_RADIUS))))
             addState(intArrayOf(android.R.attr.state_focused),shape(fill,CaritdaTokens.BUTTON_RADIUS,if(style==ActionStyle.PRIMARY)colors.onAccent else colors.accent))
             addState(intArrayOf(android.R.attr.state_selected),shape(fill,CaritdaTokens.BUTTON_RADIUS,colors.accent))
-            addState(intArrayOf(android.R.attr.state_pressed),shape(fill,CaritdaTokens.BUTTON_RADIUS,foreground))
             addState(intArrayOf(),shape(fill,CaritdaTokens.BUTTON_RADIUS,when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.QUIET->null;else->colors.border}))
         }
         icon?.let{setCompoundDrawablesRelative(CaritdaIcon(it,if(enabled)foreground else colors.secondary).apply{setBounds(0,0,dp(CaritdaTokens.ICON),dp(CaritdaTokens.ICON))},null,null,null);compoundDrawablePadding=dp(CaritdaTokens.MEDIUM)}
@@ -194,6 +210,41 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
     }
     fun history(title:String,subtitle:String,key:String,enabled:Boolean,click:()->Unit)=action("$title\n$subtitle",key,ActionStyle.QUIET,enabled,HmiIcon.CLOCK,click)
     fun expandable(title:String,key:String,expanded:Boolean,enabled:Boolean,onToggle:()->Unit)=action((if(expanded)"− " else "+ ")+title,key,ActionStyle.QUIET,enabled,HmiIcon.CHEVRON,onToggle)
+    /** One tappable heading row: bold title, one-line summary and a chevron. The caller shows or hides the content below it. */
+    fun accordion(title:String,summary:String,key:String,open:Boolean,enabled:Boolean,icon:HmiIcon?=HmiIcon.CHEVRON,onToggle:()->Unit):Button=
+        action(title+"\n"+summary,key,ActionStyle.SECONDARY,enabled,icon,onToggle).apply{
+            gravity=android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
+            isSelected=open
+            contentDescription=title+", "+summary+", "+(if(open)"펼쳐져 있어요"else"눌러서 펼쳐요")
+            text=android.text.SpannableString(title+"\n"+summary).apply{
+                setSpan(android.text.style.StyleSpan(Typeface.BOLD),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(android.text.style.RelativeSizeSpan(1.1f),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(android.text.style.RelativeSizeSpan(.8f),title.length+1,length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+    /** A whole-row navigation button: icon, bold title, one-line summary and a chevron on the right. */
+    fun listRow(title:String,summary:String,key:String,enabled:Boolean,icon:HmiIcon,click:()->Unit):Button=
+        action(title+"\n"+summary,key,ActionStyle.SECONDARY,enabled,icon,click).apply{
+            gravity=android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
+            val tint=if(enabled)colors.text else colors.secondary
+            setCompoundDrawablesRelative(compoundDrawablesRelative[0],null,CaritdaIcon(HmiIcon.CHEVRON,tint).apply{setBounds(0,0,dp(CaritdaTokens.ICON),dp(CaritdaTokens.ICON))},null)
+            contentDescription=title+", "+summary
+            text=android.text.SpannableString(title+"\n"+summary).apply{
+                setSpan(android.text.style.StyleSpan(Typeface.BOLD),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(android.text.style.RelativeSizeSpan(1.1f),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                setSpan(android.text.style.RelativeSizeSpan(.8f),title.length+1,length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            (layoutParams as LinearLayout.LayoutParams).setMargins(0,dp(6),0,dp(6))
+        }
+    /** Big icon-over-label choice tile for one-of-N settings such as the screen colour. */
+    fun choiceTile(title:String,key:String,selected:Boolean,enabled:Boolean,icon:HmiIcon,click:()->Unit):Button=
+        action(title,key,if(selected)ActionStyle.PRIMARY else ActionStyle.SECONDARY,enabled,null,click).apply{
+            val tint=if(!enabled)colors.secondary else if(selected)colors.onAccent else colors.text
+            setCompoundDrawablesRelative(null,CaritdaIcon(icon,tint).apply{setBounds(0,0,dp(40),dp(40))},null,null)
+            compoundDrawablePadding=dp(CaritdaTokens.SMALL);isSelected=selected
+            contentDescription=title+if(selected)", 선택됨"else""
+            minHeight=dp(104);minimumHeight=minHeight
+        }
     fun twoPane(primary:View,secondary:View,wide:Boolean)=column().apply{
         if(!wide){addView(primary);addView(secondary)}else{
             val row=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL}

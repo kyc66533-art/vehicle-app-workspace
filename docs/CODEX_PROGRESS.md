@@ -1,5 +1,16 @@
 # Codex 개발 진행 기록
 
+## 2026-11-14 01:23:13 +09:00 — PR #6 기반 팀원 UI·가독성 선택 통합
+
+- 로컬265파일/PR #6 6248c315 일치와 main 7f913a4를 확인하고 원본 소스·설정·일반/validation/test APK·두 앱 데이터를 비공개 백업했다. 별도 feature/ui-readability-native-nav-20261114 브랜치/PR #6 대상 Draft PR만 사용한다. main/PR #2/#3/#6/팀원 브랜치 직접 변경·병합0.
+- 팀원 Issue #5의 16파일 패치·문구표·README·ZIP 및 PNG18장(11비교+7추가)을 실제 다운로드/해시 확인/열람했다. 작업 중 새 README/PR #6 ZIP 추가 f4568d29도 읽고 대조했다. ZIP 통째 덮어쓰기0. Main 함수 두 충돌을 병합하고 목록형 설정·큰 글씨/대비·아이콘 타일·차량/개발자/인계 접힘·사용법을 채택했다. AAOS ‘이 기기’, AI 전체 동의 원문, %p/평균/공백 의미를 보완했다.
+- PR #6 InspectionSearch/NavigationBackend/NaviHelper SearchPlace(자동차 정비소)/Manifest/경로·안전 보호를 보존했다. 카카오 client/화면/서버 재도입0. 홈 모두 보기는 ALL·빈 검색으로 열고 이전 검색어·필터·입력문·스크롤의 명시 복원을 제공한다.
+- 앱 Kotlin7+테스트12 변경. 최종 Debug/Validation/AndroidTest/Lint 성공(0오류/70경고), Unit NO-SOURCE 제외. 새UI38+B안29/21/3+배치3(실측1600조합)+검색26+관련회귀407+실제Navi4=531 assertion/26안전분기 PASS. 중간 실패·재검사 중복 합산0. 실제 Pleos 전체TTS2회 완료. 실제 내비 검색 업체 목록 확인, 신규 목적지/경로 완료는 이번 미검사. STT/호출어는 fixture 회귀이며 사용자 새 발화/새 Gemini 성공으로 표시하지 않는다.
+- 최종 캡처에서 홈 제목의 한 글자 줄바꿈을 짧은 제목으로 수정했다. 보안 AI FLAG_SECURE는 유지하며 캡처 우회0. 320/600/840/1024dp·가로/세로·1/1.3/1.5/2배·라이트/다크의 실제 Activity 배치와 확인창을 검사했다. 레거시 prepare 뒤 검사들은 기존validation 보존을 위해 실행하지 않았다.
+- 원본1244DB/20766행 변경·누락0, schema/version/integrity/FK 정상, strict행동일 PASS. 일반31문제/113이벤트/10운전자/0초안 유지. 일반private 17/17동일/삭제0. validation private는449/487동일·38변경·삭제0이며 포인터/heartbeat/캡처 등에 더해 portable-issue 암호화파일1개의 평문동일은 미검증이다. 원본 사본을 보존했다. 고유fixture 추가와 원본DB행 동일을 구분하며 독립 사본 hotjournal 정상복구만 수행/앱원본수정0.
+- 최종 검증 뒤 동일 서명 일반 install-r만 수행, 일반 UI 자동 실행/조작0. 유료Gemini/Worker배포/인증·예산·SQLite초기화/키변경0. 새 TEST 캡처21장과 [통합·화면·파일·검증표](UI_READABILITY_INTEGRATION.md)를 게시 대상으로 검토했다. GitHub 연결 도구를 통한 게시 후 실제 PR/커밋을 최종 응답에 보고한다.
+
+
 ## 2026-11-13 23:55 +09:00 — 카카오 계획 중단·공식 Pleos 정비소 검색 화면 연결
 
 - 최신 지시에 따라 PR #3(a0a421fa)을 부모로 별도 fix/pleos-native-repair-search-20261113 브랜치를 만들었다. 기존 로컬261개 대상 파일이 원격과 일치함을 확인하고 원본 소스/일반·validation 데이터를 새 사본으로 보존했다. main/PR #2/원래 Draft PR #3은 직접 갱신·병합하지 않는다.

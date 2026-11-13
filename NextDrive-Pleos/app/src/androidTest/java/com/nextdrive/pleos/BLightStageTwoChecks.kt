@@ -35,6 +35,7 @@ class BLightStageTwoChecks(private val inst:Instrumentation){
             click("driver_${a.id}");click("start_driving");click("vehicle_health")
             verify(h.main{activity.window.decorView.findViewWithTag<View>("metric_EV_SOC")!=null&&activity.window.decorView.findViewWithTag<View>("drivecheck_item_DOOR_FL")==null},"BT01 health defaults to major values without expanded raw signal cards")
             click("health_expand")
+            click("health_toggle_DOOR_FL")
             verify(text().contains("위치 정보 수신")&&!text().contains("문 위치값 3"),"BT02 door integer is grouped as a received position, never inferred open/closed")
             verify(h.main{h.views(activity.window.decorView).count{it.tag?.toString()?.startsWith("health_group_")==true}==4},"BT03 four door/lamp/notice/threshold groups replace individual technical cards")
             click("health_technical");verify(text().contains("position")&&text().contains("앱 수신"),"BT04 exact raw unit/time/support/source remain in explicit technical details")

@@ -23,7 +23,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
     private fun finish(activity:MainActivity){main{activity.finish()};instrumentation.waitForIdleSync()}
     private fun tagged(a:MainActivity,tag:String):View?=a.window.decorView.findViewWithTag(tag)
-    private fun click(a:MainActivity,tag:String){ValidationUiActions.reveal(instrumentation,a,tag);main{val view=tagged(a,tag)?:error("Missing $tag");check(view.isEnabled){"Disabled $tag"};check(view.performClick())};instrumentation.waitForIdleSync()}
+    private fun click(a:MainActivity,tag:String){val routed=BLightTestNavigation.prepare(instrumentation,a,tag);instrumentation.waitForIdleSync();if(routed)return;main{val view=tagged(a,tag)?:error("Missing $tag");check(view.isEnabled){"Disabled $tag"};check(view.performClick())};instrumentation.waitForIdleSync()}
     private fun text(a:MainActivity):String=main{
         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
         collect(a.window.decorView)
@@ -44,7 +44,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             check(prefs.edit().putInt("version",1).putString("outcome","pending").commit())
             var a=launch();activity=a
             await("first guide input permitted"){main{tagged(a,"guide_skip")?.isEnabled==true}}
-            verify(text(a).contains("내 차 기록을 한곳에서") && text(a).contains("지금은 차량의 이상을 자동으로 찾아주지는 않아요."),"ON first guide is one page with exact purpose and current limitation")
+            verify(text(a).contains("내 차 기록을 다음 운전자에게 이어 줘요") && text(a).contains("차 전체가 고장인지는 알려 주지 않아요."),"ON first guide is one page with exact purpose and current limitation")
             val oldSkip=main{tagged(a,"guide_skip")!!}
             main{instrumentation.callActivityOnStop(a);oldSkip.performClick()}
             verify(prefs.getString("outcome",null)=="pending" && snapshot(repo)==baseline,"ON UNKNOWN lifecycle cannot complete guide or change records")
@@ -56,8 +56,8 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             finish(a);a=launch();activity=a
             await("existing driver route after skip"){main{tagged(a,"start_driving")?.isEnabled==true}}
             verify(main{tagged(a,"welcome_title")==null},"ON skipped guide is not repeated on relaunch")
-            click(a,"help");click(a,"replay_guide")
-            verify(main{tagged(a,"close_guide")!=null && tagged(a,"guide_skip")==null},"ON replay offers close and does not repeat setup actions")
+            click(a,"menu");click(a,"replay_guide") // the replay row now sits directly in the settings list
+            verify(main{tagged(a,"back")!=null && tagged(a,"guide_skip")==null && tagged(a,"guide_choose")==null},"ON replay offers the previous button and does not repeat setup actions")
             click(a,"close_guide");click(a,"close_help")
             verify(prefs.getString("outcome",null)=="skipped" && snapshot(repo)==baseline,"ON replay and help close preserve preference and original driver screen")
             finish(a)
@@ -67,9 +67,9 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             verify(prefs.getString("outcome",null)=="completed" && snapshot(repo)==baseline,"ON choose completes explanation only, no automatic driver selection")
             val driver=repo.currentDriver()?:repo.drivers().first()
             click(a,"driver_${driver.id}");click(a,"start_driving")
-            verify(text(a).contains("자동 고장 진단 결과가 아니에요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
+            verify(text(a).contains("차가 알려 준 정보를 보여 드려요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
             click(a,"all_issues");click(a,"filter_COMPLETED");navigate(a,"HOME");click(a,"all_issues")
-            verify(main{(tagged(a,"filter_ALL") as Button).text.startsWith("✓ ")},"ON home record action opens all records instead of hiding a previous selection")
+            verify(main{(tagged(a,"filter_ALL") as Button).isSelected&&(tagged(a,"record_search") as EditText).text.isEmpty()&&tagged(a,"restore_record_search")!=null},"ON home all-record action shows all records and preserves the previous conditions through an explicit restore action")
             navigate(a,"HOME")
             click(a,"nav_VEHICLE")
             val basic=text(a)
@@ -82,10 +82,10 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             val distance=obs.mostRecent("ODOMETER",true)?:error("odometer missing")
             val now=System.currentTimeMillis()
             verify(text(a).contains(VehiclePresentation.card("EV_SOC",soc,soc,now).value) && text(a).contains(VehiclePresentation.card("ODOMETER",distance,distance,now).value) && text(a).contains("에뮬레이터에서 받은 값"),"ON live emulator SOC and odometer remain exactly sourced")
-            click(a,"unavailable")
-            verify(text(a).contains("연료 잔량") && text(a).contains("확인할 수 없어요"),"ON unsupported fuel is explained without zero percent")
-            click(a,"load_details")
-            verify(text(a).contains("SDK 2.3.2") && text(a).contains("Capability") && text(a).contains("세션 ID") && text(a).contains("ERROR_NOT_SUPPORTED_PROPERTY"),"ON loading details retain SDK capability original error and session")
+            // The old "unavailable values" disclosure no longer exists in the B light vehicle screen: unsupported fuel must simply not appear as a made-up value.
+            verify(main{tagged(a,"metric_FUEL_PERCENT")==null&&tagged(a,"value_FUEL_PERCENT")==null},"ON unknown vehicle overview does not invent an unsupported fuel metric or numeric value")
+            click(a,"load_details");click(a,"developer_info");click(a,"load_raw") // raw SDK evidence now sits in a developer-only fold, then a second fold
+            verify(text(a).contains("SDK 2.3.2") && text(a).contains("출처") && text(a).contains("세션 ") && text(a).contains("앱 수신"),"ON loading details retain SDK version source session and app receipt time")
             click(a,"back")
             val received=rows(obs.readableDatabase,"observations")
             Thread.sleep(1300)
@@ -95,7 +95,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             if(pending==null){
                 click(a,"new_issue");main{(tagged(a,"situation") as EditText).setText("사용법 복귀 검증용 초안")}
                 val draft=repo.draft()!!
-                click(a,"help");click(a,"help_topic_2");click(a,"close_help")
+                click(a,"help");click(a,"help_topic_2");click(a,"nav_HOME");click(a,"resume_draft") // help is reached from settings now; the draft is resumed from home
                 verify(repo.draft()==draft && main{(tagged(a,"situation") as EditText).text.toString()}==draft.body,"ON contextual help returns to the exact authored draft without new writes")
                 click(a,"discard_draft")
                 await("cancel dialog"){instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("확인")?.any{it.isClickable}==true}
@@ -106,7 +106,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
             val content=text(a)
             verify(listOf("기록할 사람 고르기","차량값 불러보기","느낀 문제 남기기","다른 사람의 기록 읽기","정비할 때 기록 보여주기","자동 확인 기능의 현재 범위").all{content.contains(it)},"ON help contains six task-based entries and replay")
             click(a,"help_topic_5")
-            verify(text(a).contains("자동으로 찾아주지는 않아요") && text(a).contains("정상이라는 뜻은 아니에요"),"ON help does not promise automatic diagnosis or normality")
+            verify(text(a).contains("차 전체를 진단하는 것은 아니에요") && text(a).contains("차가 괜찮다는 뜻은 아니에요"),"ON help does not promise automatic diagnosis or normality")
             click(a,"close_help")
             layoutMatrix(a)
             verify(snapshot(repo)==baseline && rows(obs.readableDatabase,"observations").containsAll(oldObservations),"ON all original profile IDs issue history observations and drafts preserved")

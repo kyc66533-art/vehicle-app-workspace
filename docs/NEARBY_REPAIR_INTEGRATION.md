@@ -1,121 +1,74 @@
-# CARITDA 주변 정비소 자동 검색 — 구현 기록 (2026-11-13)
+# CARITDA 정비소 찾기 — 기존 Pleos 내비게이션 재사용
 
-## 2026-11-13 22:59 +09:00 — PR #3 로컬 통합·검증 결과
+## 2026-11-13 23:55 +09:00 — 카카오 계획 중단·실제 검색 연결
 
-PR #3은 음성 수정 PR #2(a4e0cf5)를 대상으로 하는 Draft이며 시작 head는 a71bdc1d3a5de395b419f597542aedd0f46f0ea4다. 로컬302파일이 PR #2와 일치했고 원격 전용 Aside 연구29개는 보존했다. 원본 소스와 일반/validation 데이터를 별도 사본으로 보존한 뒤 PR #3의7파일을 반영했다. main 직접 변경·PR 병합·서버 배포·신규 Gemini 유료 호출은 하지 않는다.
+최신 지시에 따라 카카오 Local API와 별도 지도/검색 서버 계획을 중단했다. PR #3 head `a0a421fadaaa6d9acb69a9686977e5deb7e38b98`에서 별도 `fix/pleos-native-repair-search-20261113` 브랜치로 작업한다. main/PR #2/원래 Draft PR #3을 직접 변경·병합하지 않는다. 이전 카카오 구현은 원래 PR #3과 비공개 로컬 사본에 보존하며 현재 후속 작업으로 키 등록·배포를 요구하지 않는다.
 
-### 실제 반영과 최소 수정
+## 실제 구현과 사용자 경로
 
-- 정비 상담에 위치 동의→기존 OneShotLocation/FusedLocation→Firebase 인증 검색→최대3곳 카드→사용자 선택/확인→기존 InspectionNavigation/NaviHelper.requestRoute 경로를 연결했다. 수동 좌표 입력과 기존 경로/약관/권한/CarSafetyGate/Listener 해제를 유지했다. 새 지도 SDK나 다른 내비 앱은 추가하지 않았다.
-- NearbyRepairClient는 응답 출처·직선거리·후보 구분·ID/중복/범위/크기를 확인한다. 목록의100자 업체명은 보존하면서 기존 내비 목적지 이름80자 제한에 맞춰 전달한다. 잘못된 JSON과 네트워크/시간 초과/미설정을 구분한다.
-- Main의 새 검색에 운전자·Firebase 계정·선택 기록 범위를 고정하고 화면 이탈/전환/안전 제한/계정 변경 후 늦은 결과를 버린다. 기존 FirebasePortableSession을 재사용하며 Gemini client를 만들거나 AI 동의를 우회하지 않는다.
-- 새 Worker 경로가 반환한 비동기 ApiError를 기존 오류 처리기가 받도록 `return await nearbyRepair(...)` 한 곳을 보완했다. 이 전에는 미설정503이 처리기 밖으로 reject됐다. 기존 Gemini 분석/대화·기기 서명·BUDGET 원장 코드와 운영 설정은 바꾸지 않았다.
-- 검색 핸들러는 두 키워드의 공급자 요청을 합계6초 범위로 제한하고, 기존 bodyText를 재사용해 응답을 스트림 단계에서64KiB로 제한한다. 값이 없는 거리를0m로 만들지 않는다. 결과/위치는 문제 SQLite에 자동 저장하지 않는다.
-- 새 NearbyRepairChecks/runner의 prepare 전 분기와 nearby-repair-boundaries 오프라인 검사를 추가했다. 입력/위치/계정/검색/내비 fixture와 실제 SDK 결과를 구분한다.
+**운전자 선택 → 기록 상세 → 점검·상태·상담 → 정비 상담 준비 → 내비에서 정비소 찾기 → 내비 목록에서 장소 → 목적지로 → 경로 확인/안내**
 
-### 빌드·검사
+기존 NaviHelper **3.0.5**/PleosNavigationBackend를 재사용해 공개 `requestNavigationScreen(NavigationScreenRequest.SearchPlace("자동차 정비소"))`를 호출한다. 이름·위도·경도·API 키 입력은 필요 없다. 목록과 장소 선택·경로 안내는 설치된 내비 앱이 담당한다. 새 지도 SDK·내비 앱·CARITDA 서버 검색은 없다.
 
-| 검사 | 결과 | 실제 범위 |
+새 InspectionSearch는 앱 가시·확정 운전자·CarSafetyGate ALLOWED·권한·약관을 확인한다. 기존 경로나 안내/모의 안내 모드가 있으면 새 검색을 보내지 않는다. 중복 연결/상태 callback을 차단하고 화면 이탈·운전자/안전 상태 변경·시간 초과 시 generation 및 removeListener/release를 적용한다. **화면 REQUEST_SENT와 제한된 오류 감시 종료는 검색 결과/안내 성공이 아니다.** 기존 InspectionNavigation.requestRoute와 수동 목적지 고급 경로·기존 엄격한 안내 완료 조건은 유지한다. 기본 흐름에는 수동 입력이 없다.
+
+Manifest에 공개 Normal 권한 NAVI_CUSTOM_MAP만 추가했다. CARITDA가 증상·운전자·Firebase 계정·위치를 검색 서버로 전송하지 않는다. 설치된 내비의 위치/검색 데이터 처리는 해당 앱의 기존 기능이다. SearchPlace는 검색 화면 요청이며 CARITDA가 POI 목록/선택 좌표를 반환받는 기능으로 만들지 않았다. 최단거리 순서·실시간 영업·서비스점 인증·예약·견인을 보증하지 않는다.
+
+## 공식 근거·실제 설치 상태
+
+- [NaviHelper3.0.5 소개](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/intro), [SearchPlace](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/navi-helper/ai.pleos.playground.navi.data/navigation-screen-request/search-place/entry), [requestNavigationScreen](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/navi-helper/ai.pleos.playground.navi.helper/navi-helper/request-navigation-screen): 웹 API 문서는 항목/탐색 구조만 읽혀 상세 signature는 공식 NaviHelper3.0.5 및 전이 navi-data3.0.4 sources.jar의 공개 클래스/KDoc으로 대조했다. InternalApi는 호출하지 않는다.
+- [공식 권한 가이드](https://document.pleos.ai/en/api-reference/connect-sdk-pleos/NaviHelper/declaring-permissions)의 NAVI_CUSTOM_MAP과 AAR 소스 Normal 권한을 확인했다.
+- [공식 navi-app 예제](https://github.com/Pleos-Playground/pleos-sample-navi-app/tree/76ed592487a1eab7ba102b9d4b321705426886fe)의 NaviHelperViewModel.requestNavigationScreen와 NaviTestData.RouteOptionList를 확인했다. 예제 좌표를 실제 업체 결과로 사용하지 않았다.
+- [공식 이벤트 가이드](https://document.pleos.ai/api-reference/connect-sdk-pleos/NaviHelper/event-listeners)처럼 탐색 시작/완료/안내 상태/도착을 구분한다.
+- 실제 설치: `ai.umos.maps.android.navigation.app` **3.3.2-rc5-hotfix.3**, Navi 서비스 **3.0.4**. APK pull은 Permission denied여서 우회하지 않았다. dumpsys의 공개 Android ACTION_SEARCH는 resolve됐지만 표준 query만으로 검색 화면은 열리지 않아 채택하지 않았다. geo VIEW는 resolve되지 않았다. Gleo용 broadcast·임의 component·private API는 사용하지 않고 실제 작동한 SDK SearchPlace만 채택했다.
+
+## 이번 실제 에뮬레이터 시연
+
+동일 소스 **TEST CARITDA**의 고유 UUID 문제/운전자 fixture에서 실제 버튼을 누른 뒤 기존 내비 공개 UI만 선택했다. 일반 앱 UI 자동화는 하지 않았다.
+
+| 단계 | 결과 | 실제 증거 |
 | --- | --- | --- |
-| 원본 PR Kotlin 컴파일 | PASS | Debug/Validation AndroidTest compile,2분7초. 앱 컴파일 오류는 없었음 |
-| 최종 Debug/Validation/AndroidTest | PASS | 기존 Gradle8.11.1/JBR·SDK 사용, 전체3분35초 |
-| Lint/Unit | PASS/NO-SOURCE | Lint0오류68경고. Unit NO-SOURCE는 성공 건수에서 제외 |
-| 새 서버 검색 | PASS | 기존11+경계29=40 assertion, 실제 Kakao/Gemini0 |
-| 기존 Worker 회귀 | PASS | 인증/예산64·단일 문제42/반복4/overlay5·대화54=169, 모두 오프라인 |
-| TypeScript | PASS | npm run check / tsc --noEmit |
-| 새 검색 Android UI/계약 | PASS | 34 assertion. 실제 View/SQLite, 위치·인증·업체·내비 fixture |
-| 영향 회귀 | PASS | 407 assertion: 위치/내비/DriveCheck·SOC·음성/호출어/STT/TTS·DB·Gleo 내부·AI 캐시·A/B 인계 |
-| 운영 endpoint 확인 | PASS(진단2) | 에뮬레이터 health200/익명 빈 본문 repair404, 좌표·계정 전송0 |
-| 실제 Navi SDK | 부분 확인(진단6) | 아래 실제 이벤트/화면과 미수신 완료 콜백을 구분 |
+| CARITDA → SDK 검색 요청 | PASS | CONNECTED/PREFLIGHT_READY/REQUEST_SENT, 실제 권한/약관/무경로 확인 |
+| 정비소 검색 결과 | PASS | 내비 검색란 ‘자동차 정비소’와 업체명·주소·거리 목록, 이름/좌표 입력 없음 |
+| 장소 선택·경로 미리보기 | PASS | 실제 목록 업체 선택 → ‘목적지로’ → 추천 경로/시간/거리 화면 |
+| 안내 화면 진입 | PASS | 내비 자체 미리보기 후 목적지·경로·안내 종료 표시. ‘안내 시작’ 수동 tap 전에 내비 자체 전환이 진행돼 그 tap은 실행되지 않음 |
+| SDK 선택 목적지·안내 모드 | PASS | ROUTE_SEARCH_STARTED / 선택 업체명·좌표 일치 / STATUS_ROUTE_DRIVE / MODE_ROUTE_GUIDING |
+| onRoutingCompleted | NOT_RECEIVED | 별도 실제 리스너 **45초** 동안 미수신. 화면 요청이나 다른 이벤트로 완료를 생성하지 않음 |
+| 도착·실차 | NOT_TESTED | 정차 에뮬레이터 시험이며 도착 성공을 주장하지 않음 |
+| 새 시험 경로 복원 | PASS | 최초 무경로+선택 이름/좌표를 재확인한 새 경로만 공식 cancelRoute. SDK 무경로 및 ‘어디로 갈까요?’ 화면 재확인 |
 
-Android 합계449 assertion/22개 선택 실행, Node 합계209 assertion이다. 기존477/198 전체를 무조건 반복한 결과가 아니다. 일반 앱 UI 자동화·일반 APK 교체·SDK 버전/서명 변경은 하지 않았다. validation APK/AndroidTest만 기존 인증서 일치 확인 후 install-r로 교체했다.
+이전의 예제 좌표 시험과 달리 이번에는 실제 검색 결과를 선택한 흐름이다. 목록을 가까운 순으로 가정하지 않고 내비의 예상 SOC를 실제 현재 SOC로 해석하지 않는다. SDK 전체 완료 계약은 **부분 확인**이며 기존 InspectionNavigation.guidanceConfirmed의 네 조건을 낮추지 않았다. 실제 화면/로그는 개인정보 보호를 위해 비공개 로컬 `.tools/pleos-repair-20261113/private`, results에 보관한다.
 
-프로젝트에 gradlew.bat가 없어 기존 사용자 Gradle8.11.1 배포본을 사용했다. 처음 프로젝트 전용 캐시에 AGP가 없어 컴파일 전 실패했으며, 기존 캐시를 프로젝트 내부 전용 캐시로 복사한 후 --offline으로 해결했다. 전역 설치·시스템 설정·기존 전역 캐시·키 변경은 없다. Kotlin daemon 접근 오류는 기존 in-process 컴파일 옵션으로 처리했다. 새 소프트웨어나 SDK를 내려받지 않았다.
+## 코드·빌드·검사
 
-### 실제 Pleos 내비게이션
+앱 변경: MainActivity의 카카오 검색/위치/로그인/카드를 공식 화면 진입으로 교체, NavigationBackend 공개 화면 요청 추가, InspectionSearch 신규, Manifest Normal 권한 추가. 검사: InspectionSearchChecks/InspectionSearchLiveChecks 및 runner의 prepare 전 분기, 기존 내비 UI 검사 설명 수정.
 
-NaviHelper3.0.5와 설치된 ai.pleos.playground.service.navi(version3.0.4), ai.umos.maps.android.navigation.app을 사용했다. 공식 문서의 좌표/‘공식 문서 목적지 시험’ 이름으로 단1회 요청한 별도 SDK 시험이며, 실제 Kakao 검색 결과가 아니다.
+NearbyRepairClient/기존 검사·nearby-repair.ts/두 Node 검사는 현재 브랜치에서 제외했다. portable-worker.ts는 카카오 import/라우트/분기를 제거해 **PR #2 원본 blob `e2f5ef235dd6bb046a5e0d426b1d8dfafd3c04c1`과 바이트 동일**하다. Gemini 분석/대화·Firebase·기기 서명·BUDGET 본체·운영 설정은 수정하지 않았다. 음성 호출·SQLite 스키마·DriveCheck·Gleo·위치·인계 핵심 코드는 보존했다.
 
-| 단계 | 실제 관찰 |
+| 검사 | 이번 최종 결과 |
 | --- | --- |
-| 기존 경로·약관 | NAVI_PREFLIGHT_READY: 진행 경로 없음/동의 확인 후 요청 |
-| 목적지 전달 | NAVI_REQUEST_SENT |
-| 경로 탐색 시작 | NAVI_ROUTE_SEARCH_STARTED |
-| 목적지 일치 | NAVI_DESTINATION_CONFIRMED |
-| 안내 상태 | NAVI_STATUS_ROUTE_DRIVE / NAVI_MODE_ROUTE_GUIDING |
-| 내비 화면 | 시험 목적지·경로·예상시간/거리·안내 종료 버튼 표시 확인 |
-| 경로 탐색 완료 콜백 | **미수신**: NAVI_ROUTING_COMPLETED 없음,30초 후 NAVI_TIMEOUT |
-| 목적지 도착/안내 종료 | 미시험. 정차/0km/h에서 도착 성공으로 해석하지 않음 |
-| 정리 | 일치하는 새 시험 경로만 공식 SDK로 취소. routing=false/SAFE_GUIDING과 ‘어디로 갈까요?’ 화면 확인 |
+| Debug/Validation/Validation AndroidTest | PASS, 기존 오프라인 Gradle/JBR/서명. 최초3분2초·최종1분9초 |
+| Lint | 오류0 / 기존 경고68 |
+| Unit | NO-SOURCE, 통과 건수 제외 |
+| 신규 Android 상태/실제 View·SQLite | 26 assertion, SDK 부분은 fixture |
+| 영향 회귀 | 407 assertion/19분기: 위치/내비·DriveCheck/SOC·수동 STT/홈 호출/TTS·DB·Gleo 내부·AI 캐시·A/B 인계/재시작 |
+| 실제 SDK/내비 진단 | 화면 연결4 + 선택 경로4 assertion, 완료 callback 미수신 별도 표기 |
+| 최종 Android 집계 | **441 assertion / 22개 선택 실행**. 중간 실행·기존477개는 중복 합산하지 않음 |
+| Worker 오프라인 | 인증/예산64 + 문제42/반복4/overlay5 + 대화54 = **169**. 실제 모델0 |
+| TypeScript | npm.cmd run check/tsc --noEmit PASS. wrapper CMD 호출 오류 뒤 직접 실행 성공, 소스 컴파일 오류 아님 |
 
-Listener는 시간 초과/정리 시 해제했다. 실제 안내 화면 진입은 확인했지만 누락된 onRoutingCompleted를 임의 생성하거나 기존 네 조건의 guidanceConfirmed 기준을 낮추지 않았다. SDK/service 버전 차이는 관찰 사항이며 콜백 누락의 원인으로 확정하지 않는다. 일반 CARITDA가 내비 화면으로 전환돼 보이지 않으면 기존 정책대로 모니터링을 멈춘다.
+validation과 일반 앱 모두 기존 인증서 일치 확인 후 install-r 업데이트했다. 일반 Debug SHA256는 `3cc21eed55c17fc644f04088a2987a7424726ded6d5717d0c272630932f29f4d`다. 일반 UI 자동 실행/조작·새 문제/운전자 추가·앱 삭제/clear·AVD/서명 변경은 없다. 일반 앱 사용자의 수동 조작은 이번 TEST 시연과 별개다. 실제 사람 STT·새 Gemini·외부 Gleo·실차 성공으로 확대하지 않는다. 유료 Gemini/서버 배포/새 서비스 신청은 **0**이다.
 
-공식 [목적지 가이드](https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/destinations)는 requestRoute 호출 성공과 탐색 완료를 구분한다. API-reference destinations 페이지는 이번 조회에서 읽을 본문이 없어 별도 확인으로 취급하지 않았다.
+## 데이터 보존 — 엄격한 완전 동일성 FAIL, 기존 종료 시각 1열
 
-### 현재 실제 검색 가능 여부
+새 기준 사본은 일반44DB/4,441행 + validation1,105DB/15,580행 = **1,149DB/20,021원본행**이다. 원본 키 누락0·schema/version/integrity/FK 정상, 일반31문제/113이벤트/10운전자/0초안과 기존 validation 루트1/1/2/0 보존이다.
 
-**BLOCKED: 운영 /v2/repair/nearby는 실제 에뮬레이터에서 HTTP404다.** 로컬 프로세스의 KAKAO_LOCAL_REST_KEY/PLACES_ENABLED와 .dev.vars도 미설정이다. 운영 Secret 값은 조회하지 않았으므로 서버 키 유무까지 확정하지 않는다. 신규 endpoint 배포·키/호출 제한 설정 전에는 실제 주변 업체 조회 성공이라고 보고할 수 없다. 서버 배포와 키 등록은 이번에 수행하지 않았다.
+이미 ENDED인 일반 음성 세션 1개의 `ended`만 **22:45:25.918 → 23:39:46.628 KST**로 재기록됐다. 나머지 열과20,020행은 동일하다. 변경 시각은 이번 일반 APK 업데이트 **23:49:07 KST보다 앞서**, 이전 일반 앱 실행 기간에 발생했다. 변경하지 않은 ConversationStore.state는 ENDED마다 현재 시각을 쓰고 Controller.end가 수명주기에서 다시 호출될 수 있다. 정확한 호출 스택은 미계측이며 기존 종료 처리로 판단한다. 이번 정비소 작업에서 음성 코드를 수정하거나 원본 값을 되돌리지 않았다. 전후 사본과 정확한 행 비교를 보존하며 완전 동일로 축약하지 않는다.
 
-합성 목록은 TEST 배너가 있는 격리 UI에서만 표시했다. 블루핸즈는 검색 후보이며 공식 서비스망 인증·영업·예약·견인 성공을 의미하지 않는다. 키워드/좌표는 [카카오 Local 공식 문서](https://developers.kakao.com/docs/ko/local/dev-guide#search-by-keyword)와 대조했으며 별도 지도·카카오내비 SDK는 사용하지 않았다. 실제 활성화 전에는 원래 계획의 별도 검색 호출 제한·비용 통제도 검토해야 한다.
+일반에는 관측56/스냅샷2/인사이트6/SOC평가7·공백2 = 파생·관측73행이 추가됐고 문제는 추가되지 않았다. validation 기존15,580행은 동일하고 고유 fixture DB95개가 추가됐다. 일반 인증/AI 캐시 등을 포함한 private17파일은 전부 동일/삭제0이다. validation 기존462파일 중455동일/fixture 포인터·Firebase heartbeat·로컬 검사 캐시·설치 표시7변경/삭제0이다. 개인 DB·백업·로그·APK·실제 지도 캡처는 GitHub에 게시하지 않는다.
 
-### 데이터 보존과 엄격 비교 예외
+## 남은 범위·게시
 
-시작 일반44DB/4016행+validation1031DB/15103행=1075DB/19119원본행을 새로 보존했다. 원본 행 키 누락0, 스키마·버전·integrity/FK 정상이다. 일반 문제31/이벤트113/운전자10/초안0, validation 루트1/1/2/0을 유지했다. 시험은 새 고유 fixture DB74개만 추가했다. 일반 관측342·스냅샷15·인사이트28·SOC평가27/공백13, 총425행은 기존 관측/파생 DB에 추가됐다. 일반 새 문제나 자동 해결은0이다.
+이제 외부 API 키·CARITDA 서버 배포 없이 내비 검색을 사용할 수 있다. 진행 중인 경로가 있으면 먼저 내비에서 현재 안내를 확인한다. 남은 사항은 onRoutingCompleted 미수신의 플랫폼 원인, 실차/도착, 일반 앱 사용자 직접 확인이다. 서비스/SDK 버전 차이는 관찰했지만 누락 원인으로 확정하지 않는다. 음성 종료 시각의 반복 기록은 별도 후속 점검 항목이다. 상시 내비 감시·예약·견인 기능은 추가하지 않았다.
 
-**엄격한 원본행 완전 동일 검사는 FAIL(1열 차이)**다. 기존 일반 음성 세션1개는 ENDED 상태와 본문/연결 정보를 유지한 채 ended만21:30:13.559→22:45:25.918 KST로 바뀌었다. 기존 ConversationStore.state/Controller.end는 ENDED를 재기록할 때 종료 시각을 갱신하며, 내비 화면 전환 시점과 일치한다. 일반 APK/음성 코드는 교체하지 않았다. 기존 수명주기의 종료 메타데이터 갱신으로 판단하며 그 시각을 임의로 되돌리거나 이번 범위에서 음성 코드를 바꾸지 않았다. 전후 백업과 정확한 행/열 감사 근거를 보존했다.
-
-나머지19118원본행은 동일하다. 일반 인증/AI 캐시 등 files/prefs17개는 바이트 동일/삭제0이다. validation435개 동일/진단·fixture 포인터·heartbeat·fixture AI 캐시·설치 표시7개 변경/삭제0을 별도로 기록했다. 따라서 전체 DB/파일 완전 불변으로 확대하지 않는다. 개인 DB·음성/SDK 로그·백업·실제 내비 캡처는 게시하지 않는다.
-
-### 에뮬레이터에서 직접 확인할 절차
-
-1. Android Studio에서 기존 프로젝트의 validation 변형을 선택해 [TEST] 앱을 실행한다. Debug/Validation/ValidationAndroidTest Gradle 작업 이름은 위 표와 같다. 일반 앱 삭제/데이터 초기화/무인 prepare는 하지 않는다.
-2. 정차/CarSafetyGate 허용 상태에서 TEST 운전자를 확정하고 기존 TEST 기록의 상세→점검·상태·상담→정비 상담 준비로 들어간다.
-3. ‘현재 위치로 주변 정비소 찾기’를 누르고 위치/외부 전송 범위를 확인한다. 현재 배포 상태에서는 미연결 안내가 예상 결과다. 실제 업체 목록을 만들어 표시하지 않는다.
-4. 승인된 향후 서버 설정/배포 뒤 동일 흐름에서 최근 마지막 위치·검색 결과·직선거리/후보 표시를 확인한다. 이 조회는 Gemini를 요청하지 않는다.
-5. 업체를 선택하고 목적지를 확인하면 기존 NaviHelper로 전달한다. 기존 경로가 있으면 요청을 중단한다. 고급 좌표 입력도 그대로 사용할 수 있다.
-6. ‘길찾기 수신 이력’과 내비 화면을 함께 확인한다. 목적지 전달/탐색 시작/탐색 완료/안내 상태/도착은 별개이며 현재 완료 콜백 누락을 성공으로 바꾸지 않는다. ‘요청 결과 확인 멈추기’는 내비 경로를 취소하지 않는다.
-
-자체 검사 실행은 validation runner의 nearbyRepairOnly / driveCheckNavigationUiOnly / driveCheckNavigationLiveOnly 같은 명시적 prepare 전 분기만 사용한다. live 검사는 기존 경로를 보존하고 새로 만든 일치 경로만 정리하는 별도 시험이다. 향후 실제 검색/일반 앱 사용자 흐름/실차/콜백 누락의 플랫폼 원인은 아직 미완료다.
-
-## 목표
-정비 상담 화면의 기본 경로를 '현재 위치로 주변 정비소 찾기'로 바꾼다. 운전자는 좌표를 입력하지 않는다. Pleos FusedLocation 마지막 위치 → 명시적 동의·신선도 확인 → Firebase 인증 Cloudflare Worker /v2/repair/nearby → 카카오 Local 키워드 검색 → 최대 3곳의 주소·전화·직선거리 → 사용자가 고른 목적지에 기존 NaviHelper를 전달한다.
-
-최초 초안 판정: 소스 구현·별도 브랜치 게시만 수행했다. 당시 미실행인 빌드/검사와 현재 상태의 차이는 상단 통합 결과를 따른다. 실제 정비소 검색이 성공했다고 보고하면 안 된다.
-
-## 기존 기능 재사용
-- MainActivity.kt: 정비 상담 화면의 새 검색 버튼, 상태, 결과 카드, 목적지 선택.
-- integration/NearbyRepairClient.kt: Firebase ID 토큰을 사용하는 HTTPS 요청, 응답 검증, 오류 처리. 로컬 데이터베이스를 변경하지 않는다.
-- infra/gemini-relay/src/nearby-repair.ts: 서버에만 보관할 카카오 REST 키, 반경 20km 거리순 검색, 블루핸즈 후보 우선 표시 및 중복 제거.
-- infra/gemini-relay/src/portable-worker.ts: 기존 Firebase 인증 뒤 추가 라우트 처리. Gemini 호출이나 AI 사용량 장부는 건드리지 않는다.
-- infra/gemini-relay/test/nearby-repair.test.mjs: 공급자 모의 응답만 쓰는 오프라인 테스트. 최초 게시 때 미실행이었으며 이번 실행/추가 경계 검사 결과는 상단에 구분했다.
-
-## 프라이버시와 안전
-- 검색할 때마다 사용자가 위치·외부 서비스 전송에 동의한다. 정확한 위치는 CARITDA Worker로 보내고, 카카오 전송 전에 좌표를 소수점 3자리로 줄인다. 증상, 운전자 이름, 기존 DB는 보내지 않는다.
-- 마지막 위치가 10분 이상 오래되거나 시각 이상이면 검색을 중지한다. 마지막 조회값은 현재 실제 위치를 보장하지 않는다.
-- 화면 거리는 직선거리다. 실제 이동거리·영업시간·예약 가능 여부·공식 블루핸즈 인증 여부는 확인하지 않는다.
-- 경로 요청은 사용자가 업체를 선택하고 확인한 뒤 실행한다. 기존 경로 보호, CarSafetyGate, SQLite·AI·음성 설정은 유지한다. 자동 예약·견인 호출 없음.
-- 종전의 수동 좌표 입력은 고급 대체 경로와 기존 회귀 테스트를 위해 남겨 둔다.
-
-## 활성화 전 필수 조건
-1. 카카오 디벨로퍼스의 Local API 사용 가능 여부, 쿼터, 비용을 확인하고 사용자 계정에서 키를 발급한다. 새 서비스 가입이나 결제는 임의 진행하지 않는다.
-2. Cloudflare Worker secret KAKAO_LOCAL_REST_KEY를 서버에만 등록한다. Android APK, GitHub, 문서에 키를 올리지 않는다.
-3. 별도 호출 제한·비용 통제를 확인한 뒤 PLACES_ENABLED=true 설정 및 Worker 배포를 사용자 승인 후 진행한다.
-4. 기존 Gemini Durable Object BUDGET, Firebase 인증, 암호화 캐시, AI 과금 원장은 절대 초기화·삭제·재생성하지 않는다.
-5. Node 22 이상 환경에서 아래 오프라인 검사, npm run check, Worker dry-run을 수행한다. Android Studio에서 기존 빌드와 driveCheckNavigationUiOnly/인계/음성 회귀 검사를 실행한다.
-6. Pleos 실제 위치→카카오 검색 결과→NaviHelper 경로 상태를 개별 검증한다. 기존 일반 APK를 임의 교체하지 않는다.
-
-오프라인 검사 명령:
-    cd infra/gemini-relay
-    node --experimental-strip-types test/nearby-repair.test.mjs
-    npm run check
-
-## 사용자 경로
-기록 → 기록 상세 → 점검·상태·상담 → 정비 상담 준비 → 현재 위치로 주변 정비소 찾기 → 동의 → 결과 카드 → 이곳으로 길찾기.
-
-## GitHub 협업
-기준은 음성 수정 PR #2의 커밋 a4e0cf5이다. 이 작업은 별도 feature 브랜치에만 게시하고 기존 main과 PR #2를 변경·병합하지 않는다.
-
-공식 근거:
-https://developers.kakao.com/docs/latest/ko/local/dev-guide#search-by-keyword
-https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/NaviHelper/destinations
-https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/FusedLocation/intro
+검증된 명시 파일만 GitHub 연결 도구를 통해 새 수정 브랜치와 **PR #3 대상 별도 PR**에 게시한다. main/PR #2/원래 Draft PR #3/Aside와 다른 파일은 보존한다. 실제 커밋·PR 링크는 원격 확인 후 최종 응답으로 제공한다.

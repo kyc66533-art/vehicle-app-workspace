@@ -28,6 +28,7 @@ interface NavigationBackend {
     fun initialize(events:Events)
     fun checkState()
     fun request(target:NavigationTarget)
+    fun showRepairSearch() { throw UnsupportedOperationException("NAVI_SEARCH_UNSUPPORTED") }
     fun checkDestination()
     fun release()
 }
@@ -57,6 +58,7 @@ class PleosNavigationBackend(context:Context):NavigationBackend {
     }
     override fun checkState()=sdk.getRouteStateInfo()
     override fun request(target:NavigationTarget)=sdk.requestRoute(RouteInfo(latitude=target.latitude,longitude=target.longitude,poiName=target.name.trim(),poiId="",address="",poiSubId=""))
+    override fun showRepairSearch()=sdk.requestNavigationScreen(NavigationScreenRequest.SearchPlace("자동차 정비소"))
     override fun checkDestination()=sdk.getDestinationInfo()
     override fun release(){try{synchronized(lock){closed=true;listener?.let{sdk.removeListener(it)};listener=null}}finally{sdk.release()}}
 }

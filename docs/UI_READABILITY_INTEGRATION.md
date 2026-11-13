@@ -28,12 +28,14 @@
 | androidTest/.../BLightStageTwoChecks.kt | 채택 | 실제 도어 그룹을 펼친 다음 원시값 표현 검사. 실제 validation 실행 |
 | androidTest/.../CompatibilityChecks.kt | 채택 | 바뀐 설정/차량 접근 경로 반영. 레거시 실행기는 컴파일만 확인 |
 | androidTest/.../DesignChecks.kt | 채택 | 목록형 설정·현재 탐색 구조로 접근. 레거시 실행기는 컴파일만 확인 |
-| androidTest/.../IntegratedFlowChecks.kt | 수정 채택 | AAOS ‘기기에서만’ 기대값, 기존 실제 차량 연결/AI/TTS 검사 유지. 실제 validation 실행 |
+| androidTest/.../IntegratedFlowChecks.kt | 기존 유지 | 팀원의 ‘휴대폰에서만’ 변경은 적용하지 않고 원래 AAOS ‘기기에서만’ 기대값을 유지했다. PR #6 원본과 바이트 동일. 기존 실제 차량 연결/AI/TTS 검사는 validation에서 실행 |
 | androidTest/.../NavigationChecks.kt | 수정 채택 | 실제 홈/이전 경로, 헤더 가시성 검사 뒤 원래 목록 스크롤 복원. 레거시 실행기는 컴파일만 확인 |
 | androidTest/.../OnboardingChecks.kt | 수정 채택 | ‘모두 보기’는 ALL·빈 검색이고 이전 검색 복원 제공. 미지원 연료 검사에서 항상 참이 되는 OR 제거. 레거시 실행기는 컴파일만 확인 |
 | androidTest/.../ValidationUiActions.kt | 채택 | 현재 B안 버튼/설정 경로로 실제 이동. 사라진 전역 탭을 클릭한 척하지 않음 |
 
 추가 검증 파일: `ReadabilityUiChecks.kt`와 runner의 `readabilityUiOnly` 조기 분기. `BLightLayoutChecks.kt`는 보안 AI 화면의 캡처를 건너뛰도록 했다. `FLAG_SECURE`를 해제하거나 우회하지 않으며 두 AI 모드의 실제 View/동의 원문/배치는 그대로 검사한다.
+
+원격 PR의 실제 변경은 **42파일**이다. 앱 Kotlin 7개·AndroidTest 11개·문서 2개·검증 JSON 1개·캡처 21개이며, 선택 검토한 43파일 중 `IntegratedFlowChecks.kt`는 원본과 같아 실제 diff에서 제외된다.
 
 채택하지 않은 내용: PR #3의 `repairNearbyPanel`/`NearbyRepairClient`/`findNearbyRepair`, 카카오 위치 전송 확인창, ‘이 휴대폰’ 일괄 치환, SOC의 %와 %p 혼용, 동의 전체 설명을 약화하는 축약. 신규 지도·검색 서비스·서버 기능은 추가하지 않았다.
 

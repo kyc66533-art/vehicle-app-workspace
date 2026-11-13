@@ -211,7 +211,7 @@ class MainActivity : Activity() {
     private fun findNearbyRepair(){
         if(!canEdit()||nearbyBusy||navigation.busy)return
         confirm("주변 정비소를 찾을까요?",
-            "차량의 최근 확인 위치를 조회한 뒤 약 100m 단위 위치를 CARITDA 중계 서버와 카카오 장소 검색 서비스에 전송해요. 문제 내용·운전자 정보는 보내지 않아요. 정비소를 선택해야 길찾기를 시작해요."){
+            "차량의 최근 확인 위치를 CARITDA 중계 서버에 전송하고, 카카오 장소 검색에는 약 100m 단위로 줄여 전달해요. 문제 내용·운전자 정보는 보내지 않아요. 정비소를 선택해야 길찾기를 시작해요."){
             permission("pleos.car.permission.FUSED_LOCATION"){
                 if(!visible||screen!=Screen.SUMMARY||!canEdit())return@permission
                 val run=++nearbyGeneration

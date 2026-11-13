@@ -205,11 +205,11 @@ class MainActivity : Activity() {
 
     /**
      * Explicit one-shot permission, location freshness and external-service disclosure.
-     * Only the approximate coordinate is sent to the Firebase-protected relay.
+     * Full coordinates reach our Firebase-protected relay, which rounds for Kakao.
      * Never writes to issue/AI/vehicle SQLite and never invokes Gemini.
      */
     private fun findNearbyRepair(){
-        if(!canEdit()||nearbyBusy||navigation.busy)return
+        if(!canWrite()||nearbyBusy||navigation.busy)return
         confirm("주변 정비소를 찾을까요?",
             "차량의 최근 확인 위치를 CARITDA 중계 서버에 전송하고, 카카오 장소 검색에는 약 100m 단위로 줄여 전달해요. 문제 내용·운전자 정보는 보내지 않아요. 정비소를 선택해야 길찾기를 시작해요."){
             permission("pleos.car.permission.FUSED_LOCATION"){
@@ -276,7 +276,7 @@ class MainActivity : Activity() {
         section.addView(ui.sectionTitle("가까운 정비소 찾기",HmiIcon.VEHICLE))
         section.addView(label("현재 위치를 기준으로 정비소를 검색해요. 좌표 입력은 필요 없어요.",22))
         section.addView(ui.action(if(nearbyBusy)"검색 중..."else"현재 위치로 주변 정비소 찾기",
-            "repair_nearby_search",ActionStyle.PRIMARY,canEdit()&&!nearbyBusy&&!navigation.busy){findNearbyRepair()})
+            "repair_nearby_search",ActionStyle.PRIMARY,canWrite()&&!nearbyBusy&&!navigation.busy){findNearbyRepair()})
         if(nearbyStatus.isNotBlank())section.addView(label(nearbyStatus,20))
         nearbyPlaces.forEach{place->
             val card=panel()
@@ -1380,7 +1380,12 @@ class MainActivity : Activity() {
         val issues=selectedIssue?.let{listOf(service.issue(it))}?:service.issues()
         body.addView(label(if(selectedIssue==null)"전체 기록 ${issues.size}건으로 상담을 준비해요."else"이 기록으로 상담을 준비해요.",24))
         body.addView(label("정비소로 자동 전송하거나 예약하지 않아요.",20))
-        if(issues.isNotEmpty())repairNearbyPanel(body)
+        if(issues.isNotEmpty()){
+            repairNearbyPanel(body)
+            // Legacy coordinate action stays available as a quiet fallback and for existing regression checks.
+            body.addView(ui.action("고급 · 좌표로 직접 길찾기", "inspection_navigation",ActionStyle.QUIET,
+                canEdit()&&!navigation.busy,HmiIcon.VEHICLE){destination()})
+        }
         navigationEvents.lastOrNull()?.let{event->
             body.addView(ui.state("길찾기 확인",InspectionNavigation.message(event.code)).apply{tag="navigation_progress"})
             fold(body,"길찾기 수신 이력","navigation_details"){it.addView(label(navigationEvents.joinToString("\n\n"){e->vehicleDisplay.time(e.at)+"\n"+InspectionNavigation.message(e.code)},20))}

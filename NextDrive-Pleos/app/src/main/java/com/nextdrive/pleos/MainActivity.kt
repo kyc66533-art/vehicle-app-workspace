@@ -111,6 +111,11 @@ class MainActivity : Activity() {
     private val speechInput by lazy{SpeechInput(this){visible&&canWrite()}}
     private val locationReader by lazy{OneShotLocation(this){visible&&canWrite()}}
     private val navigation by lazy{InspectionNavigation(this){visible&&canEdit()}}
+    private val nearbyWorker=java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var nearbyGeneration=0
+    private var nearbyBusy=false
+    private var nearbyStatus=""
+    private var nearbyPlaces=emptyList<NearbyRepairPlace>()
     private var locationHistory=false
     private var locationHistoryLimit=3
     private var navigationFields:List<EditText>?=null
@@ -122,7 +127,7 @@ class MainActivity : Activity() {
     private val fixturePrefix by lazy { intent.getStringExtra("validation_fixture")?.takeIf {
         packageName=="com.nextdrive.pleos.validation" && Regex("gleo-ui-[a-f0-9-]{36}").matches(it)
     } }
-    private fun stopAssistance(){homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
+    private fun stopAssistance(){nearbyGeneration++;nearbyBusy=false;homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
         if(navigation.busy)navigationEvents=navigation.events+InspectionNavigation.Event("NAVI_MONITOR_STOPPED",System.currentTimeMillis())
         navigation.stop();permissionAction=null}
     private fun locationStore()=IssueLocationStore(this,fixturePrefix?.let{it+"-locations.db"}?:"caritda-issue-location.db")
@@ -196,6 +201,95 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    /**
+     * Explicit one-shot permission, location freshness and external-service disclosure.
+     * Only the approximate coordinate is sent to the Firebase-protected relay.
+     * Never writes to issue/AI/vehicle SQLite and never invokes Gemini.
+     */
+    private fun findNearbyRepair(){
+        if(!canEdit()||nearbyBusy||navigation.busy)return
+        confirm("주변 정비소를 찾을까요?",
+            "차량의 최근 확인 위치를 조회한 뒤 약 100m 단위 위치를 CARITDA 중계 서버와 카카오 장소 검색 서비스에 전송해요. 문제 내용·운전자 정보는 보내지 않아요. 정비소를 선택해야 길찾기를 시작해요."){
+            permission("pleos.car.permission.FUSED_LOCATION"){
+                if(!visible||screen!=Screen.SUMMARY||!canEdit())return@permission
+                val run=++nearbyGeneration
+                nearbyBusy=true;nearbyStatus="차량의 마지막 확인 위치를 조회하고 있어요.";nearbyPlaces=emptyList();draw()
+                locationReader.read{value,code->
+                    if(run!=nearbyGeneration||screen!=Screen.SUMMARY||!visible)return@read
+                    if(value==null){
+                        nearbyBusy=false;nearbyStatus=LocationPresentation.failure(code);draw()
+                        return@read
+                    }
+                    if(LocationPresentation.freshness(value)!="최근에 측정된 마지막 확인 위치예요."){
+                        nearbyBusy=false;nearbyStatus=NearbyRepairClient.message("LOCATION_STALE");draw()
+                        return@read
+                    }
+                    nearbyStatus="정비소 목록을 검색하고 있어요.";draw()
+                    com.nextdrive.pleos.ai.auth.FirebaseSessionProvider.withSession{_,bearer,error->
+                        runOnUiThread{
+                            if(run!=nearbyGeneration||screen!=Screen.SUMMARY||!visible)return@runOnUiThread
+                            if(bearer.isNullOrBlank()){
+                                nearbyBusy=false;nearbyStatus=NearbyRepairClient.message(error?:"AUTH_SIGN_IN_REQUIRED");draw()
+                            }else{
+                                nearbyWorker.execute{
+                                    val result=runCatching{NearbyRepairClient.search(value.latitude,value.longitude,bearer)}
+                                    runOnUiThread{
+                                        if(run==nearbyGeneration&&screen==Screen.SUMMARY&&visible&&canEdit()){
+                                            nearbyBusy=false
+                                            result.onSuccess{
+                                                nearbyPlaces=it
+                                                nearbyStatus=if(it.isEmpty())"반경 20km에서 확인된 정비소가 없어요. 검색 범위를 확인해 주세요."
+                                                else "주변 정비소 ${it.size}곳을 찾았어요. 직선거리 기준이며 영업·예약 가능 여부는 확인되지 않았어요."
+                                            }.onFailure{
+                                                nearbyPlaces=emptyList()
+                                                nearbyStatus=NearbyRepairClient.message((it as? NearbyRepairError)?.code?:"PLACES_NETWORK_UNAVAILABLE")
+                                            }
+                                            draw()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun selectedRepairDestination(place:NearbyRepairPlace){
+        if(!canEdit()||navigation.busy)return
+        confirm("이 정비소로 길찾기를 시작할까요?",
+            "${place.name}\n${place.address}\n업체 정보·영업 여부는 별도로 확인해 주세요. 정비 예약이나 견인 신청은 하지 않아요."){
+            if(!canEdit()||screen!=Screen.SUMMARY||navigation.busy)return@confirm
+            navigation.request(place.latitude,place.longitude,place.name){code->
+                notice=InspectionNavigation.message(code);navigationEvents=navigation.events
+                feedback?.apply{text=notice;visibility=View.VISIBLE}
+                if(screen==Screen.SUMMARY){positions[screen]=scrollView?.scrollY?:0;draw()}
+            }
+        }
+    }
+
+    private fun repairNearbyPanel(body:LinearLayout){
+        val section=panel()
+        section.addView(ui.sectionTitle("가까운 정비소 찾기",HmiIcon.VEHICLE))
+        section.addView(label("현재 위치를 기준으로 정비소를 검색해요. 좌표 입력은 필요 없어요.",22))
+        section.addView(ui.action(if(nearbyBusy)"검색 중..."else"현재 위치로 주변 정비소 찾기",
+            "repair_nearby_search",ActionStyle.PRIMARY,canEdit()&&!nearbyBusy&&!navigation.busy){findNearbyRepair()})
+        if(nearbyStatus.isNotBlank())section.addView(label(nearbyStatus,20))
+        nearbyPlaces.forEach{place->
+            val card=panel()
+            card.addView(label(place.name,24,true))
+            card.addView(label(
+                "${if(place.bluehandsCandidate)"블루핸즈 검색 후보 · "else""}직선거리 약 ${place.distanceMeters}m\n${place.address}" +
+                (if(place.phone.isNotBlank())"\n전화 ${place.phone}"else""),20))
+            card.addView(ui.action("이곳으로 길찾기","repair_nearby_route_${place.id}",
+                ActionStyle.SECONDARY,canEdit()&&!navigation.busy,HmiIcon.VEHICLE){selectedRepairDestination(place)})
+            section.addView(card)
+        }
+        section.addView(label("카카오 장소 검색 결과이며 현대 공식 서비스점 인증·예약·견인 여부를 확인한 자료가 아니에요.",20))
+        body.addView(section)
     }
 
     private fun destination(){
@@ -380,7 +474,7 @@ class MainActivity : Activity() {
         homeVoice?.resume()
     }
     override fun onStop() { visible=false;removeVoiceAuth?.invoke();removeVoiceAuth=null;deferredAttention=null;stopAssistance();if(!isChangingConfigurations)entry=EntryReadState();captureDraft(); activeDialog?.dismiss(); freshnessHandler.removeCallbacks(freshnessTick);pleos.stop();stopSocWatch("앱이 보이지 않아 자동 확인을 멈췄어요. 관측 공백이 있어요."); safety.stop(); displayedSafety = EditingState.UNKNOWN; super.onStop() }
-    override fun onDestroy() { homeVoice?.close();aiConsent?.revoke();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();attentionEvents.close();super.onDestroy() }
+    override fun onDestroy() { homeVoice?.close();aiConsent?.revoke();nearbyWorker.shutdown();analysisWorker.shutdown();repository.close(); observations.close();snapshots.close();lowSoc.close();attentionEvents.close();super.onDestroy() }
     override fun onSaveInstanceState(outState: Bundle) {
         captureDraft()
         outState.putStringArrayList("expandedSections",ArrayList(expandedSections));outState.putBoolean("showHealth",showHealth);outState.putBoolean("showUnavailable",showUnavailable);outState.putBoolean("hiddenSnapshots",hiddenSnapshots);outState.putBoolean("socTechnical",socTechnical);outState.putInt("socHistoryLimit",socHistoryLimit)
@@ -1286,7 +1380,7 @@ class MainActivity : Activity() {
         val issues=selectedIssue?.let{listOf(service.issue(it))}?:service.issues()
         body.addView(label(if(selectedIssue==null)"전체 기록 ${issues.size}건으로 상담을 준비해요."else"이 기록으로 상담을 준비해요.",24))
         body.addView(label("정비소로 자동 전송하거나 예약하지 않아요.",20))
-        if(issues.isNotEmpty())body.addView(ui.action("정비 장소 길찾기 · 좌표 입력","inspection_navigation",ActionStyle.SECONDARY,canEdit()&&!navigation.busy,HmiIcon.VEHICLE){destination()})
+        if(issues.isNotEmpty())repairNearbyPanel(body)
         navigationEvents.lastOrNull()?.let{event->
             body.addView(ui.state("길찾기 확인",InspectionNavigation.message(event.code)).apply{tag="navigation_progress"})
             fold(body,"길찾기 수신 이력","navigation_details"){it.addView(label(navigationEvents.joinToString("\n\n"){e->vehicleDisplay.time(e.at)+"\n"+InspectionNavigation.message(e.code)},20))}

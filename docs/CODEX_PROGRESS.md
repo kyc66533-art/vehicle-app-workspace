@@ -1,5 +1,25 @@
 # Codex 개발 진행 기록
 
+## 2026-11-13 09:00 +09:00 — 전날 음성 수정본의 브랜치·PR 게시 재개
+
+- 사용자 지시로 어제의 게시 중단만 이어 처리한다. GitHub 연결 도구로 현재 main7f913a466490664171706029a3235885558a7584/tree8fcbde02d030b175474216b143d3affc5547fabf를 재확인했으며 어제 기준과 같다. 이후 다시 원격을 확인하고 별도 `fix/stt-home-wake-confirmation-20261113` 브랜치·main 대상 PR로 게시한다. main 직접 갱신/병합은 하지 않는다.
+- 실제 앱 수정은 Router의 전체 문장 ‘가 있다’ 확인 후보, HomeRuntime의 확인 질문, Controller의 명시적 긍정 후 별도 증상 분기다. 기존 엄격한 호출 패턴·수동 STT·final+실제ended·전체TTS DONE·안전/소유권/DB/AI 정책을 그대로 유지했다. 어제 원인 분리와 A→B→A 실제 사용자 시험을 다시 만들지 않는다.
+- Kotlin5개(앱3/검사·runner2)가 어제 검증 manifest와 바이트 동일함을 확인했다. 원본301파일과 현재 파일을 다시 비교해 명시 파일 밖의 변경을 게시에 섞지 않는다. Debug/Validation/AndroidTest/Lint 성공·332 assertion·실제 발화/TTS·1025DB/17023원본행 보존은 11월12일 검사 결과로 명시하며 오늘 재실행한 결과로 세지 않는다.
+- 오늘은 소스 해시·정확한 diff·이전 빌드/검사 증거·문서 링크/인코딩·비밀정보·게시 파일/원격SHA/부모/나머지·Aside 보존을 검사한다. 소스 재작성·일반/TEST APK 교체·ADB/앱/SQLite 조작·Gemini 요청·Worker 배포는 하지 않는다. 기존 로컬 수정본12파일을 별도 로컬 사본으로 보존했다.
+- 병행 개발의 main 보호 규칙을 AGENTS와 GITHUB_SYNC에 명시했다. 어제 `user cancelled MCP tool call`은 당시 기록으로 유지한다. 이번 브랜치/PR의 실제 성공 여부·커밋/링크는 원격 확인 뒤 최종 응답으로 보고하며 보고서에 자신의 SHA를 넣기 위한 반복 커밋은 하지 않는다.
+
+## 2026-11-12 23:38 +09:00 — 수동 STT 복구·확인형 홈 호출 실제 교차 검증
+
+- 기준 main7f913a466490664171706029a3235885558a7584/tree8fcbde02, 원격330blob/공통301파일 일치·전용 연구29개 보존. 기존 성공을 재사용해 장애 구간만 검사했다. Git/GCM/루트.git·AVD/DB/오디오 초기화·모델 호출·Worker 배포0.
+- 일반 Windows 사용자 실제 캡처 peak7682/RMS0.016347에 비해 사용자 발화 중 Android peak2/RMS0.000014. hostmicon OK/권한allow/silencedfalse와 실제 파형 실패를 분리했다. 사용자 승인 정상 Stop/같은 AVD allow-host-audio 시작·config SHA 유지 뒤 Android peak14958/RMS0.033866·한국어 진단2회·Main 자동 반영이 복구됐다. 옵션과 장치 재초기화 기여는 미분리다.
+- 이후 실제 ‘카잇다’가 최종 ‘가 있다’로 반복 변환돼 홈 패턴이 거부하는 별도 원인 확인. 수정 전 원인/대상3파일 보고 후 Router 전체문장 확인 후보·HomeRuntime 확인 질문·Controller 네/예/맞아요→말씀하세요→별도증상만 추가했다. 수동 Main/SpeechInput/Backend/Output·소유권·DB/AI 코드는 유지했다. 새 확인 검사14와 prepare 전 runner 분기 외 무관 변경 없음.
+- 실제 validation 고유 UUID에서 A→B→A 완료. B의 첫 ‘그래’는 저장0/종료, 재호출 가 있다→네→증상→1건/receipt1/revision1/UNRESOLVED·실제 TTS DONE/후속READY 확인. ‘음성 대기 꺼 줘’는 final 없이 시간 초과여서 실제 OFF 성공으로 세지 않았다. 설정 OFF 뒤 마지막 실제 한국어 final+ended/COMPLETE·초안 반영 사용자 확인. 세션 충돌은 재현되지 않았으며 독립 엔진/외부Gleo 성공이 아니다.
+- Debug/Validation/AndroidTest/Lint/Unit BUILD SUCCESSFUL2m31s, TEST 이름 수정 AndroidTest1m4s. Lint0오류67경고·Unit NO-SOURCE. 새14+직접 관련318=332 assertion(Pleos READY/취소6·실제전체TTS3 별도), 전체477/198 무조건 반복 없음. fixture/실제SDK/사용자발화/실모델을 구분했다.
+- 원본1025DB/17023행·전체schema/version/integrity/FK 보존. 일반25문제/100이벤트/10운전자/0초안 불변, 업데이트전125/일반실행후159행 추가(관측128·스냅샷5·인사이트10·SOC평가13/공백3). validation 기존14356행 변경0/새 고유DB50. 일반private는업데이트전17동일/최종15동일·heartbeat/설치표시2변경, 인증/AI캐시동일. validation419동일/6변경. 진단 로그/백업/개인 SDK 원문은 게시하지 않는다. 종료 후AppOp runningfalse/자체focus없음/CAAS캡처stop, 다른 UID 시스템Gleo HOTWORD_TAP과 구분했다.
+- 일반APK기존서명동일 install-r·설치SHA263b11576c6c1aeea4a67e97cefa1a4950f098c90797866c52d3260ea27ed7ef 대조/실행resumed 성공, 일반UI자동조작0·Vosk제외. 가동중사본 observations_recent 인덱스검사FAIL은 보존했고 원본수정/재색인없이 쓰기중단후새사본에서1025DB전체PASS. 비원자복사영향으로판단/원본손상확정안함. 실제일반사람발화는미검증이다.
+- 공식 공모전 개발/제출/심사/FAQ·Pleos STT3.3.1/공식 샘플을 선택 재확인. 마감11월15일23:59/Release·심사접근 준비/기획과 실제 전면·정차 범위 차이를 [STT 안정화](STT_STABILITY.md)에 출처와 기록했다. 이전 웹snapshot이 없어 오늘 신규변경으로 단정하지 않았다. 운전/전화·내비 실제경합·일반사람발화·실차는 남음.
+- 원인/검증 결과를 먼저 보고한 뒤 일반 기존서명 업데이트를 완료했다. 명시11파일의 공유안전·원본이력·대상SHA·로컬301기준 대조를 통과해 GitHub 연결 도구를 통한 게시를 시도했으나 create_tree가 `user cancelled MCP tool call`을 반환했다. 같은 변경을 재시도하지 않았으며 새 main 커밋은 없다. 이후 원격main7f913a466490664171706029a3235885558a7584/tree8fcbde02 불변을 읽기 확인했다. 검증된 로컬 코드/문서/백업은 보존했다.
+
 ## 2026-11-12 16:30 +09:00 — 홈 음성 대기·Gemini 대화 운영 배포·실모델 검증
 
 - 시작 main a9c2b29c66ccff3b5a0bd2381113834e731eb5a2/tree3f36ad26, 공통285파일 일치·원격314blob/전용연구29개 보존. 기존자동화/DBv4/receipt/Gleo/SDK/B안/503보호를 재사용했다. 독립호출·실제발화·실모델·일반앱·외부Gleo/실차를 구분하며 전체음성완료라고 판정하지 않는다.

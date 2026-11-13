@@ -11,6 +11,10 @@ sealed class VoiceCommand {
 }
 /** Deliberately narrow local router. No model is allowed to decide a SQLite write. */
 object VoiceCommandRouter {
+    /** Observed ON_DEVICE result for the user's wake trial. This is NOT a wake match:
+     * only the foreground standby host may ask for explicit confirmation of this whole phrase. */
+    fun needsWakeConfirmation(raw:String)=raw.trim().replace(Regex("[\\s,.!?。]"),"")=="가있다"
+    fun confirmsWake(raw:String)=raw.trim().replace(Regex("[\\s,.!?。]"),"") in setOf("네","예","맞아요")
     /** Orthographic whitespace only; no unverified phonetic aliases. */
     fun afterWake(raw:String):String?{
         val text=raw.trim()

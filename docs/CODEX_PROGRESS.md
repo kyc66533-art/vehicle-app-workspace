@@ -1,5 +1,17 @@
 # Codex 개발 진행 기록
 
+## 2026-11-13 23:55 +09:00 — 카카오 계획 중단·공식 Pleos 정비소 검색 화면 연결
+
+- 최신 지시에 따라 PR #3(a0a421fa)을 부모로 별도 fix/pleos-native-repair-search-20261113 브랜치를 만들었다. 기존 로컬261개 대상 파일이 원격과 일치함을 확인하고 원본 소스/일반·validation 데이터를 새 사본으로 보존했다. main/PR #2/원래 Draft PR #3은 직접 갱신·병합하지 않는다.
+- 공식 NaviHelper3.0.5·전이 navi-data3.0.4 공개 소스/문서·공식 navi-app 예제를 확인해 requestNavigationScreen(SearchPlace("자동차 정비소"))를 채택했다. MainActivity/NavigationBackend/새 InspectionSearch/Normal NAVI_CUSTOM_MAP 권한으로 기존 내비에 연결한다. 이름·좌표·로그인/새 지도 API 입력이 필요 없다. 기존 경로/약관/권한/안전 상태·generation·중복·해제를 유지한다. 수동 requestRoute 고급 경로는 보존했다.
+- 카카오 Client/검사/서버 핸들러/Node 검사2개를 제외했다. portable-worker.ts는 카카오3곳만 제거해 PR #2 원본 blob e2f5ef235dd6bb046a5e0d426b1d8dfafd3c04c1과 동일하다. 기존 Gemini 분석/대화·Firebase·BUDGET·운영 설정/음성·SQLite 스키마는 그대로다. 유료 Gemini·서버 배포·새 서비스 신청0.
+- 실제 TEST 버튼 → SDK 무경로/약관 확인 → 내비 정비소 목록 → 업체 선택 → 목적지로 → 미리보기/안내 화면을 확인했다. 실제 ROUTE_SEARCH_STARTED/선택 이름·좌표 일치/ROUTE_DRIVE/ROUTE_GUIDING 수신. onRoutingCompleted는 실제45초 미수신이라 전체 SDK 완료/도착 성공으로 만들지 않는다. 소유 증거가 있는 새 시험 경로만 취소해 SDK 무경로와 ‘어디로 갈까요?’로 복원했다. ACTION_SEARCH resolve만으로는 화면이 열리지 않아 채택하지 않았다.
+- Debug/Validation/AndroidTest/Lint 성공(0오류/68경고), Unit NO-SOURCE 제외. 신규26+관련 회귀407+실제 SDK 진단8=441 assertion/22분기. Node 인증/예산/문제/대화169/TypeScript 성공. 기존477/198 전체나 중간 실행을 중복 합산하지 않는다. validation 고유fixture/prepare 전 분기만 실행했다. 일반 앱 동일 서명 install-r 반영, 일반 UI 자동 실행/조작0.
+- 데이터 감사: 원본1149DB/20021행 누락0·schema/version/integrity/FK 정상. 일반31문제/113이벤트/10운전자/0초안·validation 루트1/1/2/0 유지. 단, 이미 ENDED인 일반 음성 세션1개의 ended가22:45:25.918→23:39:46.628 KST로 재기록돼 strict완전동일은 FAIL이다. 나머지20020행 동일, 일반 신규 파생/관측73행·validation 고유DB95개 추가. 변경은 일반 APK 업데이트23:49:07 이전 실행 기간이며 기존 종료 처리로 판단/정확한 스택 미계측이다. 음성 원본 수정/값 복원0. 일반private17동일/삭제0, validation455동일7변경/삭제0. 전후 사본·예외를 비공개로 보존했다.
+- [최신 구현·공식 근거·실제 시연·한계·사용 경로](NEARBY_REPAIR_INTEGRATION.md)를 갱신했다. 검증된 명시 파일만 GitHub 연결 도구를 통한 게시로 새 브랜치/PR #3 대상 별도 PR에 담는다. Aside/나머지 파일 SHA·부모·기대HEAD를 확인하며 실제 게시 결과/커밋은 최종 응답에서 보고한다.
+
+
+
 ## 2026-11-13 22:59 +09:00 — PR #3 주변 정비소 로컬 통합·NaviHelper 재검증
 
 - PR #3 Draft/head a71bdc1d3a5de395b419f597542aedd0f46f0ea4/base PR #2 a4e0cf5와 로컬302파일 일치, 원격 전용 연구29개 보존. 소스/최신 일반·validation 백업 후 PR7파일을 반영했다. main/PR #2 병합·일반 APK 교체·서버 배포·추가 Gemini 유료 호출0.

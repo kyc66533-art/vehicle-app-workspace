@@ -127,7 +127,7 @@ class MainActivity : Activity() {
     private val fixturePrefix by lazy { intent.getStringExtra("validation_fixture")?.takeIf {
         packageName=="com.nextdrive.pleos.validation" && Regex("gleo-ui-[a-f0-9-]{36}").matches(it)
     } }
-    private fun stopAssistance(){nearbyGeneration++;nearbyBusy=false;homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
+    private fun stopAssistance(){nearbyGeneration++;nearbyBusy=false;nearbyPlaces=emptyList();nearbyStatus="";homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
         if(navigation.busy)navigationEvents=navigation.events+InspectionNavigation.Event("NAVI_MONITOR_STOPPED",System.currentTimeMillis())
         navigation.stop();permissionAction=null}
     private fun locationStore()=IssueLocationStore(this,fixturePrefix?.let{it+"-locations.db"}?:"caritda-issue-location.db")
@@ -625,6 +625,9 @@ class MainActivity : Activity() {
         body.addView(ui.grid(listOf(left,right),columns(840)))
     }
     private fun draw() {
+        if(screen!=Screen.SUMMARY && (nearbyBusy||nearbyPlaces.isNotEmpty()||nearbyStatus.isNotBlank())){
+            nearbyGeneration++;nearbyBusy=false;nearbyPlaces=emptyList();nearbyStatus="";locationReader.stop()
+        }
         if(::service.isInitialized)ActionDriverSession.id=if(service.confirmed())service.driver().id else null
         if(screen!=Screen.RECORD&&speechFormVisible){speechInput.stop();speechFormVisible=false}
         if (!::service.isInitialized || isDestroyed || isFinishing) return

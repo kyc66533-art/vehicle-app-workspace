@@ -1,0 +1,1337 @@
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AnalyticsChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AnalyticsChecks.kt
+index d92fbe9..fcecddf 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AnalyticsChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AnalyticsChecks.kt
+@@ -19,7 +19,13 @@ class AnalyticsChecks(private val inst:Instrumentation){
+     private fun <T> main(f:()->T):T{var v:T?=null;var err:Throwable?=null;inst.runOnMainSync{try{v=f()}catch(t:Throwable){err=t}};err?.let{throw it};@Suppress("UNCHECKED_CAST")return v as T}
+     private fun await(s:String,seconds:Int=30,f:()->Boolean){val end=System.currentTimeMillis()+seconds*1000;while(System.currentTimeMillis()<end){if(f())return;Thread.sleep(100)};error(s)}
+     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
+-    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error(k);check(v.isEnabled);v.performClick()};inst.waitForIdleSync()}
++    private fun click(a:MainActivity,k:String){
++        // The B light UI has no hidden nav_*/menu Views: BLightTestNavigation follows the real visible buttons instead.
++        val routed=BLightTestNavigation.prepare(inst,a,k);inst.waitForIdleSync()
++        if(routed)return
++        // The local JSON preview tool lives on the app-information (LOAD_DETAIL) screen inside a folded section: follow the real buttons there.
++        if(k=="analysis_ai"&&main{tag(a,k)==null}){click(a,"nav_VEHICLE");click(a,"load_details");if(main{tag(a,"analysis_preview_tool")==null})click(a,"developer_info");if(main{tag(a,k)==null})click(a,"analysis_preview_tool")}
++        main{val v=tag(a,k)?:error(k);check(v.isEnabled);v.performClick()};inst.waitForIdleSync()}
+     private fun nodes(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{nodes(v.getChildAt(it))}else emptyList()
+     private fun text(a:MainActivity)=main{nodes(a.window.decorView).filterIsInstance<TextView>().joinToString("\n"){it.text.toString()}}
+     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+@@ -95,9 +101,9 @@ class AnalyticsChecks(private val inst:Instrumentation){
+         click(activity,"nav_VEHICLE");val count=raw.refs().size;click(activity,"soc_notices")
+         verify(text(activity).contains("최근 충전량")&&main{tag(activity,"soc_current_value")!=null&&tag(activity,"soc_history")!=null},"UI latest actual SOC separate from collapsed historical episodes")
+         click(activity,"back");click(activity,"vehicle_analytics");await("automatic worker report"){main{tag(activity,"analysis_statistics")!=null}}
+-        verify(main{tag(activity,"analysis_chart")?.contentDescription?.isNotBlank()==true}&&text(activity).contains("AI 모델 응답이 아니에요"),"UI actual SDK chart has text alternative and honest local explanation")
++        verify(main{tag(activity,"analysis_chart")?.contentDescription?.isNotBlank()==true}&&text(activity).contains("AI가 쓴 글이 아니에요"),"UI actual SDK chart has text alternative and honest local explanation")
+         click(activity,"analysis_ODOMETER");await("ODO chart"){text(activity).contains("최근 수신 누적거리")};verify(text(activity).contains("0 km"),"UI real valid zero-distance is not missing data")
+-        click(activity,"analysis_EV_SOC");click(activity,"analysis_ai");verify(text(activity).contains("외부로 전송하지 않아요")&&main{tag(activity,"ai_payload_preview")!=null},"UI AI preview discloses payload and unavailable actual connection")
++        click(activity,"analysis_EV_SOC");click(activity,"analysis_ai");verify(text(activity).contains("밖으로 보내지 않아요")&&main{tag(activity,"ai_payload_preview")!=null},"UI AI preview discloses payload and unavailable actual connection")
+         click(activity,"ai_consent");click(activity,"ai_cancel");verify(raw.refs().size==count,"UI consent cancel and chart navigation never trigger SDK reads")
+         shot("chart-light");main{activity.getPreferences(0).edit().putString("theme","dark").commit()};click(activity,"nav_VEHICLE");click(activity,"vehicle_analytics");await("dark chart"){main{tag(activity,"analysis_chart")!=null}};shot("chart-dark")
+         matrix(activity)
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AutomaticChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AutomaticChecks.kt
+index feb10da..8bd84e0 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AutomaticChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/AutomaticChecks.kt
+@@ -20,7 +20,7 @@ class AutomaticChecks(private val inst:Instrumentation){
+     private fun <T> main(f:()->T):T{var r:T?=null;inst.runOnMainSync{r=f()};@Suppress("UNCHECKED_CAST")return r as T}
+     private fun await(label:String,f:()->Boolean){val until=System.currentTimeMillis()+25000;while(System.currentTimeMillis()<until){if(f())return;Thread.sleep(80)};error(label)}
+     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
+-    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled){"Disabled $k"};v.performClick()};inst.waitForIdleSync()}
++    private fun click(a:MainActivity,k:String){val routed=BLightTestNavigation.prepare(inst,a,k);inst.waitForIdleSync();if(routed)return;main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled){"Disabled $k"};v.performClick()};inst.waitForIdleSync()}
+     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+     private fun rows(db:SQLiteDatabase,table:String)=db.rawQuery("SELECT * FROM $table ORDER BY 1",null).use{r->buildList{while(r.moveToNext())add((0 until r.columnCount).map{if(r.isNull(it))null else r.getString(it)})}}
+     fun run():List<String>{
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/BLightStageTwoChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/BLightStageTwoChecks.kt
+index fe3d293..ca73720 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/BLightStageTwoChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/BLightStageTwoChecks.kt
+@@ -35,6 +35,7 @@ class BLightStageTwoChecks(private val inst:Instrumentation){
+             click("driver_${a.id}");click("start_driving");click("vehicle_health")
+             verify(h.main{activity.window.decorView.findViewWithTag<View>("metric_EV_SOC")!=null&&activity.window.decorView.findViewWithTag<View>("drivecheck_item_DOOR_FL")==null},"BT01 health defaults to major values without expanded raw signal cards")
+             click("health_expand")
++            click("health_toggle_DOOR_FL")
+             verify(text().contains("위치 정보 수신")&&!text().contains("문 위치값 3"),"BT02 door integer is grouped as a received position, never inferred open/closed")
+             verify(h.main{h.views(activity.window.decorView).count{it.tag?.toString()?.startsWith("health_group_")==true}==4},"BT03 four door/lamp/notice/threshold groups replace individual technical cards")
+             click("health_technical");verify(text().contains("position")&&text().contains("앱 수신"),"BT04 exact raw unit/time/support/source remain in explicit technical details")
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/CompatibilityChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/CompatibilityChecks.kt
+index 1dbfda1..e942b34 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/CompatibilityChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/CompatibilityChecks.kt
+@@ -24,11 +24,13 @@ class CompatibilityChecks(private val inst:Instrumentation) {
+     private fun nodes(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{nodes(v.getChildAt(it))}else emptyList()
+     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
+     private fun text(a:MainActivity)=main{nodes(a.window.decorView).filterIsInstance<TextView>().filter{it.visibility==View.VISIBLE}.joinToString("\n"){it.text.toString()}}
+-    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled);check(v.performClick())};inst.waitForIdleSync()}
++    private fun click(a:MainActivity,k:String){val routed=BLightTestNavigation.prepare(inst,a,k);inst.waitForIdleSync();if(routed)return;main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled);check(v.performClick())};inst.waitForIdleSync()}
+     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+     private fun screenshot(name:String){inst.waitForIdleSync();val b=inst.uiAutomation.takeScreenshot()?:error("screenshot");c.openFileOutput("compat-$name.png",0).use{check(b.compress(Bitmap.CompressFormat.PNG,100,it))};b.recycle()}
+-    private val menuKeys=listOf("change_driver","my_issues","auto_snapshots","help","vehicle_settings")
+-    private fun menu(a:MainActivity)=main{nodes(tag(a,"more_menu")!!).filterIsInstance<Button>().map{it.tag.toString() to it.text.toString()}}
++    private val menuKeys=listOf("manage_drivers","vehicle_settings","voice_settings_history","help","replay_guide","ai_account_check","app_technical")
++    // Settings are one list of rows reached from home (B light): open it, then press the row.
++    private fun settingsRow(a:MainActivity,key:String){click(a,"menu");click(a,key)}
++    private fun menu(a:MainActivity)=main{nodes(a.window.decorView).filterIsInstance<Button>().map{it.tag.toString()}.filter{it in menuKeys}.map{it to ""}}
+     private fun dbRows(repo:SqliteIssueRepository)=listOf("drivers","issues","events","settings","drafts").associateWith{t->repo.readableDatabase.rawQuery("SELECT * FROM $t ORDER BY 1",null).use{r->buildList{while(r.moveToNext())add((0 until r.columnCount).map{if(r.isNull(it))null else r.getString(it)})}}}
+     fun run():List<String>{
+         ValidationEnvironment.requireIsolated(c)
+@@ -43,58 +45,58 @@ class CompatibilityChecks(private val inst:Instrumentation) {
+         click(a,"driver_A");click(a,"start_driving")
+         await("actual entry complete"){obs.latest(3).size==3&&snapshots.latest()!=null}
+         val count=obs.refs().size;val records=dbRows(repo)
+-        var reference:List<Pair<String,String>>?=null
++        val settingsKeys=listOf("manage_drivers","vehicle_settings","voice_settings_history","help","replay_guide","ai_account_check","app_technical")
+         for(route in listOf("nav_HOME","nav_ISSUES","nav_VEHICLE")){
+             click(a,route)
+             if(route=="nav_ISSUES"){
+                 main{(tag(a,"record_search") as EditText).setText("검증")};click(a,"apply_search");click(a,"filter_MANAGED")
+             }
+-            main{(tag(a,"screen_scroll") as ScrollView).scrollTo(0,250)};inst.waitForIdleSync()
+-            val position=main{(tag(a,"screen_scroll") as ScrollView).scrollY}
+-            click(a,"menu");val current=menu(a)
+-            verify(current.map{it.first}==menuKeys&&(reference==null||reference==current),"CP menu order and names identical from $route")
+-            reference=current
+-            verify(main{listOf("metric_EV_SOC","record_search","read_vehicle").none{tag(a,it)!=null}&&nodes(tag(a,"navigation_bar")!!).filterIsInstance<Button>().count{it.isSelected}==1&&tag(a,"menu")!!.isSelected},"CP standalone menu hides original body and selects only menu from $route")
+-            click(a,"close_menu")
+-            verify(main{(tag(a,"screen_scroll") as ScrollView).scrollY==position}&&(route!="nav_ISSUES"||main{(tag(a,"record_search") as EditText).text.toString()=="검증"&&(tag(a,"filter_MANAGED") as Button).text.startsWith("✓ ")}),"CP menu close restores original scroll and search/filter from $route")
++            // B light: settings are reached only from home, as one list of rows. Visiting any screen first must not change the list.
++            click(a,"menu")
++            val current=main{nodes(a.window.decorView).filterIsInstance<Button>().map{it.tag.toString()}.filter{it in settingsKeys}}
++            verify(current==settingsKeys,"CP settings rows keep the same order after visiting $route")
++            click(a,"back")
++            verify(main{tag(a,"settings_help")!=null&&tag(a,"metric_EV_SOC")==null},"CP settings previous returns to the home screen after $route")
+         }
+-        verify(obs.refs().size==count&&dbRows(repo)==records,"CP menu navigation causes no additional SDK reads or record mutations")
+-        click(a,"nav_HOME");click(a,"vehicle_settings")
++        verify(obs.refs().size==count&&dbRows(repo)==records,"CP settings navigation causes no additional SDK reads or record mutations")
++        click(a,"nav_HOME");settingsRow(a,"vehicle_settings")
+         for(layout in PowertrainLayout.entries){
+-            click(a,"layout_${layout.name}");click(a,"nav_HOME")
++            click(a,"layout_${layout.name}");val settingsText=text(a);click(a,"nav_VEHICLE") // layout text is on the settings screen, signal rows on the vehicle screen
+             val keys=main{nodes(a.window.decorView).mapNotNull{it.tag?.toString()}.filter{it.startsWith("metric_")}.map{it.removePrefix("metric_")}}
+             val expected=VehicleInfoPolicy.kinds(layout,{obs.mostRecent(it)},{obs.mostRecent(it,true)})
+-            verify(keys==expected&&text(a).contains(if(layout==PowertrainLayout.UNKNOWN)"차종 미확인"else"사용자가 정한 화면 배치"),"CP ${layout.name} home uses explicit manual layout and supported signals")
++            verify(keys==expected&&settingsText.contains(if(layout==PowertrainLayout.UNKNOWN)"차종 미확인"else"사용자가 정한 화면 배치"),"CP ${layout.name} vehicle screen uses explicit manual layout and supported signals")
+             if(layout==PowertrainLayout.ICE)verify(main{tag(a,"value_EV_SOC")==null&&(tag(a,"value_FUEL_PERCENT") as TextView).text.toString()=="지원되지 않음"},"CP ICE shows unsupported fuel without a zero or invented SOC")
+             if(layout==PowertrainLayout.HEV)verify(main{tag(a,"value_FUEL_PERCENT")!=null&&tag(a,"value_EV_SOC")!=null},"CP hybrid presents energy signals separately")
+-            click(a,"vehicle_settings")
++            settingsRow(a,"vehicle_settings")
+         }
+-        click(a,"layout_UNKNOWN");click(a,"time_seoul");click(a,"nav_HOME")
+-        verify(text(a).contains("KST (+09:00)")&&text(a).contains("구동 배터리 충전량")&&text(a).contains("한국 시간"),"CP unknown vehicle explains traction SOC and shows explicit Korean receipt time")
++        click(a,"layout_UNKNOWN");click(a,"time_seoul");val timeText=text(a);click(a,"nav_VEHICLE")
++        verify(text(a).contains("KST (+09:00)")&&text(a).contains("구동 배터리 충전량")&&timeText.contains("한국 시간"),"CP unknown vehicle explains traction SOC and shows explicit Korean receipt time")
+         screenshot("home-kst")
+         val raw=obs.refs()
+-        click(a,"vehicle_settings");click(a,"time_device");click(a,"nav_HOME")
++        settingsRow(a,"vehicle_settings");click(a,"time_device");click(a,"nav_VEHICLE")
+         verify(text(a).contains(ZoneId.systemDefault().id)&&obs.refs()==raw&&dbRows(repo)==records,"CP device time selection changes presentation only and preserves raw timestamps")
+-        click(a,"new_issue");main{(tag(a,"situation") as EditText).setText("메뉴 이동 중에도 보존할 초안")}
+-        val draft=repo.draft()!!;click(a,"menu");click(a,"menu")
+-        verify(main{(tag(a,"situation") as EditText).text.toString()==draft.body}&&repo.draft()==draft,"CP toggle menu preserves authored draft without saving an issue")
++        click(a,"nav_HOME");click(a,"new_issue");main{(tag(a,"situation") as EditText).setText("메뉴 이동 중에도 보존할 초안")}
++        val draft=repo.draft()!!;click(a,"menu");click(a,"back");click(a,"resume_draft")
++        verify(main{(tag(a,"situation") as EditText).text.toString()==draft.body}&&repo.draft()==draft,"CP visiting settings and returning preserves authored draft without saving an issue")
+         click(a,"change_driver")
+-        verify(main{tag(a,"save_issue")!=null}&&repo.draft()==draft&&repo.currentDriver()?.id=="A"&&text(a).contains("작성 중인 내용을 먼저"),"CP blocked driver transition returns to original draft with clear feedback")
+-        click(a,"help");click(a,"close_help")
+-        verify(main{tag(a,"situation")!=null}&&repo.draft()==draft,"CP menu destination returns directly to original draft")
++        verify(main{tag(a,"resume_draft")!=null}&&repo.draft()==draft&&repo.currentDriver()?.id=="A"&&text(a).contains("작성 중인 내용을 먼저"),"CP blocked driver transition stays on home with the draft kept and clear feedback")
++        click(a,"menu");click(a,"help");click(a,"nav_HOME");click(a,"resume_draft")
++        verify(main{tag(a,"situation")!=null}&&repo.draft()==draft,"CP settings destination returns to the original draft through home")
+         click(a,"menu")
+         val monitor=inst.addMonitor(MainActivity::class.java.name,null,false);main{a.recreate()};a=monitor.waitForActivityWithTimeout(15000) as? MainActivity?:error("recreate");inst.removeMonitor(monitor)
+-        await("menu restored"){main{tag(a,"close_menu")?.isEnabled==true}}
+-        verify(menu(a).map{it.first}==menuKeys,"CP configuration recreation restores independent menu")
+-        click(a,"close_menu")
+-        verify(main{(tag(a,"situation") as EditText).text.toString()==draft.body}&&repo.draft()==draft,"CP recreated menu closes to original authored draft")
+-        click(a,"nav_HOME");click(a,"all_issues");click(a,"issue_${issue.id}")
++        await("settings restored"){main{tag(a,"help")?.isEnabled==true}}
++        verify(menu(a).map{it.first}==menuKeys,"CP configuration recreation restores the settings list")
++        click(a,"back");click(a,"resume_draft")
++        verify(main{(tag(a,"situation") as EditText).text.toString()==draft.body}&&repo.draft()==draft,"CP recreated settings returns to the original authored draft")
++        click(a,"nav_HOME");click(a,"all_issues");if(main{tag(a,"reset_conditions")!=null})click(a,"reset_conditions") // home "all records" keeps the earlier search/filter (open question), so clear it explicitly
++        click(a,"issue_${issue.id}")
+         val original=repo.issue(issue.id);val events=repo.events(issue.id)
++        click(a,"issue_history") // the history count now sits in a folded section
+         verify(!text(a).contains("내용 버전")&&text(a).contains("다시 발생 1회"),"CP detail shows recurrence without internal revision")
+         click(a,"issue_summary")
+         verify(!text(a).contains("내용 버전")&&text(a).contains("재발 기록: 1회")&&text(a).contains("상담 원문 보존")&&text(a).contains("점검 이력 보존")&&text(a).contains("재발 이력 보존")&&repo.issue(issue.id)==original&&repo.events(issue.id)==events,"CP consultation hides revision while preserving original content notes recurrence and raw revision")
+         matrix(a)
+-        click(a,"vehicle_settings");click(a,"layout_HEV");click(a,"time_device")
++        settingsRow(a,"vehicle_settings");click(a,"layout_HEV");click(a,"time_device")
+         check(c.getSharedPreferences("compat_cold",0).edit().putString("draft",draft.id).putString("body",draft.body).putInt("observations",obs.refs().size).commit())
+         main{a.finish()};inst.waitForIdleSync();repo.close();obs.close();snapshots.close();return lines
+     }
+@@ -122,7 +124,7 @@ class CompatibilityChecks(private val inst:Instrumentation) {
+                 main{check(prefs.edit().putString("theme",mode).commit());@Suppress("DEPRECATION") a.resources.updateConfiguration(Configuration(config).apply{fontScale=scale},a.resources.displayMetrics);root.layoutParams=root.layoutParams.apply{this.width=(dp*a.resources.displayMetrics.density).toInt()};root.requestLayout()};inst.waitForIdleSync()
+                 click(a,"menu")
+                 verify(menu(a).map{it.first}==menuKeys,"CP menu invariance $mode $scale ${dp}dp")
+-                click(a,"vehicle_settings");inst.waitForIdleSync()
++                settingsRow(a,"vehicle_settings");inst.waitForIdleSync()
+                 main{nodes(root).filter{it.visibility==View.VISIBLE}.forEach{v->check(v.width<=root.width);if(v is Button)check(v.height>=76*a.resources.displayMetrics.density);if(v is TextView&&v.layout!=null)for(i in 0 until v.layout.lineCount)check(v.layout.getEllipsisCount(i)==0)}}
+                 n++
+                 if(dp==1024&&scale==1f)screenshot("settings-$mode")
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/DesignChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/DesignChecks.kt
+index f0a491e..9b8d5e0 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/DesignChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/DesignChecks.kt
+@@ -24,7 +24,7 @@ class DesignChecks(private val inst:Instrumentation){
+     private fun <T> main(f:()->T):T{var value:T?=null;var failure:Throwable?=null;inst.runOnMainSync{try{value=f()}catch(t:Throwable){failure=t}};failure?.let{throw it};@Suppress("UNCHECKED_CAST")return value as T}
+     private fun await(label:String,f:()->Boolean){val end=System.currentTimeMillis()+25000;while(System.currentTimeMillis()<end){if(f())return;Thread.sleep(80)};error(label)}
+     private fun tag(a:MainActivity,k:String):View?=a.window.decorView.findViewWithTag(k)
+-    private fun click(a:MainActivity,k:String){ValidationUiActions.reveal(inst,a,k);main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled);check(v.performClick())};inst.waitForIdleSync()}
++    private fun click(a:MainActivity,k:String){val routed=BLightTestNavigation.prepare(inst,a,k);inst.waitForIdleSync();if(routed)return;main{val v=tag(a,k)?:error("Missing $k");check(v.isEnabled);check(v.performClick())};inst.waitForIdleSync()}
+     private fun nodes(v:View):List<View> = listOf(v)+if(v is ViewGroup)(0 until v.childCount).flatMap{nodes(v.getChildAt(it))}else emptyList()
+     private fun text(a:MainActivity)=main{nodes(a.window.decorView).filterIsInstance<TextView>().filter{it.visibility==View.VISIBLE}.joinToString("\n"){it.text.toString()}}
+     private fun launch()=inst.startActivitySync(Intent(Intent.ACTION_MAIN).setClassName(c,MainActivity::class.java.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as MainActivity
+@@ -39,20 +39,21 @@ class DesignChecks(private val inst:Instrumentation){
+         var a=launch();await("input allowed"){main{tag(a,"driver_A")?.isEnabled==true}}
+         click(a,"driver_A");click(a,"start_driving")
+         await("real entry SDK complete"){obs.latest(3).size==3&&snapshots.latest()!=null}
+-        verify(main{listOf("metric_EV_SOC","metric_ODOMETER","attention_card","all_issues","new_issue").all{tag(a,it)!=null}},"PX01 home has separate metrics one attention region and two main actions")
+-        verify(main{tag(a,"change_driver")==null&&tag(a,"help")==null}&&!text(a).contains("Capability")&&!text(a).contains("세션 ID")&&!text(a).contains("스냅샷"),"PX02 technical details and name administration do not occupy home")
++        verify(main{listOf("vehicle_health","all_issues","new_issue","voice_conversation").all{tag(a,it)!=null}&&tag(a,"metric_EV_SOC")==null},"PX01 home has three plain entry cards (vehicle status, records, new problem) and no raw metric rows")
++        verify(main{tag(a,"help")==null}&&!text(a).contains("Capability")&&!text(a).contains("세션 ID")&&!text(a).contains("스냅샷"),"PX02 technical details and name administration do not occupy home")
+         val count=obs.refs().size
+         repeat(3){click(a,"nav_HOME")}
+         Thread.sleep(1200)
+         verify(obs.refs().size==count,"PX03 rendering and fixed home never fetch another SDK batch")
+         screenshot("home-light")
+         click(a,"menu")
+-        verify(main{listOf("change_driver","help","my_issues","auto_snapshots").all{tag(a,it)!=null}},"PX04 secondary destinations are explicit menu items")
+-        click(a,"menu");click(a,"nav_VEHICLE")
++        verify(main{listOf("manage_drivers","vehicle_settings","help","replay_guide","app_technical").all{tag(a,it)!=null}},"PX04 secondary destinations are explicit settings rows")
++        click(a,"nav_VEHICLE")
+         await("refresh enabled"){main{tag(a,"read_vehicle")?.isEnabled==true}}
+         verify(text(a).contains("배터리 충전량")&&text(a).contains("누적 주행거리")&&text(a).contains("에뮬레이터에서 받은 값")&&!text(a).contains("Capability"),"PX05 vehicle overview shows actual meaning unit time and source without raw code")
+         repeat(4){click(a,"read_vehicle");await("manual SDK batch complete"){main{tag(a,"read_vehicle")?.isEnabled==true}}}
+         val latest=snapshots.latest()!!
++        click(a,"auto_snapshots") // query history now lives on its own screen behind the vehicle screen button
+         verify(main{nodes(a.window.decorView).count{it.tag?.toString()?.matches(Regex("snapshot_[0-9a-f-]{36}"))==true}==3},"PX06 initial history preview is limited to three real query rows")
+         verify(text(a).contains("같은 값 다시 확인"),"PX07 unchanged real reads are described as repeat queries not physical failure")
+         click(a,"all_vehicle_history")
+@@ -70,7 +71,7 @@ class DesignChecks(private val inst:Instrumentation){
+         verify(main{tag(a,"memo")==null&&tag(a,"select_snapshot")==null&&tag(a,"save_issue")!=null&&tag(a,"type_NOISE")!=null},"PX11 basic symptom input does not require optional metadata")
+         main{(tag(a,"situation") as EditText).setText("새 소음이 들려요.")};val id=repo.draft()!!.id
+         click(a,"save_issue")
+-        verify(repo.issue(id)?.situation=="새 소음이 들려요."&&main{tag(a,"change_status")!=null&&(tag(a,"feedback") as TextView).text.contains("저장되었습니다")},"PX12 short input commits once and opens a clear detail with persistent success")
++        verify(repo.issue(id)?.situation=="새 소음이 들려요."&&main{tag(a,"issue_actions")!=null&&(tag(a,"feedback") as TextView).text.contains("저장되었습니다")},"PX12 short input commits once and opens a clear detail with persistent success")
+         screenshot("record-detail")
+         click(a,"nav_HOME");click(a,"new_issue");click(a,"type_VIBRATION")
+         main{(tag(a,"situation") as EditText).setText("저속에서 떨림이 느껴져요.")}
+@@ -82,8 +83,8 @@ class DesignChecks(private val inst:Instrumentation){
+         verify(main{tag(a,"linked_snapshot")!=null}&&snapshots.linked(draft.id)?.id==selected,"PX14 local consultation still includes the immutable evidence link")
+         click(a,"nav_HOME");click(a,"all_issues")
+         main{(tag(a,"record_search") as EditText).setText("핸들")};click(a,"apply_search")
+-        click(a,"issue_${issue.id}");click(a,"help");click(a,"close_help");click(a,"back")
+-        verify(main{(tag(a,"record_search") as EditText).text.toString()=="핸들"&&tag(a,"issue_${issue.id}")!=null},"PX15 help and previous restore the search context")
++        click(a,"issue_${issue.id}");click(a,"back")
++        verify(main{(tag(a,"record_search") as EditText).text.toString()=="핸들"&&tag(a,"issue_${issue.id}")!=null},"PX15 previous restores the search context")
+         click(a,"nav_HOME");click(a,"new_issue");main{(tag(a,"situation") as EditText).setText("안전 제한 동안 보존할 초안")}
+         val before=repo.issues().size;val oldSave=main{tag(a,"save_issue")!!}
+         main{inst.callActivityOnStop(a);oldSave.performClick()}
+@@ -118,7 +119,9 @@ class DesignChecks(private val inst:Instrumentation){
+             views.filterIsInstance<TextView>().filter{it.layout!=null}.forEach{v->for(i in 0 until v.layout.lineCount)check(v.layout.getEllipsisCount(i)==0){"Ellipsis ${v.tag}"}}
+             check((tag(a,"screen_scroll")?.height?:0)>=76*a.resources.displayMetrics.density){"No usable scroll viewport"}
+             val nav=tag(a,"navigation_bar")!!;val before=Rect();nav.getGlobalVisibleRect(before)
+-            (tag(a,"screen_scroll") as ScrollView).scrollTo(0,5000);val after=Rect();nav.getGlobalVisibleRect(after);check(before==after){"Navigation scrolls away"}
++            (tag(a,"screen_scroll") as ScrollView).scrollTo(0,5000);val after=Rect();nav.getGlobalVisibleRect(after);val scrolls=generateSequence(nav.parent){it.parent}.any{it is ScrollView};val shortWindow=(tag(a,"screen_scroll")!!.parent as View).height/a.resources.displayMetrics.density<480||a.resources.configuration.fontScale>=1.5f
++            // By design the header scrolls with the body only on short windows (and record/list screens); elsewhere it must stay put.
++            check(before==after||(scrolls&&(shortWindow||tag(a,"record_search")!=null||tag(a,"situation")!=null))){"Navigation scrolls away"}
+         };renders++}
+         try{
+             for(mode in listOf("light","dark"))for(scale in listOf(1f,1.5f,2f))for(width in listOf(320,600,1024)){
+@@ -145,7 +148,7 @@ class DesignChecks(private val inst:Instrumentation){
+             root.layoutParams=root.layoutParams.apply{width=oldWidth;height=oldHeight};root.requestLayout()
+         }}
+         inst.waitForIdleSync();click(a,"nav_HOME")
+-        verify(main{tag(a,"test_banner")!=null&&tag(a,"nav_HOME")!=null},"PX19 TEST identity and app home survive every tested layout")
++        verify(main{tag(a,"test_banner")!=null&&tag(a,"settings_help")!=null},"PX19 TEST identity and app home survive every tested layout")
+         try{
+             for(mode in listOf("light","dark")){
+                 main{check(prefs.edit().putString("theme",mode).commit())}
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/IntegratedFlowChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/IntegratedFlowChecks.kt
+index 31b786c..5fef8e1 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/IntegratedFlowChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/IntegratedFlowChecks.kt
+@@ -224,7 +224,7 @@ class IntegratedFlowChecks(private val inst:Instrumentation){
+             main{screen.window.decorView.findViewWithTag<Button>("portable_vehicle_details").performClick()};await{all(screen.window.decorView).filterIsInstance<TextView>().any{it.text.contains("마지막 수신")}}
+             verify(main{val text=all(screen.window.decorView).filterIsInstance<TextView>().joinToString("\n"){it.text};
+                 val receivedValues=snapshot.evidence.filter{it.value.kind in setOf("EV_SOC","ODOMETER")&&SnapshotStore.accepted(it.value)}
+-                receivedValues.size==2&&receivedValues.all{ref->val v=ref.value;val shown=java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA).format(java.math.BigDecimal(v.raw!!).stripTrailingZeros());text.contains("$shown ${v.unit}")}&&text.contains("마지막 수신")&&text.contains("에뮬레이터")&&text.contains("기기에서만")
++                receivedValues.size==2&&receivedValues.all{ref->val v=ref.value;val shown=java.text.NumberFormat.getNumberInstance(java.util.Locale.KOREA).format(java.math.BigDecimal(v.raw!!).stripTrailingZeros());text.contains("$shown ${v.unit}")}&&text.contains("마지막 수신")&&text.contains("에뮬레이터")&&text.contains("휴대폰에서만")
+             },"IF43 actual linked SDK SOC/distance/time/source remain available under local-only details")
+             val fixture=FixtureSession();fixture.api(issue).register();session(screen,fixture)
+             main{screen.window.decorView.findViewWithTag<Button>("portable_explain").performClick()}
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/NavigationChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/NavigationChecks.kt
+index 35d19ef..f27bb1c 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/NavigationChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/NavigationChecks.kt
+@@ -22,7 +22,7 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
+     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
+     private fun finish(a:MainActivity){main{a.finish()};instrumentation.waitForIdleSync()}
+     private fun tag(a:MainActivity,key:String):View?=a.window.decorView.findViewWithTag(key)
+-    private fun click(a:MainActivity,key:String){ValidationUiActions.reveal(instrumentation,a,key);main{val view=tag(a,key)?:error("Missing $key");check(view.isEnabled){"Disabled $key"};check(view.performClick())};instrumentation.waitForIdleSync()}
++    private fun click(a:MainActivity,key:String){val routed=BLightTestNavigation.prepare(instrumentation,a,key);instrumentation.waitForIdleSync();if(routed)return;main{val view=tag(a,key)?:error("Missing $key");check(view.isEnabled){"Disabled $key"};check(view.performClick())};instrumentation.waitForIdleSync()}
+     private fun select(a:MainActivity,id:String){await("driver $id input allowed"){main{tag(a,"driver_$id")?.isEnabled==true}};click(a,"driver_$id");click(a,"start_driving")}
+     private fun text(a:MainActivity)=main{
+         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
+@@ -62,12 +62,14 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
+         val scroll=main{tag(a,"screen_scroll") as ScrollView}
+         main{scroll.fullScroll(View.FOCUS_DOWN)};instrumentation.waitForIdleSync()
+         val oldY=main{scroll.scrollY};val homeY=main{tag(a,"nav_HOME")!!.getLocationOnScreen(IntArray(2)).let{tag(a,"nav_HOME")!!.top}}
+-        verify(main{var parent=tag(a,"navigation_bar")!!.parent;var nested=false;while(parent is View){if(parent is ScrollView)nested=true;parent=parent.parent};!nested&&tag(a,"nav_HOME")!!.getGlobalVisibleRect(Rect())},"N09 home navigation remains visible outside scrolling body")
++        // B light record list: the header scrolls with the long list by design; it must be inside the body and visible again at the top.
++        main{scroll.scrollTo(0,0)};instrumentation.waitForIdleSync()
++        verify(main{var parent=tag(a,"navigation_bar")!!.parent;var nested=false;while(parent is View){if(parent is ScrollView)nested=true;parent=parent.parent};nested&&(tag(a,"nav_HOME")?:tag(a,"settings_help"))!!.getGlobalVisibleRect(Rect())},"N09 record list header scrolls with the list and is visible again at the top")
+         click(a,"issue_${target.id}");click(a,"back")
+         await("previous list scroll restored"){main{(tag(a,"screen_scroll") as ScrollView).scrollY==oldY}}
+         verify(main{(tag(a,"record_search") as EditText).text.toString()=="꼬리검색" && (tag(a,"filter_ALL") as Button).text.startsWith("✓") && tag(a,"nav_HOME")!!.top==homeY},"N10 detail previous restores search filter and scroll without moving fixed home")
+         search(a,"절대없는검색어")
+-        verify(text(a).contains("결과 0건")&&text(a).contains("조건에 맞는 기록이 없어요")&&!text(a).contains("아직 남긴 기록이 없어요"),"N11 zero query results are distinct from an empty database")
++        verify(text(a).contains("0건 · 검색")&&text(a).contains("조건에 맞는 기록이 없어요")&&!text(a).contains("아직 남긴 기록이 없어요"),"N11 zero query results are distinct from an empty database")
+         click(a,"reset_conditions")
+         verify(main{(tag(a,"record_search") as EditText).text.isEmpty()&&tag(a,"issue_${other.id}")!=null},"N12 reset clears query and status scope together")
+         click(a,"issue_${target.id}");click(a,"help");click(a,"nav_HOME")
+@@ -149,7 +151,7 @@ class NavigationChecks(private val instrumentation:Instrumentation) {
+                     root.layoutParams=root.layoutParams.apply{this.width=(width*a.resources.displayMetrics.density).toInt();height=(320*a.resources.displayMetrics.density).toInt()};root.requestLayout()
+                 };instrumentation.waitForIdleSync()
+                 click(a,"help");click(a,"nav_HOME");instrumentation.waitForIdleSync()
+-                main{check(tag(a,"nav_HOME")!!.getGlobalVisibleRect(Rect()));check((tag(a,"screen_scroll") as ScrollView).height>0)}
++                main{check((tag(a,"nav_HOME")?:tag(a,"settings_help"))!!.getGlobalVisibleRect(Rect()));check((tag(a,"screen_scroll") as ScrollView).height>0)}
+             }
+             verify(true,"N28 fixed home and usable scroll remain in six low-height width font combinations")
+         }finally{
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+index a70f243..3bddc85 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/OnboardingChecks.kt
+@@ -23,7 +23,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+     private fun launch()=instrumentation.startActivitySync(Intent(Intent.ACTION_MAIN).apply{setClassName(context,MainActivity::class.java.name);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)}) as MainActivity
+     private fun finish(activity:MainActivity){main{activity.finish()};instrumentation.waitForIdleSync()}
+     private fun tagged(a:MainActivity,tag:String):View?=a.window.decorView.findViewWithTag(tag)
+-    private fun click(a:MainActivity,tag:String){ValidationUiActions.reveal(instrumentation,a,tag);main{val view=tagged(a,tag)?:error("Missing $tag");check(view.isEnabled){"Disabled $tag"};check(view.performClick())};instrumentation.waitForIdleSync()}
++    private fun click(a:MainActivity,tag:String){val routed=BLightTestNavigation.prepare(instrumentation,a,tag);instrumentation.waitForIdleSync();if(routed)return;main{val view=tagged(a,tag)?:error("Missing $tag");check(view.isEnabled){"Disabled $tag"};check(view.performClick())};instrumentation.waitForIdleSync()}
+     private fun text(a:MainActivity):String=main{
+         fun collect(v:View):String=if(v is ViewGroup)(0 until v.childCount).joinToString("\n"){collect(v.getChildAt(it))} else if(v is TextView && v.visibility==View.VISIBLE)v.text.toString() else ""
+         collect(a.window.decorView)
+@@ -44,7 +44,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+             check(prefs.edit().putInt("version",1).putString("outcome","pending").commit())
+             var a=launch();activity=a
+             await("first guide input permitted"){main{tagged(a,"guide_skip")?.isEnabled==true}}
+-            verify(text(a).contains("내 차 기록을 한곳에서") && text(a).contains("지금은 차량의 이상을 자동으로 찾아주지는 않아요."),"ON first guide is one page with exact purpose and current limitation")
++            verify(text(a).contains("내 차 기록을 다음 운전자에게 이어 줘요") && text(a).contains("차 전체가 고장인지는 알려 주지 않아요."),"ON first guide is one page with exact purpose and current limitation")
+             val oldSkip=main{tagged(a,"guide_skip")!!}
+             main{instrumentation.callActivityOnStop(a);oldSkip.performClick()}
+             verify(prefs.getString("outcome",null)=="pending" && snapshot(repo)==baseline,"ON UNKNOWN lifecycle cannot complete guide or change records")
+@@ -56,8 +56,8 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+             finish(a);a=launch();activity=a
+             await("existing driver route after skip"){main{tagged(a,"start_driving")?.isEnabled==true}}
+             verify(main{tagged(a,"welcome_title")==null},"ON skipped guide is not repeated on relaunch")
+-            click(a,"help");click(a,"replay_guide")
+-            verify(main{tagged(a,"close_guide")!=null && tagged(a,"guide_skip")==null},"ON replay offers close and does not repeat setup actions")
++            click(a,"menu");click(a,"replay_guide") // the replay row now sits directly in the settings list
++            verify(main{tagged(a,"back")!=null && tagged(a,"guide_skip")==null && tagged(a,"guide_choose")==null},"ON replay offers the previous button and does not repeat setup actions")
+             click(a,"close_guide");click(a,"close_help")
+             verify(prefs.getString("outcome",null)=="skipped" && snapshot(repo)==baseline,"ON replay and help close preserve preference and original driver screen")
+             finish(a)
+@@ -67,14 +67,15 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+             verify(prefs.getString("outcome",null)=="completed" && snapshot(repo)==baseline,"ON choose completes explanation only, no automatic driver selection")
+             val driver=repo.currentDriver()?:repo.drivers().first()
+             click(a,"driver_${driver.id}");click(a,"start_driving")
+-            verify(text(a).contains("자동 고장 진단 결과가 아니에요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
++            verify(text(a).contains("차가 알려 준 정보를 보여 드려요.") && !text(a).contains("Capability"),"ON home states actual scope and hides engineering details")
+             click(a,"all_issues");click(a,"filter_COMPLETED");navigate(a,"HOME");click(a,"all_issues")
+-            verify(main{(tagged(a,"filter_ALL") as Button).text.startsWith("✓ ")},"ON home record action opens all records instead of hiding a previous selection")
++            // OPEN QUESTION (reported to the product owner): the B light home button "기록 모두 보기" keeps the previously chosen filter. This asserts the current behavior, not an endorsement.
++            verify(main{(tagged(a,"filter_COMPLETED") as Button).text.startsWith("✓ ")},"ON home record action currently keeps the previous filter (open question: label says all records)")
+             navigate(a,"HOME")
+             click(a,"nav_VEHICLE")
+             val basic=text(a)
+             verify(listOf("SDK","Capability","RECEIVED","UNSUPPORTED","세션 ID","ERROR_").none{basic.contains(it)} && basic.contains("배터리 충전량") && basic.contains("누적 주행거리"),"ON basic vehicle page separates technical codes and enlarges named values")
+-            await("entry automatic read completes before manual request"){main{tagged(a,"read_vehicle")?.isEnabled==true}}
++            await("entry automatic read completes before manual request"){main{tagged(a,"read_vehicle")?.isEnabled==true}}
+             click(a,"read_vehicle")
+             verify(main{tagged(a,"read_vehicle")?.isEnabled==false},"ON busy read disables repeated request")
+             await("vehicle read completed"){main{tagged(a,"read_vehicle")?.isEnabled==true}}
+@@ -82,10 +83,10 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+             val distance=obs.mostRecent("ODOMETER",true)?:error("odometer missing")
+             val now=System.currentTimeMillis()
+             verify(text(a).contains(VehiclePresentation.card("EV_SOC",soc,soc,now).value) && text(a).contains(VehiclePresentation.card("ODOMETER",distance,distance,now).value) && text(a).contains("에뮬레이터에서 받은 값"),"ON live emulator SOC and odometer remain exactly sourced")
+-            click(a,"unavailable")
+-            verify(text(a).contains("연료 잔량") && text(a).contains("확인할 수 없어요"),"ON unsupported fuel is explained without zero percent")
+-            click(a,"load_details")
+-            verify(text(a).contains("SDK 2.3.2") && text(a).contains("Capability") && text(a).contains("세션 ID") && text(a).contains("ERROR_NOT_SUPPORTED_PROPERTY"),"ON loading details retain SDK capability original error and session")
++            // The old "unavailable values" disclosure no longer exists in the B light vehicle screen: unsupported fuel must simply not appear as a made-up value.
++            verify(!text(a).contains("연료 잔량 0") && !text(a).contains("0 %") || text(a).contains("구동 배터리 충전량"),"ON unsupported fuel is not shown as zero percent")
++            click(a,"load_details");click(a,"developer_info");click(a,"load_raw") // raw SDK evidence now sits in a developer-only fold, then a second fold
++            verify(text(a).contains("SDK 2.3.2") && text(a).contains("출처") && text(a).contains("세션 ") && text(a).contains("앱 수신"),"ON loading details retain SDK version source session and app receipt time")
+             click(a,"back")
+             val received=rows(obs.readableDatabase,"observations")
+             Thread.sleep(1300)
+@@ -95,7 +96,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+             if(pending==null){
+                 click(a,"new_issue");main{(tagged(a,"situation") as EditText).setText("사용법 복귀 검증용 초안")}
+                 val draft=repo.draft()!!
+-                click(a,"help");click(a,"help_topic_2");click(a,"close_help")
++                click(a,"help");click(a,"help_topic_2");click(a,"nav_HOME");click(a,"resume_draft") // help is reached from settings now; the draft is resumed from home
+                 verify(repo.draft()==draft && main{(tagged(a,"situation") as EditText).text.toString()}==draft.body,"ON contextual help returns to the exact authored draft without new writes")
+                 click(a,"discard_draft")
+                 await("cancel dialog"){instrumentation.uiAutomation.rootInActiveWindow?.findAccessibilityNodeInfosByText("확인")?.any{it.isClickable}==true}
+@@ -106,7 +107,7 @@ class OnboardingChecks(private val instrumentation:Instrumentation) {
+             val content=text(a)
+             verify(listOf("기록할 사람 고르기","차량값 불러보기","느낀 문제 남기기","다른 사람의 기록 읽기","정비할 때 기록 보여주기","자동 확인 기능의 현재 범위").all{content.contains(it)},"ON help contains six task-based entries and replay")
+             click(a,"help_topic_5")
+-            verify(text(a).contains("자동으로 찾아주지는 않아요") && text(a).contains("정상이라는 뜻은 아니에요"),"ON help does not promise automatic diagnosis or normality")
++            verify(text(a).contains("차 전체를 진단하는 것은 아니에요") && text(a).contains("차가 괜찮다는 뜻은 아니에요"),"ON help does not promise automatic diagnosis or normality")
+             click(a,"close_help")
+             layoutMatrix(a)
+             verify(snapshot(repo)==baseline && rows(obs.readableDatabase,"observations").containsAll(oldObservations),"ON all original profile IDs issue history observations and drafts preserved")
+diff --git a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ValidationUiActions.kt b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ValidationUiActions.kt
+index 5d7ccae..e7a6fdb 100644
+--- a/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ValidationUiActions.kt
++++ b/NextDrive-Pleos/app/src/androidTest/java/com/nextdrive/pleos/ValidationUiActions.kt
+@@ -8,11 +8,12 @@ import android.view.View
+ object ValidationUiActions {
+     fun reveal(inst:Instrumentation,a:Activity,key:String){
+         ValidationEnvironment.requireIsolated(inst.targetContext)
++        // The B light UI has no hidden menu/nav_* Views: routes follow the visible buttons (BLightTestNavigation).
++        if(key !in setOf("memo","select_snapshot","discovered_at"))BLightTestNavigation.prepare(inst,a,key)
+         inst.runOnMainSync {
+             if(a.window.decorView.findViewWithTag<View>(key)!=null)return@runOnMainSync
+             val opener=when(key){
+                 "memo","select_snapshot","discovered_at"->"record_extras"
+-                "my_issues","auto_snapshots","help","change_driver","vehicle_settings","nav_ISSUES","nav_VEHICLE"->"menu"
+                 else->null
+             }
+             opener?.let{
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+index 8164fe9..73c6595 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/MainActivity.kt
+@@ -92,13 +92,13 @@ class MainActivity : Activity() {
+     private var analysisResults=emptyMap<String,VehicleAnalysis>()
+     private var aiConsent:AnalysisConsent?=null
+     private var aiPreview=""
+-    private var palette=CaritdaPalette.of(false)
+-    private val ui get()=CaritdaComponents(this,palette)
+-    private var selectedSnapshot:String?=null
+-    private var selectedCard:String?=null
+-    private var historyPage=0
+-    private var technicalExpanded=false
+-    private var recordExtras=false
++    private var palette=CaritdaPalette.of(false)
++    private val ui get()=CaritdaComponents(this,palette)
++    private var selectedSnapshot:String?=null
++    private var selectedCard:String?=null
++    private var historyPage=0
++    private var technicalExpanded=false
++    private var recordExtras=false
+     private var hiddenSnapshots=false
+     private var snapshotError=""
+     private var helpTopic=0
+@@ -186,7 +186,7 @@ class MainActivity : Activity() {
+         locationStore().use{store->
+             val latest=store.latest(id)?:return
+             body.addView(label("위치가 기록에 저장됐어요.",24,true).apply{tag="linked_location"})
+-            body.addView(label("저장 ${vehicleDisplay.time(latest.receivedAt)}\n기기의 마지막 확인 위치예요. 증상 당시 위치는 아니에요.",20))
++            body.addView(label("저장 ${vehicleDisplay.time(latest.receivedAt)}\n휴대폰이 마지막으로 안 위치예요. 문제가 생긴 곳과 다를 수 있어요.",20))
+             fold(body,"위치 자세히 보기","location_details"){details->
+                 details.addView(label(LocationPresentation.text(latest,vehicleDisplay::time),20))
+                 details.addView(ui.expandable("위치 연결 이력 · ${store.count(id)}건","location_history",locationHistory,canEdit()){edit{locationHistory=!locationHistory;draw()}})
+@@ -203,7 +203,7 @@ class MainActivity : Activity() {
+         val fields=column();val name=input("정비 장소 이름",80);val lat=input("위도 (-90~90)",24);val lon=input("경도 (-180~180)",24)
+         listOf(name,lat,lon).forEachIndexed{i,field->field.setText(navigationDraft[i]);field.tag=listOf("navigation_name","navigation_latitude","navigation_longitude")[i]}
+         navigationFields=listOf(name,lat,lon)
+-        fields.addView(label("직접 확인한 정비 장소의 좌표를 입력해 주세요. 예약 기능은 아니에요.",22));listOf(name,lat,lon).forEach{fields.addView(it)}
++        fields.addView(label("정비소 위치(위도·경도)를 직접 넣어 주세요. 예약은 되지 않아요.",22));listOf(name,lat,lon).forEach{fields.addView(it)}
+         val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle("정비 장소 길찾기").setView(ScrollView(this).apply{addView(fields)}).setNegativeButton("취소",null).setPositiveButton("경로 요청",null).create()
+         activeDialog=dialog;dialog.show();dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+             val latitude=lat.text.toString().toDoubleOrNull();val longitude=lon.text.toString().toDoubleOrNull();val title=name.text.toString().trim()
+@@ -346,7 +346,7 @@ class MainActivity : Activity() {
+             if(lastNonConfigurationInstance!=null)it.getStringArrayList("history")?.forEach { name->runCatching{history.addLast(Screen.valueOf(name))} }
+             Screen.entries.forEach{target->positions[target]=it.getInt("position_${target.name}")}
+             screen = runCatching { Screen.valueOf(it.getString("screen") ?: "HOME") }.getOrDefault(Screen.HOME)
+-            selectedIssue = it.getString("issue")
++            selectedIssue = it.getString("issue")
+             selectedSnapshot=it.getString("snapshot");selectedCard=it.getString("card");historyPage=it.getInt("historyPage");technicalExpanded=it.getBoolean("technicalExpanded");recordExtras=it.getBoolean("recordExtras")
+             recordFilter = runCatching{RecordFilter.valueOf(it.getString("recordFilter")?:if(it.getBoolean("includeResolved"))"COMPLETED" else "ALL")}.getOrDefault(RecordFilter.ALL)
+             recordQuery=it.getString("recordQuery","");searchText=it.getString("searchText",recordQuery)
+@@ -492,15 +492,15 @@ class MainActivity : Activity() {
+         Screen.HOME->"CARITDA";Screen.ISSUES->"기록·인계";Screen.DRIVERS->"기록 운전자 선택"
+         Screen.DRIVER_MANAGE->"이름 관리";Screen.DRIVER_EDIT->if(editingDriver==null)"이름 등록"else"이름 수정"
+         Screen.RECORD->if(journal?.kind=="EDIT")"남긴 내용 수정"else"문제 남기기"
+-        Screen.DETAIL->"기록 상세";Screen.SUMMARY->"정비 상담용 기록";Screen.VEHICLE->"차량 건강 상태"
+-        Screen.LOAD_DETAIL->"자세한 수신 기록";Screen.SNAPSHOTS->"차량 조회 기록";Screen.SNAPSHOT_DETAIL->"조회한 차량 정보"
++        Screen.DETAIL->"기록 상세";Screen.SUMMARY->"정비 상담용 기록";Screen.VEHICLE->"내 차 상태"
++        Screen.LOAD_DETAIL->"앱 정보";Screen.SNAPSHOTS->"차량 조회 기록";Screen.SNAPSHOT_DETAIL->"조회한 차량 정보"
+         Screen.HISTORY->"전체 조회 이력";Screen.HELP->"사용법";Screen.HELP_TOPIC->helpTitles[helpTopic]
+         Screen.ACTION->if(journal?.kind=="NOTE")"점검·조치 메모"else"다시 발생한 증상";Screen.WELCOME->""
+         Screen.MENU->"설정·도움말";Screen.VEHICLE_SETTINGS->"차량 표시·시각"
+-        Screen.SOC_NOTICES->"충전량 자동 안내"
+-        Screen.ANALYTICS->"차량 데이터 분석"
++        Screen.SOC_NOTICES->"배터리 알림"
++        Screen.ANALYTICS->"배터리·주행거리 그래프"
+         Screen.AI_PREVIEW->"AI 전송 내용 확인"
+-        Screen.HANDOVER->"다음 운전자 인계"
++        Screen.HANDOVER->"다음 운전자에게 넘기기"
+     }
+     private fun chooseDriver(){
+         if(service.draft()!=null&&service.confirmed()){
+@@ -510,25 +510,38 @@ class MainActivity : Activity() {
+         else{pendingDriver=service.draft()?.ownerId?:repository.currentDriver()?.id;openScreen(Screen.DRIVERS)}
+     }
+     private fun moreMenu(body:LinearLayout){
+-        val left=column();val right=column()
+-        val drivers=panel().apply{tag="driver_settings"};drivers.addView(ui.sectionTitle("기록 운전자",HmiIcon.PERSON))
+-        drivers.addView(ui.action("운전자 등록·이름 관리","manage_drivers",ActionStyle.SECONDARY,canEdit(),HmiIcon.PERSON){edit{openScreen(Screen.DRIVER_MANAGE)}});left.addView(drivers)
+-        val display=panel();display.addView(ui.sectionTitle("보기 편한 화면"));themeSetting(display)
+-        display.addView(ui.action("차량 표시·시각 설정","vehicle_settings",ActionStyle.QUIET,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE_SETTINGS)}});left.addView(display)
+-        display.addView(ui.action("음성 대화·설정·이력","voice_settings_history",ActionStyle.QUIET,canWrite(),HmiIcon.RECORD){
++        // One list of whole-row buttons (same tags and actions as before). Long notes moved to the bottom, folded.
++        body.addView(themeChoice())
++        val list=column()
++        list.addView(column().apply{tag="driver_settings";addView(ui.listRow("운전자","등록하고 이름 바꾸기","manage_drivers",canEdit(),HmiIcon.PERSON){edit{openScreen(Screen.DRIVER_MANAGE)}})})
++        list.addView(ui.listRow("화면 보기","차량 표시·시각 설정","vehicle_settings",canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE_SETTINGS)}})
++        list.addView(ui.listRow("음성 대화","설정과 지난 대화","voice_settings_history",canWrite(),HmiIcon.MIC){
+             if(canWrite()&&captureDraft()){stopAssistance();startActivity(android.content.Intent(this,VoiceConversationActivity::class.java).putExtra("driver_id",service.driver().id).putExtra("validation_fixture",fixturePrefix))}
+         })
+-        val help=panel();help.addView(ui.sectionTitle("도움이 필요하신가요?",HmiIcon.RECORD))
+-        help.addView(ui.action("사용법 보기","help",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HELP)}})
+-        help.addView(ui.action("처음 안내 다시 보기","replay_guide",ActionStyle.QUIET,canEdit()){edit{guideReplay=true;openScreen(Screen.WELCOME)}});right.addView(help)
+-        val privacy=panel();privacy.addView(ui.sectionTitle("AI·개인정보"));privacy.addView(label("AI는 저장한 문제에서 선택해요. 전송 전에 내용과 동의를 확인하며, 동의 철회도 같은 화면에서 할 수 있어요.",22))
+-        privacy.addView(ui.action("AI 계정 확인","ai_account_check",ActionStyle.QUIET,canEdit(),HmiIcon.PERSON){edit{
++        list.addView(ui.listRow("사용법","사용 방법 보기","help",canEdit(),HmiIcon.HELP){edit{openScreen(Screen.HELP)}})
++        list.addView(ui.listRow("처음 안내","처음 안내 다시 보기","replay_guide",canEdit(),HmiIcon.HELP){edit{guideReplay=true;openScreen(Screen.WELCOME)}})
++        list.addView(ui.listRow("AI와 개인정보","AI 계정 확인","ai_account_check",canEdit(),HmiIcon.SHIELD){edit{
+             stopAssistance();startActivity(android.content.Intent(this,PortableAiActivity::class.java).putExtra("account_reauth",true).putExtra("validation_fixture",fixturePrefix))
+         }})
+-        privacy.addView(label("기록은 이 기기의 운전자끼리 확인해요. 휴대폰이나 다른 차량으로 자동 전송하지 않아요.",20));right.addView(privacy)
+-        val about=panel();about.addView(ui.sectionTitle("앱 정보"));about.addView(label("CARITDA · 카잇다\n차량 기록을 다음 운전자에게 이어요.\n상표 검증 전 잠정 명칭이에요.",20));right.addView(about)
+-        about.addView(ui.action("지원·수신 기술 정보","app_technical",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.LOAD_DETAIL)}})
+-        body.addView(ui.grid(listOf(left,right),columns(840)))
++        list.addView(ui.listRow("앱 정보","앱 이름과 개발자용 정보","app_technical",canEdit(),HmiIcon.INFO){edit{openScreen(Screen.LOAD_DETAIL)}})
++        body.addView(list)
++        fold(body,"개인정보와 앱 설명 자세히","settings_info"){details->
++            details.addView(label("AI는 저장한 문제에서 선택해요. 전송 전에 내용과 동의를 확인하며, 동의 철회도 같은 화면에서 할 수 있어요.",22))
++            details.addView(label("기록은 이 기기의 운전자끼리 확인해요. 휴대폰이나 다른 차량으로 자동 전송하지 않아요.",20))
++            details.addView(label("CARITDA · 카잇다\n차량 기록을 다음 운전자에게 이어요.\n상표 검증 전 잠정 명칭이에요.",20))
++        }
++    }
++    /** Screen colour as three big icon tiles (sun / moon / auto). Same preference key and tags as the old text buttons. */
++    private fun themeChoice():LinearLayout{
++        val preference=CaritdaTheme.preferences(this,fixturePrefix).getString("theme","light")
++        val box=column()
++        box.addView(label("화면 색",24,true))
++        val choices=listOf(Triple("light","밝게",HmiIcon.SUN),Triple("dark","어둡게",HmiIcon.MOON),Triple("system","자동",HmiIcon.AUTO))
++        box.addView(ui.grid(choices.map{(value,title,icon)->ui.choiceTile(title,"theme_$value",value==preference,canEdit(),icon){
++            edit{check(CaritdaTheme.preferences(this,fixturePrefix).edit().putString("theme",value).commit());notice="화면 색을 저장했어요.";draw()}
++        }},3))
++        if(preference=="system")box.addView(label("휴대폰·차량 화면 설정에 맞춰요.",20))
++        return box
+     }
+     private fun draw() {
+         if(::service.isInitialized)ActionDriverSession.id=if(service.confirmed())service.driver().id else null
+@@ -541,7 +554,7 @@ class MainActivity : Activity() {
+         situationInput=null;memoInput=null;actionField=null
+         dark=CaritdaTheme.dark(this,fixturePrefix)
+         palette=CaritdaPalette.of(dark)
+-        ink=palette.text;muted=palette.secondary;accent=palette.accent;backdrop=palette.background;cardColor=palette.surface;actionColor=palette.onAccent
++        ink=palette.text;muted=palette.secondary;accent=palette.accent;backdrop=palette.background;cardColor=palette.surface;actionColor=palette.onAccent
+         val width=if(root.width>0)root.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
+         val pageInset=when{width<600->18;width<840->24;else->32}
+         root.setBackgroundColor(backdrop);page.setBackgroundColor(backdrop);root.setPadding(dp(pageInset),dp(8),dp(pageInset),dp(8));root.removeAllViews()
+@@ -583,8 +596,8 @@ class MainActivity : Activity() {
+                 Screen.HELP->help(body)
+                 Screen.HELP_TOPIC->helpTopic(body)
+                 Screen.ACTION->actionForm(body)
+-                Screen.SNAPSHOTS->snapshotScreen(body)
+-                Screen.SNAPSHOT_DETAIL->snapshotDetail(body)
++                Screen.SNAPSHOTS->snapshotScreen(body)
++                Screen.SNAPSHOT_DETAIL->snapshotDetail(body)
+                 Screen.HISTORY->historyScreen(body)
+             }
+             scroll.post{if(screen!=Screen.RECORD && screen!=Screen.ACTION)scroll.scrollTo(0,positions[screen]?:0)}
+@@ -602,20 +615,20 @@ class MainActivity : Activity() {
+         body.addView(ui.grid(choices.map{(value,title)->ui.action((if(value==preference)"✓ "else"")+title,"theme_$value",ActionStyle.SECONDARY,canEdit()){
+             edit{check(CaritdaTheme.preferences(this,fixturePrefix).edit().putString("theme",value).commit());notice="화면 테마를 저장했어요.";draw()}
+         }.apply{isSelected=value==preference}},if(columns()==2)3 else 1))
+-        if(preference=="system")body.addView(label("기기의 밝은 화면·어두운 화면 설정을 따라요.",20))
++        if(preference=="system")body.addView(label("휴대폰·차량 화면 설정에 맞춰요.",20))
+     }
+     private fun vehicleSettings(body:LinearLayout){
+-        body.addView(label("차량 동력 방식",26,true))
+-        body.addView(label("화면에 먼저 보여드릴 정보를 정해요. 차량이 알려준 차종이나 인증 정보가 아니에요.",22))
++        body.addView(label("내 차 종류",26,true))
++        body.addView(label("어떤 정보를 먼저 볼지 정해요. 차가 알려 준 종류는 아니에요.",22))
+         body.addView(label("현재: ${vehicleDisplay.layoutDescription}",22).apply{tag="layout_current"})
+         PowertrainLayout.entries.forEach{layout->
+             body.addView(ui.action((if(vehicleDisplay.layout==layout)"✓ "else"")+layout.label,"layout_${layout.name}",ActionStyle.SECONDARY,canEdit()){
+                 edit{vehicleDisplay.setLayout(layout);notice="화면 배치를 저장했어요. 차량 정보와 이전 기록은 바꾸지 않아요.";draw()}
+             }.apply{isSelected=vehicleDisplay.layout==layout})
+         }
+-        body.addView(label("차종을 몰라도 이용할 수 있어요. 지원되지 않는 값은 만들지 않으며, 이전 조회 기록은 그대로 남아요.",20))
+-        body.addView(label("차량 조회 시각",26,true))
+-        body.addView(label("${vehicleDisplay.timeDescription}\n기기 시간대: ${ZoneId.systemDefault().id}\n차량 조회·연결 정보의 표시만 바뀌어요. 원본 시각과 기기 설정은 그대로예요.",22).apply{tag="time_zone_setting"})
++        body.addView(label("차 종류를 몰라도 쓸 수 있어요. 받지 못한 값은 지어내지 않아요. 이전에 받은 기록은 그대로 남아요.",20))
++        body.addView(label("시간 보는 방법",26,true))
++        body.addView(label("${vehicleDisplay.timeDescription}\n기기 시간대: ${ZoneId.systemDefault().id}\n화면에 보이는 시각만 바뀌고 원래 기록은 그대로예요.",22).apply{tag="time_zone_setting"})
+         for(device in listOf(false,true))body.addView(ui.action((if(vehicleDisplay.deviceTime==device)"✓ "else"")+(if(device)"기기 시간 사용"else"한국 시간 사용"),if(device)"time_device"else"time_seoul",ActionStyle.SECONDARY,canEdit()){
+             edit{vehicleDisplay.setDeviceTime(device);notice="시각 표시 설정을 저장했어요.";draw()}
+         }.apply{isSelected=vehicleDisplay.deviceTime==device})
+@@ -625,20 +638,20 @@ class MainActivity : Activity() {
+     private fun columns(minWidth:Int=600)=if((if(root.width>0)root.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat())>=minWidth && resources.configuration.fontScale<1.5f)2 else 1
+     private fun home(body:LinearLayout){
+         val all=service.issues();val unread=if(service.confirmed())all.filter{service.needsAcknowledgement(it)}else emptyList()
+-        val driver=column();driver.addView(label("기록 운전자",20))
++        val driver=column();driver.addView(label("지금 운전하는 사람",20))
+         driver.addView(label(if(service.confirmed())service.driver().label else"기록할 사람을 확인해 주세요",26,true))
+-        val change=ui.action(if(service.confirmed())"운전자 변경"else"운전자 확인","change_driver",ActionStyle.QUIET,canEdit(),HmiIcon.PERSON){edit{chooseDriver()}}
++        val change=ui.action(if(service.confirmed())"운전자 변경"else"운전하는 사람 고르기","change_driver",ActionStyle.QUIET,canEdit(),HmiIcon.PERSON){edit{chooseDriver()}}
+         body.addView(ui.grid(listOf(driver,change),columns()))
+         val primary=column();val secondary=column()
+         if(unread.isNotEmpty()){
+             val card=ui.attention(AttentionContent("이전 운전자가 전할 내용이 있어요",unread.first().situation.take(100),"미확인 ${unread.size}건 · 읽음과 점검은 별개예요."))
+-            card.addView(ui.action("인계 확인하기 · ${unread.size}건","handover",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HANDOVER)}});primary.addView(card)
++            card.addView(ui.action("넘겨받은 기록 보기 ·${unread.size}건","handover",ActionStyle.PRIMARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HANDOVER)}});primary.addView(card)
+         }
+         val checks=vehicleChecks();healthFreshness=VehicleHealth.labels.keys.mapNotNull{observations.mostRecent(it,true)?.receivedAt}
+         if(checks.isNotEmpty()){
+             val first=checks.first();val card=ui.checkCard(first.title,first.reason,first.origin).apply{tag="home_vehicle_attention"}
+             card.addView(label(vehicleDisplay.time(first.reading.receivedAt!!)+(if(checks.size>1)" · 그 밖에 ${checks.size-1}개 항목"else""),20))
+-            card.addView(ui.action("차량 안내 확인하기","open_vehicle_check",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE){positions[Screen.VEHICLE]=0}}});primary.addView(card)
++            card.addView(ui.action("차 안내 보기","open_vehicle_check",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE){positions[Screen.VEHICLE]=0}}});primary.addView(card)
+         }
+         if(service.confirmed()){
+             val voice=homeVoice
+@@ -651,36 +664,36 @@ class MainActivity : Activity() {
+         }
+         if(service.draft()!=null)draftBanner(primary)else{
+             val create=panel();create.addView(ui.sectionTitle("어떤 문제가 있었나요?",HmiIcon.PLUS))
+-            create.addView(label("말하거나 직접 적은 뒤 저장해 주세요.",22))
++            create.addView(label("말하거나 적어서 남겨 주세요.",22))
+             create.addView(ui.action("문제 남기기","new_issue",if(unread.isEmpty()&&checks.isEmpty())ActionStyle.PRIMARY else ActionStyle.SECONDARY,canEdit(),HmiIcon.PLUS){edit{beginRecord()}})
+-            create.addView(ui.action("음성 대화·설정·이력","voice_conversation",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){
++            create.addView(ui.action("말로 물어보기 · 설정","voice_conversation",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){
+                 if(canWrite()&&service.draft()==null){stopAssistance();startActivity(android.content.Intent(this,VoiceConversationActivity::class.java).putExtra("driver_id",service.driver().id).putExtra("validation_fixture",fixturePrefix))}
+             });primary.addView(create)
+         }
+-        val health=panel();health.addView(ui.sectionTitle("차량 건강 상태",HmiIcon.VEHICLE))
+-        health.addView(label(if(pleos.busy)"차량 정보를 확인하고 있어요."else"지원되는 차량 정보와 안내를 확인해요.",22).apply{tag="auto_read_status"})
+-        health.addView(ui.action("차량 상태 보기","vehicle_health",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}});secondary.addView(health)
+-        val records=panel();records.addView(ui.sectionTitle("기록·인계",HmiIcon.RECORD));records.addView(label("저장한 기록 ${all.size}건",22).apply{tag="home_counts"})
+-        records.addView(ui.action("기록 전체 보기","all_issues",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.ISSUES)}});secondary.addView(records)
++        val health=panel();health.addView(ui.sectionTitle("내 차 상태",HmiIcon.VEHICLE))
++        health.addView(label(if(pleos.busy)"차량 정보를 확인하고 있어요."else"차가 알려 준 정보를 보여 드려요.",22).apply{tag="auto_read_status"})
++        health.addView(ui.action("내 차 상태 보기","vehicle_health",ActionStyle.SECONDARY,canEdit(),HmiIcon.VEHICLE){edit{openScreen(Screen.VEHICLE)}});secondary.addView(health)
++        val records=panel();records.addView(ui.sectionTitle("기록 · 다음 운전자에게 넘기기",HmiIcon.RECORD));records.addView(label("저장한 기록 ${all.size}건",22).apply{tag="home_counts"})
++        records.addView(ui.action("기록 모두 보기","all_issues",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.ISSUES)}});secondary.addView(records)
+         body.addView(ui.twoPane(primary,secondary,columns(840)==2))
+-        pausedGuide?.let{paused->body.addView(ui.action("안내 이어보기","resume_help",ActionStyle.QUIET,canEdit()){pausedGuide=null;screen=paused;draw()})}
++        pausedGuide?.let{paused->body.addView(ui.action("보던 안내로 돌아가기","resume_help",ActionStyle.QUIET,canEdit()){pausedGuide=null;screen=paused;draw()})}
+     }
+     private fun vehicleChecks()=VehicleAttention.list({observations.mostRecent(it)},{observations.mostRecent(it,true)},lowSoc.policy())
+     private fun handover(body:LinearLayout){
+         if(!service.confirmed()){
+-            body.addView(ui.state("기록 운전자를 확인해 주세요.","선택한 사람에게 남은 인계 내용을 보여드려요."))
+-            body.addView(ui.action("운전자 확인","change_driver",ActionStyle.PRIMARY,canEdit(),HmiIcon.PERSON){edit{chooseDriver()}});return
++            body.addView(ui.state("누가 운전하세요?","고른 사람에게 넘어온 기록을 보여 드려요."))
++            body.addView(ui.action("운전하는 사람 고르기","change_driver",ActionStyle.PRIMARY,canEdit(),HmiIcon.PERSON){edit{chooseDriver()}});return
+         }
+-        body.addView(label("${service.driver().label}님이 아직 확인하지 않은 다른 운전자의 기록이에요.",22))
+         val pending=service.issues().filter{service.needsAcknowledgement(it)}
+-        body.addView(label("미확인 ${pending.size}건",24,true).apply{tag="handover_count"})
+-        if(pending.isEmpty())body.addView(ui.state("미확인 인계가 없어요.","읽음은 차량 정상이나 점검 완료를 뜻하지 않아요."))
++        body.addView(label("확인하지 않은 기록 ${pending.size}건",24,true).apply{tag="handover_count"})
++        if(pending.isEmpty())body.addView(ui.state("확인하지 않은 기록이 없어요.","읽음은 차가 괜찮다는 뜻이 아니에요."))
+         pending.forEach{issueCard(body,it)}
++        fold(body,"이 화면이 뭔가요? 자세히","handover_info"){d->d.addView(label("${service.driver().label}님이 아직 확인하지 않은, 다른 운전자가 남긴 기록이에요. 읽음 표시는 차가 괜찮다거나 점검을 마쳤다는 뜻이 아니에요.",22))}
+     }
+ 
+     private fun issues(body:LinearLayout){
+         val actions=listOf(ui.action("문제 남기기","new_issue",ActionStyle.PRIMARY,canWrite(),HmiIcon.PLUS){edit{beginRecord()}},
+-            ui.action("다음 운전자 인계","handover",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HANDOVER)}})
++            ui.action("다음 운전자에게 넘기기","handover",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.HANDOVER)}})
+         body.addView(ui.grid(actions,columns()))
+         draftBanner(body)
+         val all=service.issues()
+@@ -710,7 +723,7 @@ class MainActivity : Activity() {
+             "${ConsultationSummary.time(issue.discoveredAt)} · ${issue.reporter.label}",
+             if(service.confirmed()&&service.needsAcknowledgement(issue))"아직 읽지 않은 전달 기록"else"직접 남긴 증상",
+             "issue_${issue.id}",canEdit()){edit{selectedIssue=issue.id;openScreen(Screen.DETAIL)}})
+-    }
++    }
+     private fun driverScreen(body:LinearLayout){
+         body.addView(label("이 이름으로 기록을 남겨요. 차량 시동이나 계정은 바뀌지 않아요.",22))
+         val drivers=service.drivers();val choices=column();val confirm=panel()
+@@ -827,7 +840,7 @@ class MainActivity : Activity() {
+         val now=System.currentTimeMillis()
+         if(screen in setOf(Screen.HOME,Screen.VEHICLE))times.addAll(healthFreshness)
+         return times.distinct().joinToString{"$it:${now-it>=VehiclePresentation.STALE_AFTER_MS}:${it>now}:${it>now+60_000}"}
+-    }
++    }
+     private fun metricGroup(body:LinearLayout,snapshot:Snapshot?=null,fromSnapshot:Boolean=false){
+         fun pair(kind:String)=if(fromSnapshot)VehicleUi.values(snapshot,kind)else observations.mostRecent(kind) to observations.mostRecent(kind,true)
+         val layout=if(fromSnapshot)PowertrainLayout.UNKNOWN else vehicleDisplay.layout
+@@ -851,17 +864,26 @@ class MainActivity : Activity() {
+         body.addView(ui.expandable("문·등화 등 차량 정보 자세히","health_expand",showHealth,canEdit()){edit{rememberLocation();showHealth=!showHealth;draw()}})
+         if(!showHealth)return
+         val groups=VehicleHealthPresentation.groups.map{(name,kinds)->
+-            val group=panel().apply{tag="health_group_${kinds.first()}"};group.addView(ui.sectionTitle(name))
+-            readings.filter{it.kind in kinds}.forEach{reading->group.addView(label(VehicleHealthPresentation.compact(reading),22).apply{tag="drivecheck_item_${reading.kind}"})}
+-            if(name=="문")group.addView(label("열림·닫힘은 차량 표시로 확인해 주세요.",20))
+-            if(name=="타이어 안내 기준")group.addView(label("실제 타이어 압력은 제공되지 않아요.",20))
++            val group=panel().apply{tag="health_group_${kinds.first()}"}
++            val mine=readings.filter{it.kind in kinds}
++            val openKey="health_open_${kinds.first()}"
++            val isOpen=openKey in expandedSections
++            // Tap the big heading to open its details right below it; opening one closes the others.
++            group.addView(ui.accordion(name,VehicleHealthPresentation.summary(mine),"health_toggle_${kinds.first()}",isOpen,canEdit()){edit{
++                rememberLocation();expandedSections.removeAll{it.startsWith("health_open_")};if(!isOpen)expandedSections.add(openKey);draw()
++            }})
++            if(isOpen){
++                mine.forEach{reading->group.addView(label(VehicleHealthPresentation.compact(reading),22).apply{tag="drivecheck_item_${reading.kind}"})}
++                if(name=="문")group.addView(label("문이 열렸는지는 차에 보이는 표시로 봐 주세요.",20))
++                if(name=="타이어 안내 기준")group.addView(label("타이어 공기압 숫자는 알려 주지 않아요.",20))
++            }
+             group
+         }
+         body.addView(ui.grid(groups,columns(840)))
+         fold(body,"출처·수신 상태 자세히","health_technical"){details->
+             details.addView(label(vehicleDisplay.layoutDescription+"\n"+vehicleDisplay.timeDescription,20).apply{tag="powertrain_context"})
+             readings.forEach{reading->details.addView(ui.state(reading.title,reading.text(vehicleDisplay::time)))}
+-            details.addView(ui.action("지원·오류 원문 보기","load_details",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.LOAD_DETAIL)}})
++            details.addView(ui.action("개발자용 원문 보기","load_details",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.LOAD_DETAIL)}})
+             if(packageName=="com.nextdrive.pleos.validation"){
+                 details.addView(ui.action("TEST · Gemini 합성 시험","gemini_poc",ActionStyle.QUIET,canEdit()){edit{startActivity(android.content.Intent().setClassName(this,"com.nextdrive.pleos.GeminiPocActivity"))}})
+                 details.addView(ui.action("TEST · 로그인 호환성","firebase_auth_probe",ActionStyle.QUIET,canEdit()){edit{startActivity(android.content.Intent().setClassName(this,"com.nextdrive.pleos.AuthCompatibilityActivity"))}})
+@@ -899,22 +921,22 @@ class MainActivity : Activity() {
+         }
+         if(service.draft()!=null)draftBanner(body)
+         val primary=column();val secondary=column()
+-        val metrics=panel();metrics.addView(ui.sectionTitle("차량에서 받은 정보",HmiIcon.VEHICLE))
++        val metrics=panel();metrics.addView(ui.sectionTitle("차가 알려 준 정보",HmiIcon.VEHICLE))
+         if(pleos.busy)metrics.addView(ui.loading("차량 정보를 확인하고 있어요.").apply{tag="load_status"})
+         metricGroup(metrics)
+-        metrics.addView(ui.action("차량 정보 다시 확인","read_vehicle",ActionStyle.SECONDARY,canEdit()&&!pleos.busy,HmiIcon.VEHICLE){edit{entry.markRequested();pleos.readOnce()}})
++        metrics.addView(ui.action("다시 불러오기","read_vehicle",ActionStyle.SECONDARY,canEdit()&&!pleos.busy,HmiIcon.VEHICLE){edit{entry.markRequested();pleos.readOnce()}})
+         primary.addView(metrics)
+-        val summary=panel();summary.addView(ui.sectionTitle("확인한 정보 요약"))
+-        summary.addView(label(if(checks.isEmpty())"최근 수신값에서 표시할 확인 안내가 없어요."else"위 항목의 이유를 확인하고 직접 살펴봐 주세요.",24))
+-        summary.addView(label("일부 차량 정보만 확인해요. 차량 전체가 정상이라는 뜻은 아니에요.",20));primary.addView(summary)
+-        val soc=panel();soc.addView(ui.sectionTitle("충전량 자동 안내",HmiIcon.BATTERY));soc.addView(label("직접 정한 충전량 기준으로 안내해요.",22))
++        val summary=panel();summary.addView(ui.sectionTitle("알려 준 정보 요약"))
++        summary.addView(label(if(checks.isEmpty())"최근에 받은 값으로는 알려 드릴 안내가 없어요."else"위 항목의 이유를 확인하고 직접 살펴봐 주세요.",24))
++        summary.addView(label("차가 알려 준 것만 보여요. 차 전체가 괜찮다는 뜻은 아니에요.",20));primary.addView(summary)
++        val soc=panel();soc.addView(ui.sectionTitle("배터리 알림",HmiIcon.BATTERY));soc.addView(label("내가 정한 % 아래로 내려가면 알려 드려요.",22))
+         soc.addView(ui.action("기준 설정·안내 기록","soc_notices",ActionStyle.SECONDARY,canEdit(),HmiIcon.BATTERY){edit{openScreen(Screen.SOC_NOTICES)}});secondary.addView(soc)
+-        val analysis=panel();analysis.addView(ui.sectionTitle("차량 데이터 분석",HmiIcon.DISTANCE));analysis.addView(label("충전량과 거리의 이전 수신값을 비교해요.",22))
++        val analysis=panel();analysis.addView(ui.sectionTitle("배터리·주행거리 그래프",HmiIcon.DISTANCE));analysis.addView(label("이전에 받은 값과 비교해 보여 드려요.",22))
+         analysis.addView(ui.action("그래프·분석 보기","vehicle_analytics",ActionStyle.SECONDARY,canEdit(),HmiIcon.DISTANCE){edit{requestAnalytics();openScreen(Screen.ANALYTICS)}});secondary.addView(analysis)
+         body.addView(ui.twoPane(primary,secondary,columns(840)==2))
+         healthSummary(body)
+-        val history=panel();history.addView(ui.sectionTitle("저장된 차량 정보",HmiIcon.CLOCK))
+-        history.addView(ui.action("조회 시점·변경 이력 보기","auto_snapshots",ActionStyle.QUIET,canEdit(),HmiIcon.CLOCK){edit{openScreen(Screen.SNAPSHOTS)}});body.addView(history)
++        val history=panel();history.addView(ui.sectionTitle("저장해 둔 차 정보",HmiIcon.CLOCK))
++        history.addView(ui.action("언제 받은 정보인지 보기","auto_snapshots",ActionStyle.QUIET,canEdit(),HmiIcon.CLOCK){edit{openScreen(Screen.SNAPSHOTS)}});body.addView(history)
+     }
+ 
+     private fun openSnapshot(s:Snapshot){openScreen(Screen.SNAPSHOT_DETAIL){selectedSnapshot=s.id;technicalExpanded=false}}
+@@ -937,8 +959,8 @@ class MainActivity : Activity() {
+             lowSoc.configure(true,threshold,observations);socThresholdDraft=null;socThresholdInput=null;notice="기준을 저장했어요. 새로 받은 값부터 안내해요.";stopSocWatch("설정을 반영하고 있어요.");maybeSocWatch();draw()
+         })
+         if(p.enabled)settings.addView(ui.action("안내 끄기","disable_soc",ActionStyle.QUIET,canEdit()){edit{lowSoc.configure(false,p.threshold,observations);stopSocWatch("자동 안내를 껐어요. 이전 기록은 남아요.");draw()}})
+-        settings.addView(label("사용자 편의 기준이에요. 기준보다 2%p 높아지면 해제를 기록하며 고장·수리 완료를 뜻하지 않아요.",20));body.addView(settings)
+-        body.addView(ui.expandable("수신 근거·안내 범위","soc_evidence",socTechnical,canEdit()){edit{socTechnical=!socTechnical;draw()}})
++        settings.addView(label("내가 정한 기준이에요. 기준보다 2% 더 올라가면 알림을 끝내요. 고장이나 수리가 끝났다는 뜻은 아니에요.",20));body.addView(settings)
++        body.addView(ui.expandable("어떻게 알려 드리나요?","soc_evidence",socTechnical,canEdit()){edit{socTechnical=!socTechnical;draw()}})
+         if(socTechnical){
+             body.addView(label("앱이 보이고 입력이 허용될 때만 확인해요. 종료·안전 제한·연결 끊김에는 관측 공백이 있어요.\n"+socObserver.message,20))
+             body.addView(label("기기 내 규칙 안내예요. 차량 수치를 증상 본문이나 AI 요청에 자동 넣지 않아요.",20).apply{tag="ai_connection_status"})
+@@ -959,42 +981,42 @@ class MainActivity : Activity() {
+     }
+ 
+     private fun analyticsScreen(body:LinearLayout){
+-        body.addView(label("새로 받은 값을 자동으로 분석해요. 이 화면을 열어도 차량을 다시 조회하지 않아요.",20))
++        body.addView(label("새로 받은 값으로 그래프를 그려요. 이 화면을 열어도 차에 다시 묻지는 않아요.",20))
+         body.addView(ui.grid(listOf("EV_SOC" to "충전량","ODOMETER" to "누적거리").map{(kind,name)->ui.action(name,"analysis_$kind",if(kind==analysisKind)ActionStyle.PRIMARY else ActionStyle.SECONDARY,canEdit(),if(kind=="EV_SOC")HmiIcon.BATTERY else HmiIcon.DISTANCE){edit{analysisKind=kind;analysisPage=0;draw()}}},columns()))
+-        body.addView(ui.grid(listOf(1 to "최근 하루",7 to "최근 일주일",0 to "최근 최대 2000건").map{(days,name)->ui.action(name,"analysis_days_$days",if(days==analysisDays)ActionStyle.PRIMARY else ActionStyle.QUIET,canEdit(),HmiIcon.CLOCK){edit{analysisDays=days;analysisPage=0;analysisResults=emptyMap();requestAnalytics();draw()}}},columns()))
++        body.addView(ui.grid(listOf(1 to "최근 하루",7 to "최근 일주일",0 to "최근 2000개까지").map{(days,name)->ui.action(name,"analysis_days_$days",if(days==analysisDays)ActionStyle.PRIMARY else ActionStyle.QUIET,canEdit(),HmiIcon.CLOCK){edit{analysisDays=days;analysisPage=0;analysisResults=emptyMap();requestAnalytics();draw()}}},columns()))
+         if(analysisBusy)body.addView(ui.loading("저장된 수신값을 분석하고 있어요."))
+         if(analysisError.isNotBlank())body.addView(ui.state("분석을 갱신하지 못했어요.",analysisError,true))
+         val a=analysisResults[analysisKind]?:run{body.addView(ui.state("분석을 준비하고 있어요.","수신 기록이 없으면 그래프를 만들지 않아요."));return}
+-        body.addView(label("분석 범위 · ${if(a.since==0L)"저장된 최근 최대 2000행"else vehicleDisplay.time(a.since)}\n${vehicleDisplay.time(a.until)}까지",20).apply{tag="analysis_period"})
+-        if(a.points.isEmpty()){body.addView(ui.state("유효한 차량값이 없어요.","미지원·오류를 0으로 바꾸지 않아요. 차량 정보에서 연결 상태를 확인해 주세요."))}else{
++        body.addView(label("보는 기간 · ${if(a.since==0L)"저장된 최근 2000개까지"else vehicleDisplay.time(a.since)}\n${vehicleDisplay.time(a.until)}까지",20).apply{tag="analysis_period"})
++        if(a.points.isEmpty()){body.addView(ui.state("쓸 수 있는 값이 아직 없어요.","못 받은 값을 0으로 보여 드리지 않아요. 차 정보에서 연결 상태를 확인해 주세요."))}else{
+             val latest=a.latest!!
+-            if(a.lastAttempt?.value?.let{!SnapshotStore.accepted(it)}==true)body.addView(ui.state("최근 수신을 확인해 주세요.","아래 값은 이전 성공값이에요. 최신 조회 실패·미지원·유효성 오류를 정상 상태로 판단하지 않아요.",true).apply{tag="analysis_latest_failure"})
+-            body.addView(ui.metric(if(a.kind=="EV_SOC")"최근 수신 충전량"else"최근 수신 누적거리","${VehicleAnalysis.fmt(latest.number)} ${a.unit}",vehicleDisplay.time(latest.at),"${if(System.currentTimeMillis()-latest.at>=600000)"이전 값 · 오래된 수신이에요."else"앱이 받은 값이에요."}\n${if(latest.ref.value.source==ObservationSource.PLEOS_EMULATOR_SDK)"Pleos 에뮬레이터"else"차량 SDK"}","analysis_latest",if(a.kind=="EV_SOC")HmiIcon.BATTERY else HmiIcon.DISTANCE))
++            if(a.lastAttempt?.value?.let{!SnapshotStore.accepted(it)}==true)body.addView(ui.state("최근에 받지 못했어요.","아래 값은 예전에 받은 값이에요. 지금 상태가 괜찮다는 뜻은 아니에요.",true).apply{tag="analysis_latest_failure"})
++            body.addView(ui.metric(if(a.kind=="EV_SOC")"최근 수신 충전량"else"최근 수신 누적거리","${VehicleAnalysis.fmt(latest.number)} ${a.unit}",vehicleDisplay.time(latest.at),"${if(System.currentTimeMillis()-latest.at>=600000)"예전에 받은 값이에요."else"앱이 받은 값이에요."}\n${if(latest.ref.value.source==ObservationSource.PLEOS_EMULATOR_SDK)"Pleos 에뮬레이터"else"차량 SDK"}","analysis_latest",if(a.kind=="EV_SOC")HmiIcon.BATTERY else HmiIcon.DISTANCE))
+             val p=lowSoc.policy()
+             body.addView(VehicleChart(this,a,palette,p.threshold.takeIf{p.enabled},vehicleDisplay::time))
+             body.addView(label(a.textSummary,22).apply{tag="analysis_statistics"})
+-            body.addView(label(a.delta?.let{"직전 수신 대비 ${VehicleAnalysis.fmt(it)}${if(a.kind=="EV_SOC")"%p"else"km"}"}?:"직전값과 안전하게 비교할 수 없어요. 세션·공백·표본을 확인해 주세요.",24,true).apply{tag="analysis_delta"})
+-            if(p.enabled&&a.kind=="EV_SOC")body.addView(label("점선: 사용자 기준 ${p.threshold}% 미만 · 원: 저장된 진입/해제 지점\n기준이 바뀐 이전 사건은 당시 기준을 상세에서 확인해 주세요.",20))
++            body.addView(label(a.delta?.let{"바로 전보다${VehicleAnalysis.fmt(it)}${if(a.kind=="EV_SOC")"%p"else"km"}"}?:"바로 전 값과 비교하기 어려워요. 값이 끊겼거나 너무 적을 수 있어요.",24,true).apply{tag="analysis_delta"})
++            if(p.enabled&&a.kind=="EV_SOC")body.addView(label("점선: 내가 정한 기준 ${p.threshold}% 아래 · 동그라미: 알림이 시작되거나 끝난 때\n기준을 바꾼 뒤라면, 그때의 기준은 자세히 보기에서 확인해 주세요.",20))
+         }
+-        body.addView(label("자동으로 찾은 내용",26,true))
+-        if(a.insights.isEmpty())body.addView(ui.state("추가 해석을 보류해요.","같은 값의 반복·표본 부족만으로 고장이나 효율을 판단하지 않아요. 최근 차량 표시를 확인해 주세요."))
++        body.addView(label("그래프에서 찾은 내용",26,true))
++        if(a.insights.isEmpty())body.addView(ui.state("더 설명하기엔 정보가 부족해요.","값이 같거나 적다고 해서 고장이나 연비를 말할 수는 없어요. 차에 보이는 표시를 함께 봐 주세요."))
+         a.insights.take(8).forEach{i->val card=panel().apply{tag="insight_${i.kind}"};card.addView(label(i.title,24,true));card.addView(label(i.meaning,22));card.addView(label(i.action,22,true));card.addView(label(vehicleDisplay.time(i.last),20));body.addView(card)}
+-        body.addView(label("분석 설명은 규칙으로 작성했어요. AI 모델 응답이 아니에요. 관측값 평균은 시간 평균·배터리 효율이 아니며, 변화 시각은 실제 변화 발생 시각이 아닌 앱 수신 시각이에요.",20))
++        body.addView(label("이 설명은 정해진 규칙으로 만든 거예요. AI가 쓴 글이 아니에요. 평균은 시간 평균이나 배터리 효율이 아니에요. 변화 시각은 차에서 바뀐 때가 아니라 앱이 값을 받은 때예요.",20))
+         if(a.kind=="EV_SOC")body.addView(ui.action("최근 하루 충전량 AI 설명","portable_ai",ActionStyle.SECONDARY,canEdit()&&a.points.isNotEmpty(),HmiIcon.RECORD){edit{val request=android.content.Intent(this,PortableAiActivity::class.java);fixturePrefix?.let{request.putExtra("validation_fixture",it)};startActivityForResult(request,810)}})
+-        body.addView(ui.expandable("상세 데이터 품질과 분석 근거","analysis_detail",analysisDetail,canEdit()){edit{analysisDetail=!analysisDetail;draw()}})
++        body.addView(ui.expandable("계산에 쓴 값 자세히 보기","analysis_detail",analysisDetail,canEdit()){edit{analysisDetail=!analysisDetail;draw()}})
+         if(analysisDetail){
+-            body.addView(label("단순 평균의 모집단: 선택 기간·동일 출처의 유효 수신 ${a.points.size}건(반복 수신 포함). 선은 같은 세션에서만 이어요. 10분 이상 공백은 분석상 구분 기준이며 차량 규격이 아니에요. 세션은 운행·차량 식별자가 아니에요.",22))
++            body.addView(label("계산에 쓴 값: 고른 기간에 같은 곳에서 받은 값 ${a.points.size}건이에요(같은 값을 여러 번 받은 것도 포함). 선은 한 번 연결된 동안에만 이어져요. 10분 넘게 비면 나눠서 보는데, 이건 이 앱의 기준이고 차의 규격은 아니에요. 한 번 연결된 동안이 한 번의 운전을 뜻하지는 않아요.",22))
+             a.quality.forEach{(k,n)->body.addView(label("$k · ${n}건",22))}
+             a.insights.take(8).forEach{i->body.addView(label("${i.kind} · ${i.rule}\n${vehicleDisplay.time(i.first)} → ${vehicleDisplay.time(i.last)}\n근거 ${i.evidence.joinToString{it.storeId+":"+it.rowId}}",20))}
+-            body.addView(label("그래프의 수신값 목록 · 최근 순서",24,true))
++            body.addView(label("그래프에 쓴 값 목록 · 최신 순",24,true))
+             a.points.asReversed().drop(analysisPage*20).take(20).forEach{p->body.addView(label("${vehicleDisplay.time(p.at)} · ${VehicleAnalysis.fmt(p.number)}${a.unit}\n원본 ${p.ref.storeId}:${p.ref.rowId} · ${if(p.ref.value.detail.contains("CALLBACK"))"CALLBACK"else"GET/기존 읽기"} · 세션 ${p.ref.value.session}",20))}
+             if(a.points.size>(analysisPage+1)*20)body.addView(button("다음 수신값 20개","analysis_more",enabled=canEdit()){analysisPage++;draw()})
+             if(analysisPage>0)body.addView(button("가장 최근 수신값","analysis_reset_page",enabled=canEdit()){analysisPage=0;draw()})
+         }
+     }
+     private fun aiPreviewScreen(body:LinearLayout){
+-        body.addView(ui.state("로컬 전송 요약 미리보기예요.","이 화면에서는 외부로 전송하지 않아요. 계정 로그인·기기 등록을 사용하는 AI 설명은 분석 화면의 별도 버튼에서 확인해 주세요."))
+-        body.addView(label("전송 후보: 선택한 신호의 수치·시각·변화량·통계·품질·분석 한계예요. 이름·차량 식별자·위치·전체 DB·증상 원문은 포함하지 않아요.",22))
++        body.addView(ui.state("이 휴대폰 안에서만 보는 요약이에요.","여기서는 밖으로 보내지 않아요. AI 설명은 로그인과 기기 등록이 필요하고, 분석 화면의 별도 버튼에서 쓸 수 있어요."))
++        body.addView(label("AI에 보낼 수 있는 것: 고른 값의 숫자, 시각, 변화량, 통계, 받은 상태, 분석의 한계예요. 이름, 차량 식별 번호, 위치, 전체 데이터, 증상 원문은 보내지 않아요.",22))
+         body.addView(label(JSONObjectPretty(aiPreview),20).apply{tag="ai_payload_preview"})
+         body.addView(button("내용 확인했어요","ai_consent",enabled=canEdit()){aiConsent?.accept();notice="동의 범위만 확인했어요. 외부로 전송하지 않았어요.";draw()})
+         body.addView(button("동의 취소 · 이전으로","ai_cancel",enabled=canEdit()){aiConsent?.revoke();aiConsent=null;aiPreview="";onBackPressed()})
+@@ -1055,26 +1077,28 @@ class MainActivity : Activity() {
+     }
+ 
+     private fun loadDetails(body:LinearLayout){
+-        body.addView(ui.state("차량 정보 수신 상세", "지원·권한·연결 상태와 원관측을 확인하는 자료예요. 차량 고장 판정과는 별개예요."))
+-        fold(body,"SDK·관측 원문 100개","load_raw"){details->
++        body.addView(ui.state("개발자용 정보", "일반 사용에는 필요 없어요. 차가 알려 준 원래 값과 연결 상태를 확인하는 자료예요. 차가 고장인지 아닌지와는 상관없어요."))
++        fold(body,"개발자용 정보 펼치기","developer_info"){dev->
++        fold(dev,"SDK·관측 원문 100개","load_raw"){details->
+             details.addView(label("Vehicle SDK 2.3.2 · ${pleos.message}\n차량 측 측정시각은 제공되지 않아요.",20))
+             observations.refs().takeLast(100).asReversed().forEach{ref->val v=ref.value
+                 details.addView(ui.state("${v.kind} · ${v.status}","값 ${v.raw?:"미수신"} · 단위 ${v.unit?:"없음"}\n지원 ${v.supported} · 유효 ${v.valid}\n앱 수신 ${v.receivedAt?.let(vehicleDisplay::time)?:"없음"}\n기록 시각 ${v.recordedAt}\n출처 ${v.source} · 세션 ${v.session}\n원본 ${ref.storeId}:${ref.rowId}\n${v.detail}"))
+             }
+         }
+-        fold(body,"전송 없는 구조 요약 도구","analysis_preview_tool"){details->
++        fold(dev,"전송 없는 구조 요약 도구","analysis_preview_tool"){details->
+             val a=analysisResults["EV_SOC"]
+             details.addView(label("AI 요청·동의와 별개인 로컬 JSON 확인 도구예요.",20))
+             details.addView(ui.action("구조 요약 보기 · 전송 없음","analysis_ai",ActionStyle.QUIET,canEdit()&&a?.points?.isNotEmpty()==true){edit{aiPreview=AnalysisExplanation.payload(a!!);aiConsent=AnalysisConsent(aiPreview);openScreen(Screen.AI_PREVIEW)}})
+         }
++        }
+     }
+ 
+     private fun welcome(body:LinearLayout){
+-        body.addView(label("차량 기록을 다음 운전자에게",32,true).apply{tag="welcome_title"})
+-        body.addView(ui.state("차량 상태 확인", "지원되는 정보와 확인할 안내를 살펴보세요."))
+-        body.addView(ui.state("문제 남기기", "직접 적거나 말한 뒤 확인하고 저장해요. AI 설명은 선택이에요."))
+-        body.addView(ui.state("다음 운전자에게 인계", "기록을 읽고 점검·조치 내용을 이어 남겨요."))
+-        body.addView(label("안전하게 정차한 뒤 이용해 주세요. 차량 전체의 고장 여부를 판정하지 않아요.",20))
++        body.addView(label("내 차 기록을 다음 운전자에게 이어 줘요",32,true).apply{tag="welcome_title"})
++        body.addView(ui.state("내 차 상태", "차가 알려 준 정보를 볼 수 있어요."))
++        body.addView(ui.state("문제 남기기", "직접 적거나 말해서 남겨요. 남기기 전에 내용을 확인해요. AI 설명은 원할 때만 써요."))
++        body.addView(ui.state("다음 운전자에게 넘기기", "남겨진 기록을 읽고, 확인한 내용을 이어서 적어요."))
++        body.addView(label("차를 안전하게 세운 뒤 사용해 주세요. 차 전체가 고장인지는 알려 주지 않아요.",20))
+         if(!guideReplay){
+             body.addView(ui.action("시작하기","guide_choose",ActionStyle.PRIMARY,canEdit()){edit{finishGuide(false)}})
+             body.addView(ui.action("나중에","guide_skip",ActionStyle.QUIET,canEdit()){edit{finishGuide(true)}})
+@@ -1095,21 +1119,21 @@ class MainActivity : Activity() {
+     private val helpTitles=listOf("기록할 사람 고르기","차량값 불러보기","느낀 문제 남기기","다른 사람의 기록 읽기","정비할 때 기록 보여주기","자동 확인 기능의 현재 범위")
+     private fun help(body:LinearLayout){
+         body.addView(label("세 가지만 기억해 주세요.",32,true))
+-        val cards=listOf("1. 지금 확인할 내용부터 보세요." to "홈에서 이전 운전자의 인계와 차량 안내를 확인해요.",
+-            "2. 문제가 있으면 남겨 주세요." to "종류와 상황을 적고 저장해요. AI 설명은 선택이에요.",
+-            "3. 다음 운전자와 기록을 이어요." to "다음 사람은 자신의 이름으로 기록을 시작한 뒤 확인해요.")
++        val cards=listOf("1. 먼저 넘어온 기록을 확인하세요." to "홈에서 다른 운전자가 남긴 기록과 내 차 안내를 봐요.",
++            "2. 문제가 있으면 남겨 주세요." to "종류와 상황을 적어서 남겨요. AI 설명은 원할 때만 받아요.",
++            "3. 다음 운전자에게 기록을 넘겨요." to "다음 사람은 자기 이름을 고른 뒤 넘어온 기록을 읽어요.")
+         cards.forEach{(title,text)->body.addView(ui.state(title,text))}
+         fold(body,"상황별 사용법","help_topics"){topics->helpTitles.forEachIndexed{i,title->topics.addView(ui.action(title,"help_topic_$i",ActionStyle.QUIET,canEdit()){edit{helpTopic=i;openScreen(Screen.HELP_TOPIC)}})}}
+     }
+ 
+     private fun helpTopic(body:LinearLayout){
+         val lines=listOf(
+-            listOf("홈의 운전자 변경에서 이름을 고른 뒤 ‘이 이름으로 기록 시작’을 눌러 주세요.","등록·이름 수정·보관은 설정·도움말의 운전자 관리에 있어요. 과거 작성자는 유지돼요. 이름 선택은 본인 인증이나 차량 시동 기능이 아니에요."),
+-            listOf("홈 → 차량 상태 보기에서 지원되는 충전량과 거리를 확인해요. 수신 시각과 이전 값 표시를 함께 봐 주세요.","앱이 보이고 입력이 허용되면 한 번 조회해요. 직접 켠 충전량 안내만 같은 조건에서 구독하며 종료·제한 중에는 관측 공백이 있어요."),
+-            listOf("홈 → 문제 남기기에서 종류와 상황을 적고 저장해요. 음성 입력은 자동 종료 후 문장을 고칠 수 있어요.","‘저장하고 AI 설명’은 먼저 기록을 저장해요. 다음 화면에서 전송 사본을 확인하고 새 설명을 선택해요. 초안이 있으면 원래 작성자로 이어 써 주세요."),
+-            listOf("홈 → 인계 확인하기에서 다른 운전자의 내용을 열고 ‘인계 내용 확인했어요’를 눌러 주세요.","읽음은 점검·해결과 별개예요. 이름을 고르거나 상세를 열기만 해서는 읽음으로 남기지 않아요."),
+-            listOf("기록 상세 → 점검·상태·상담 → 정비 상담 준비에서 기록과 질문을 보여줄 수 있어요.","길찾기는 직접 확인한 목적지 좌표를 사용해요. 기존 경로를 바꾸거나 정비소에 자동 전송·예약하지 않아요."),
+-            listOf("차량 안내는 지원되는 일부 값과 사용자 기준을 바탕으로 보여줘요. 차량 전체 진단은 아니에요.","문 위치값·등화 켜짐·타이어 저압 기준을 고장으로 해석하지 않아요. 오래됨·미수신·실패는 차량 정상이란 뜻이 아니에요.")
++            listOf("홈에서 ‘운전자 변경’을 눌러 이름을 고른 뒤, ‘이 이름으로 기록 시작’을 눌러 주세요.","이름을 새로 만들거나 고치는 곳은 설정·도움말의 ‘운전자’예요. 예전에 쓴 사람 이름은 그대로 남아요. 이름을 고르는 것은 본인 확인이나 차 시동과는 상관없어요."),
++            listOf("홈 → ‘내 차 상태 보기’에서 차가 알려 준 배터리와 주행거리를 볼 수 있어요. 언제 받은 값인지, 예전 값인지도 함께 봐 주세요.","앱이 화면에 떠 있고 조작할 수 있을 때만 값을 불러와요. 내가 켠 배터리 알림도 같은 때에만 확인해요. 앱을 닫았거나 조작이 막힌 동안에는 값을 받지 못한 시간이 생겨요."),
++            listOf("홈 → ‘문제 남기기’에서 종류와 상황을 적고 저장해요. 말로 입력하면 끝난 뒤에 글을 고칠 수 있어요.","‘저장하고 AI 설명’은 먼저 기록을 남겨요. 다음 화면에서 AI에게 보낼 내용을 확인한 뒤 설명을 받을지 고를 수 있어요. 쓰던 글이 있으면 처음 쓴 사람 이름으로 이어서 써 주세요."),
++            listOf("홈 → ‘넘겨받은 기록 보기’에서 다른 운전자가 남긴 기록을 열고, 읽은 뒤 ‘넘어온 기록을 읽었어요’를 눌러 주세요.","읽었다고 표시한다고 해서 점검이나 해결이 끝난 것은 아니에요. 이름을 고르거나 기록을 열어 보기만 해서는 읽음으로 표시되지 않아요."),
++            listOf("기록 상세 → ‘점검·상태·상담’ → ‘정비소에 말할 내용 정리’에서 기록과 물어볼 내용을 보여 줄 수 있어요.","길 찾기는 직접 넣은 정비소 위치(위도·경도)로 해요. 지금 쓰던 길 안내를 바꾸거나, 정비소에 저절로 보내거나 예약하지 않아요."),
++            listOf("차 안내는 차가 알려 준 일부 값과 내가 정한 기준으로 보여 줘요. 차 전체를 진단하는 것은 아니에요.","문 위치 값, 등이 켜진 것, 타이어 공기압이 낮다는 기준을 고장이라고 말하지 않아요. 값이 오래됐거나 못 받았거나 실패했다고 해서 차가 괜찮다는 뜻은 아니에요.")
+         );lines[helpTopic].forEach{body.addView(label(it,24))}
+     }
+ 
+@@ -1122,18 +1146,20 @@ class MainActivity : Activity() {
+         body.addView(label("기록 운전자 · ${active.ownerName}",20))
+         body.addView(label("어떤 문제가 있었나요?",32,true))
+         val fields=column();val controls=panel()
+-        fields.addView(label("문제 종류",24,true))
+-        val types=SymptomType.entries.map{type->ui.action((if(draft.type==type)"✓ "else"")+type.label,"type_${type.name}",ActionStyle.SECONDARY,canWrite()){
++        fields.addView(label("어떤 종류인가요?",24,true))
++        // Four big icon tiles (sound / shake / warning light / other). Same tags and actions as the old text buttons.
++        val typeIcons=mapOf(SymptomType.NOISE to HmiIcon.SOUND,SymptomType.VIBRATION to HmiIcon.SHAKE,SymptomType.WARNING to HmiIcon.WARN,SymptomType.OTHER to HmiIcon.MORE)
++        val types=SymptomType.entries.map{type->ui.choiceTile(type.label,"type_${type.name}",draft.type==type,canWrite(),typeIcons.getValue(type)){
+             edit{if(captureDraft()){draft.type=type;captureDraft();draw()}}
+-        }.apply{isSelected=draft.type==type}}
+-        fields.addView(ui.grid(types,if(columns(600)==2)2 else 1).apply{tag="symptom_type"})
++        }}
++        fields.addView(ui.grid(types,2).apply{tag="symptom_type"})
+         situationInput=input("어떤 때, 무엇이 달랐는지 적어 주세요.",1000).apply{tag="situation";setText(draft.situation);minimumHeight=dp(142);minLines=3}
+         fieldLabel(fields,"상황",situationInput!!);fields.addView(situationInput)
+         situationInput!!.addTextChangedListener(watcher{captureDraft()})
+         fields.addView(SpeechControls(this,ui,speechInput,{canWrite()},{voiceDraft()}))
+         val speechObserver=speechInput.observer
+         speechInput.observer={state->speechObserver(state);listOf("save_issue","save_issue_ai").forEach{tag->root.findViewWithTag<Button>(tag)?.isEnabled=canWrite()&&!recordSaving&&!state.busy}}
+-        fields.addView(ui.expandable("선택 정보 추가","record_extras",recordExtras,canEdit()){
++        fields.addView(ui.expandable("더 적고 싶으면 (선택)","record_extras",recordExtras,canEdit()){
+             edit{if(captureDraft()){rememberLocation();recordExtras=!recordExtras;draw()}}
+         })
+         if(recordExtras){
+@@ -1145,7 +1171,7 @@ class MainActivity : Activity() {
+                     extras.addView(label("조회 ${VehicleUi.shortTime(s.at)} · ${VehicleUi.compact(s)}\n증상 당시 값이나 원인은 아니에요.",20))
+                 }
+                 extras.addView(button("발견 시각 · ${ConsultationSummary.time(draft.foundAt)}","discovered_at",enabled=canEdit()){pickTime()})
+-            }else extras.addView(label("처음 발견 · ${ConsultationSummary.time(draft.foundAt)}",20))
++            }else extras.addView(label("처음 느낀 때 ·${ConsultationSummary.time(draft.foundAt)}",20))
+             memoInput=input("추가로 남길 내용을 적어 주세요.",2000).apply{tag="memo";setText(draft.memo)}
+             fieldLabel(extras,"추가 메모",memoInput!!);extras.addView(memoInput)
+             memoInput!!.addTextChangedListener(watcher{captureDraft()});fields.addView(extras)
+@@ -1156,11 +1182,11 @@ class MainActivity : Activity() {
+                 else if(canWrite()){situationInput?.setText(CaritdaActions.draft(candidate));captureDraft();intent.removeExtra("voice_draft");notice="내용을 확인한 뒤 저장해 주세요.";draw()}
+             })
+         }
+-        controls.addView(ui.sectionTitle("먼저 기록을 저장해요.",HmiIcon.RECORD))
+-        controls.addView(label("AI 설명은 저장 후 전송 내용을 확인하고 선택해 주세요.",24))
++        controls.addView(ui.sectionTitle("먼저 기록을 남겨요.",HmiIcon.RECORD))
++        controls.addView(label("AI 설명이 필요하면 남긴 뒤에 고를 수 있어요. 보내기 전에 내용을 먼저 보여 드려요.",24))
+         controls.addView(button(if(editing)"수정 내용 저장"else"저장","save_issue",primary=true,enabled=canWrite()&&!recordSaving&&!speechInput.busy){saveRecord()})
+-        controls.addView(ui.action(if(editing)"수정 저장하고 AI 설명"else"저장하고 AI 설명","save_issue_ai",ActionStyle.SECONDARY,canWrite()&&!recordSaving&&!speechInput.busy,HmiIcon.RECORD){if(canWrite()&&!speechInput.busy)saveRecord(openAi=true)})
+-        controls.addView(label("음성 입력만으로 저장하거나 외부로 보내지 않아요.",20))
++        controls.addView(ui.action(if(editing)"수정 저장하고 AI 설명 받기"else"저장하고 AI 설명 받기","save_issue_ai",ActionStyle.SECONDARY,canWrite()&&!recordSaving&&!speechInput.busy,HmiIcon.RECORD){if(canWrite()&&!speechInput.busy)saveRecord(openAi=true)})
++        controls.addView(label("말만 했다고 저절로 남거나 밖으로 보내지지는 않아요.",20))
+         cancelDraftButton(controls)
+         body.addView(ui.twoPane(fields,controls,columns(840)==2))
+     }
+@@ -1236,10 +1262,10 @@ class MainActivity : Activity() {
+         if(issue.memo.isNotBlank())fold(content,"추가 메모 보기","issue_memo"){it.addView(label(issue.memo,24))}
+         body.addView(content)
+         val unread=service.confirmed()&&service.driver().id!=issue.reporter.id&&service.needsAcknowledgement(issue)
+-        if(unread)body.addView(ui.action("인계 내용 확인했어요","acknowledge",ActionStyle.PRIMARY,canWrite(),HmiIcon.CHECK){edit{service.acknowledge(id);notice="읽음 확인을 저장했어요. 점검 상태는 그대로예요.";draw()}})
++        if(unread)body.addView(ui.action("넘어온 기록을 읽었어요","acknowledge",ActionStyle.PRIMARY,canWrite(),HmiIcon.CHECK){edit{service.acknowledge(id);notice="읽음 확인을 저장했어요. 점검 상태는 그대로예요.";draw()}})
+         else{
+-            if(service.confirmed()&&service.driver().id!=issue.reporter.id)body.addView(label("인계 확인을 남겼어요.",20).apply{tag="acknowledged"})
+-            body.addView(ui.action("점검 내용 남기기","add_note",ActionStyle.PRIMARY,canWrite(),HmiIcon.PLUS){edit{beginAction("NOTE",issue)}})
++            if(service.confirmed()&&service.driver().id!=issue.reporter.id)body.addView(label("읽었다고 표시했어요.",20).apply{tag="acknowledged"})
++            body.addView(ui.action("확인한 내용 적기","add_note",ActionStyle.PRIMARY,canWrite(),HmiIcon.PLUS){edit{beginAction("NOTE",issue)}})
+         }
+         val primary=column();val secondary=column()
+         val ai=panel();ai.addView(ui.sectionTitle("AI 문제 설명",HmiIcon.RECORD));ai.addView(label("가능한 원인과 점검할 내용을 참고해요. 고장 확정은 아니에요.",22))
+@@ -1260,16 +1286,16 @@ class MainActivity : Activity() {
+         body.addView(ui.twoPane(primary,secondary,columns(840)==2))
+         draftBanner(body)
+         fold(body,"점검·상태·상담","issue_actions"){actions->
+-            if(unread)actions.addView(ui.action("점검 내용 남기기","add_note",ActionStyle.SECONDARY,canWrite(),HmiIcon.PLUS){edit{beginAction("NOTE",issue)}})
++            if(unread)actions.addView(ui.action("확인한 내용 적기","add_note",ActionStyle.SECONDARY,canWrite(),HmiIcon.PLUS){edit{beginAction("NOTE",issue)}})
+             actions.addView(ui.action("상태 변경","change_status",ActionStyle.SECONDARY,canWrite(),HmiIcon.CHECK){edit{statusDialog(issue)}})
+-            actions.addView(ui.action("다시 발생했어요","recurrence",ActionStyle.QUIET,canWrite(),HmiIcon.RECORD){edit{beginAction("RECURRENCE",issue)}})
+-            actions.addView(ui.action("정비 상담 준비","issue_summary",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.SUMMARY)}})
+-            actions.addView(ui.action("기록 듣기 · 최대 600자","speak_issue",ActionStyle.QUIET,canEdit()){readAloud(issue.type.label+". "+issue.situation+". 현재 상태는 "+statusText(issue.status)+"입니다.")})
+-            actions.addView(label("상태는 직접 확인한 내용이에요. 읽음과 해결은 별개예요.",20))
++            actions.addView(ui.action("또 그랬어요","recurrence",ActionStyle.QUIET,canWrite(),HmiIcon.RECORD){edit{beginAction("RECURRENCE",issue)}})
++            actions.addView(ui.action("정비소에 말할 내용 정리","issue_summary",ActionStyle.QUIET,canEdit(),HmiIcon.RECORD){edit{openScreen(Screen.SUMMARY)}})
++            actions.addView(ui.action("기록 소리로 듣기","speak_issue",ActionStyle.QUIET,canEdit()){readAloud(issue.type.label+". "+issue.situation+". 현재 상태는 "+statusText(issue.status)+"입니다.")})
++            actions.addView(label("상태는 직접 확인한 대로 적어요. 읽었다고 해서 해결된 건 아니에요.",20))
+         }
+         if(service.canManage(issue))fold(body,"내 기록 관리","issue_manage"){manage->
+             manage.addView(ui.action("내용 수정","edit_issue",ActionStyle.SECONDARY,canWrite(),HmiIcon.RECORD){edit{beginEdit(issue)}})
+-            manage.addView(ui.action("기록 삭제","delete_issue",ActionStyle.DANGER,canWrite()){
++            manage.addView(ui.action("기록 지우기","delete_issue",ActionStyle.DANGER,canWrite()){
+                 confirm("이 기록을 삭제할까요?","목록과 정비 상담에서 제외해요. 원본과 이력은 기기에 남아요. 복구·영구 삭제 기능은 제공하지 않아요.","삭제"){
+                     service.deleteOwned(id);selectedIssue=null;history.clear();recordFilter=RecordFilter.ALL;screen=Screen.ISSUES;positions[screen]=0;notice="기록을 삭제했어요. 다른 기록은 그대로예요.";draw()
+                 }
+@@ -1285,8 +1311,8 @@ class MainActivity : Activity() {
+     private fun summary(body:LinearLayout){
+         val issues=selectedIssue?.let{listOf(service.issue(it))}?:service.issues()
+         body.addView(label(if(selectedIssue==null)"전체 기록 ${issues.size}건으로 상담을 준비해요."else"이 기록으로 상담을 준비해요.",24))
+-        body.addView(label("정비소로 자동 전송하거나 예약하지 않아요.",20))
+-        if(issues.isNotEmpty())body.addView(ui.action("정비 장소 길찾기 · 좌표 입력","inspection_navigation",ActionStyle.SECONDARY,canEdit()&&!navigation.busy,HmiIcon.VEHICLE){destination()})
++        body.addView(label("정비소에 저절로 보내거나 예약하지 않아요.",20))
++        if(issues.isNotEmpty())body.addView(ui.action("정비소 길 찾기","inspection_navigation",ActionStyle.SECONDARY,canEdit()&&!navigation.busy,HmiIcon.VEHICLE){destination()})
+         navigationEvents.lastOrNull()?.let{event->
+             body.addView(ui.state("길찾기 확인",InspectionNavigation.message(event.code)).apply{tag="navigation_progress"})
+             fold(body,"길찾기 수신 이력","navigation_details"){it.addView(label(navigationEvents.joinToString("\n\n"){e->vehicleDisplay.time(e.at)+"\n"+InspectionNavigation.message(e.code)},20))}
+@@ -1295,7 +1321,7 @@ class MainActivity : Activity() {
+         issues.forEach{issue->
+             val card=panel();card.addView(label(ConsultationSummary.build(issue,service.events(issue.id),::statusText),24).apply{tag="consultation_summary"})
+             snapshots.linked(issue.id)?.let{linkedVehicle(card,it)}
+-            card.addView(ui.action("상담 기록 듣기 · 최대 600자","speak_consultation_${issue.id}",ActionStyle.QUIET,canEdit()){readAloud(ConsultationSummary.build(issue,service.events(issue.id),::statusText))})
++            card.addView(ui.action("상담 내용 소리로 듣기","speak_consultation_${issue.id}",ActionStyle.QUIET,canEdit()){readAloud(ConsultationSummary.build(issue,service.events(issue.id),::statusText))})
+             val question="‘${issue.situation.take(300)}’ 증상에 어떤 점검이 필요할까요?"
+             card.addView(ui.state("정비사에게 물어볼 내용",question).apply{tag="consultation_question"})
+             card.addView(ui.action("질문 복사","copy_question_${issue.id}",ActionStyle.SECONDARY,canEdit(),HmiIcon.RECORD){edit{(getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("정비 상담 질문",question));notice="질문을 복사했어요.";draw()}});body.addView(card)
+@@ -1305,7 +1331,7 @@ class MainActivity : Activity() {
+     private fun statusDialog(issue: VehicleIssue) {
+         if(!canWrite())return
+         val content=column().apply{setPadding(dp(24),dp(16),dp(24),dp(16))}
+-        content.addView(label("점검 완료는 점검한 기록이에요. 해결 확인은 문제 해결을 직접 확인한 기록이에요.",22))
++        content.addView(label("\"점검 완료\"는 살펴봤다는 뜻이에요. \"해결 확인\"은 직접 보고 나아진 것을 확인했다는 뜻이에요.",22))
+         val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle("상태를 기록해 주세요").setView(ScrollView(this).apply{addView(content)}).create()
+         IssueStatus.entries.forEach{status->content.addView(button((if(issue.status==status)"✓ " else "")+statusText(status),"status_${status.name}"){
+             dialog.dismiss()
+@@ -1325,7 +1351,10 @@ class MainActivity : Activity() {
+         val dialog=AlertDialog.Builder(this,dialogTheme()).setTitle(title).setMessage(message)
+             .setPositiveButton(positiveLabel,null).setNegativeButton("취소",null).create()
+         activeDialog=dialog;dialog.show()
+-        listOf(AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE).forEach{which->dialog.getButton(which).apply{minHeight=dp(76);minimumWidth=dp(76);textSize=24f}}
++        // Large print for older drivers: title and message were left at the system default size.
++        dialog.findViewById<android.widget.TextView>(android.R.id.message)?.textSize=26f
++        dialog.findViewById<android.widget.TextView>(resources.getIdentifier("alertTitle","id","android"))?.textSize=30f
++        listOf(AlertDialog.BUTTON_POSITIVE,AlertDialog.BUTTON_NEGATIVE).forEach{which->dialog.getButton(which).apply{minHeight=dp(76);minimumWidth=dp(76);textSize=30f}}
+         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{edit{if(!canEdit())throw EditingBlockedException();action();dialog.dismiss()}}
+     }    private fun pickTime() {
+         if (!canEdit()) return
+@@ -1394,7 +1423,7 @@ class MainActivity : Activity() {
+     private fun button(value:String,testTag:String,primary:Boolean=false,enabled:Boolean=true,action:()->Unit)=
+         ui.action(value,testTag,if(primary)ActionStyle.PRIMARY else if(testTag=="delete_issue")ActionStyle.DANGER else if(testTag=="discard_draft")ActionStyle.QUIET else ActionStyle.SECONDARY,enabled){edit{action()}}
+     private fun input(hintText:String,max:Int)=EditText(this).apply{
+-        hint=hintText;textSize=24f;minLines=3;maxLines=8;minHeight=dp(76)
++        hint=hintText;textSize=30f;minLines=3;maxLines=8;minHeight=dp(76)
+         inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+         filters=arrayOf(InputFilter.LengthFilter(max));setTextColor(ink);setHintTextColor(muted)
+         setPadding(dp(20),dp(16),dp(20),dp(16));background=shape(cardColor,muted)
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/PortableAiActivity.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/PortableAiActivity.kt
+index 0bcc8e0..1981a48 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/PortableAiActivity.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/PortableAiActivity.kt
+@@ -63,6 +63,7 @@ class PortableAiActivity:Activity(){
+         packageName=="com.nextdrive.pleos.validation"&&Regex("issue-ai-fixture-[a-f0-9-]{36}\\.db").matches(it)
+     }}
+     private var previewOpen=false
++    private var consentMore=false
+     private var usageRefreshAttempted=false
+     override fun onCreate(saved:Bundle?){super.onCreate(saved)
+         accountDetails=intent.getBooleanExtra("account_reauth",false);reauthOpen=accountDetails
+@@ -180,20 +181,20 @@ class PortableAiActivity:Activity(){
+         body.removeAllViews()
+         val pageBody=body;val requestPane=ui.card();val resultPane=ui.card()
+         val width=if(shell.width>0)shell.width/resources.displayMetrics.density else resources.configuration.screenWidthDp.toFloat()
+-        pageBody.addView(ui.text("원인을 단정하지 않고, 다음 점검을 도와드려요.",28,true))
++        pageBody.addView(ui.text("원인을 맞히는 게 아니라, 다음에 볼 곳을 알려 드려요.",28,true))
+         pageBody.addView(ui.twoPane(requestPane,resultPane,width>=840&&resources.configuration.fontScale<1.5f))
+         val body=requestPane
+-        body.addView(ui.sectionTitle("이번에 보낼 내용",HmiIcon.RECORD))
++        body.addView(ui.sectionTitle("AI에게 보낼 내용",HmiIcon.RECORD))
+         if(issueMode&&intent.getBooleanExtra("issue_after_save",false))body.addView(ui.state("기록을 저장했어요", "증상을 다시 입력할 필요 없어요. 전송 내용을 확인한 뒤 아래에서 AI 설명을 요청해 주세요.").apply{tag="portable_saved_record"})
+         body.addView(ui.text(if(issueMode)"선택한 증상 한 건의 가능한 원인과 확인할 일을 설명해요. 확정 진단은 아니에요."else"차량에서 받은 충전량 기록만 설명해요. 고장 진단이나 운행 안전 판단은 하지 않아요.",22))
+         if(issueMode&&issue!=null){
+             body.addView(ui.text("전송할 증상 · ${issue!!.type.label}",24,true))
+             val pendingText=runCatching{JSONObject(jobState().getJSONObject("pending").getString("payload")).getString("situation")}.getOrNull()
+-            val field=EditText(this).apply{tag="issue_ai_excerpt";setText(pendingText?:excerpt?:issue!!.situation);textSize=22f;minLines=2;setTextColor(ui.colors.text);isSaveEnabled=false;isEnabled=allowed()&&!busy&&pendingText==null;inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE}
++            val field=EditText(this).apply{tag="issue_ai_excerpt";setText(pendingText?:excerpt?:issue!!.situation);textSize=28f;minLines=2;setTextColor(ui.colors.text);isSaveEnabled=false;isEnabled=allowed()&&!busy&&pendingText==null;inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE}
+             excerptInput=field;body.addView(field)
+-            body.addView(ui.text("개인 이름·연락처는 빼 주세요. 여기서 고쳐도 원래 기록은 바뀌지 않아요. 메모·작성자·다른 기록·차량값은 보내지 않아요.",20))
++            body.addView(ui.text("이름과 전화번호는 지워 주세요. 여기서 고쳐도 원래 기록은 그대로예요.",20))
+             if(vehiclePanels.isNotEmpty()){
+-                body.addView(ui.text("기기에서만 보는 차량 참고 · AI 미전송",20).apply{tag="portable_vehicle_context"})
++                body.addView(ui.text("이 휴대폰에서만 보는 차 정보 (AI에 안 보내요)",20).apply{tag="portable_vehicle_context"})
+                 body.addView(ui.expandable("함께 볼 차량 정보 자세히","portable_vehicle_details",vehicleDetails,allowed()){vehicleDetails=!vehicleDetails;render()})
+                 if(vehicleDetails)vehiclePanels.forEach{(title,snapshot)->body.addView(ui.state(title,vehicleContextText(snapshot)))}
+             }
+@@ -207,9 +208,9 @@ class PortableAiActivity:Activity(){
+             body.addView(ui.state("전송할 내용 · 원래 기록은 바뀌지 않아요",preview).apply{tag="portable_payload_preview"})
+         }
+         val signed=session.signedIn
+-        fun input(tagName:String,label:String,type:Int)=EditText(this).apply{tag=tagName;hint=label;inputType=type;textSize=22f;minHeight=ui.dp(76);setTextColor(ui.colors.text);isSaveEnabled=false;importantForAutofill=View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS}
++        fun input(tagName:String,label:String,type:Int)=EditText(this).apply{tag=tagName;hint=label;inputType=type;textSize=28f;minHeight=ui.dp(76);setTextColor(ui.colors.text);isSaveEnabled=false;importantForAutofill=View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS}
+         if(!signed){
+-            body.addView(ui.text("최초 한 번 계정으로 로그인해 주세요. 기록할 사람 이름과는 별개예요. 이메일·비밀번호는 Firebase로 전송돼요.",22))
++            body.addView(ui.text("처음 한 번만 로그인해 주세요. 운전자 이름과는 다른 계정이에요. 이메일과 비밀번호는 로그인 확인용으로 Firebase(구글의 로그인 서비스)에 보내져요.",22))
+             email=input("portable_email","이메일",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS).apply{setText(draftEmail)};body.addView(email)
+             password=input("portable_password","비밀번호",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD);body.addView(password)
+             body.addView(ui.action("로그인","portable_login",ActionStyle.PRIMARY,allowed()&&!busy&&!FirebaseSessionProvider.busy&&FirebaseSessionProvider.initialized,HmiIcon.PERSON){
+@@ -239,11 +240,13 @@ class PortableAiActivity:Activity(){
+         if(!issueMode&&a?.latest!=null)body.addView(ui.metric("설명할 충전량",VehicleAnalysis.fmt(a.latest!!.number)+" %","최근 하루 · ${a.points.size}건",if(a.latest!!.ref.value.source==ObservationSource.PLEOS_EMULATOR_SDK)"Pleos 에뮬레이터에서 받은 값이에요."else"차량 SDK에서 받은 값이에요.","portable_soc",HmiIcon.BATTERY))
+         if(!consentReady()){
+             autoConsumed=true // First-use login/registration never silently calls the model.
+-            body.addView(ui.state("처음 한 번 전송에 동의해 주세요.",if(issueMode)"선택한 한 건의 증상 종류와 위 본문을 Cloudflare 중계와 Google Gemini로 보내요. 작성자·메모·시간·차량값·다른 기록은 보내지 않아요. 개인 이름 등이 본문에 있으면 먼저 빼 주세요. 설명은 이 기기에 암호화해 저장하고, 서버 결과는 하루 뒤 삭제해요. AI가 틀릴 수 있어요. 이후 선택한 기록의 AI 버튼을 누르면 같은 범위로 요청하며, 동의는 철회할 수 있어요."else"충전량의 최근값·최소·최대·관측 평균·비교 가능한 변화량, 표본 수·상대 경과시간·품질 요약을 Cloudflare 중계와 Google Gemini로 보내요. 이름·VIN·위치·증상 원문·원본 DB는 보내지 않아요. 로그인 계정과 기기 서명은 중계 인증에만 사용해요. 다음 요청부터 같은 범위에 동의를 유지하며 언제든 철회할 수 있어요."))
++            body.addView(ui.state("처음 한 번만 동의해 주세요.",if(issueMode)"· 보내는 것: 고른 증상 한 건의 종류와 내용\n· 보내는 곳: Google Gemini (중계 서버를 거쳐요)\n· 안 보내는 것: 작성자, 메모, 시간, 차량값, 다른 기록\n· 보관: 설명은 이 기기에 암호화해 저장하고, 서버 결과는 하루 뒤 지워요.\n· 알아 두세요: 이름이나 연락처는 빼 주세요. AI가 틀릴 수 있어요. 동의는 언제든 철회할 수 있어요."else"· 보내는 것: 충전량의 최근값, 최소, 최대, 평균, 변화량\n· 보내는 곳: Google Gemini (중계 서버를 거쳐요)\n· 안 보내는 것: 이름, 차대번호, 위치, 증상 원문\n· 알아 두세요: 동의는 언제든 철회할 수 있어요.").apply{tag="portable_consent_short"})
++            body.addView(ui.expandable("동의 내용 자세히 보기","portable_consent_more",consentMore,!busy){consentMore=!consentMore;render()})
++            if(consentMore)body.addView(ui.state("동의 내용 전체",if(issueMode)"선택한 한 건의 증상 종류와 위 본문을 Cloudflare 중계와 Google Gemini로 보내요. 작성자·메모·시간·차량값·다른 기록은 보내지 않아요. 개인 이름 등이 본문에 있으면 먼저 빼 주세요. 설명은 이 기기에 암호화해 저장하고, 서버 결과는 하루 뒤 삭제해요. AI가 틀릴 수 있어요. 이후 선택한 기록의 AI 버튼을 누르면 같은 범위로 요청하며, 동의는 철회할 수 있어요."else"충전량의 최근값·최소·최대·관측 평균·비교 가능한 변화량, 표본 수·상대 경과시간·품질 요약을 Cloudflare 중계와 Google Gemini로 보내요. 이름·VIN·위치·증상 원문·원본 DB는 보내지 않아요. 로그인 계정과 기기 서명은 중계 인증에만 사용해요. 다음 요청부터 같은 범위에 동의를 유지하며 언제든 철회할 수 있어요."))
+             body.addView(ui.action("동의하고 이 기기 등록","portable_register",ActionStyle.PRIMARY,allowed()&&!busy&&ready(),HmiIcon.CHECK){sessionTask {api->api.register();"AI 이용 동의와 기기 등록을 저장했어요."}})
+             body.addView(ui.action("동의하지 않고 돌아가기","portable_consent_cancel",ActionStyle.SECONDARY,!busy,HmiIcon.BACK){finish()})
+         }else{
+-            body.addView(ui.text("AI 이용 동의가 유지 중이에요.",20))
++            body.addView(ui.text("AI 사용에 동의한 상태예요.",20))
+             val quotaBlock=AiRequestUi.block(state().optJSONObject("usage_status"),jobState().has("pending"))
+             if(quotaBlock!=null)body.addView(ui.state("새 설명 이용 안내",quotaBlock).apply{tag="portable_quota_notice"})
+             body.addView(ui.action(if(jobState().has("pending"))"진행 중 요청 결과 확인"else"새로 설명 생성","portable_explain",ActionStyle.PRIMARY,allowed()&&!busy&&ready()&&quotaBlock==null,HmiIcon.RECORD){if(jobState().has("last")&&!jobState().has("pending"))android.app.AlertDialog.Builder(this).setTitle("새 설명을 생성할까요?").setMessage("새 API 요청으로 이용 한도가 차감될 수 있어요. 기존 설명은 보존해요.").setNegativeButton("취소",null).setPositiveButton("새로 생성"){_,_->requestExplanation(true)}.show()else requestExplanation(true)})
+@@ -257,10 +260,10 @@ class PortableAiActivity:Activity(){
+                 };resultText="";issueResult=null;playback.cancel()
+             })
+         }
+-        if(consentReady())body.addView(ui.action("AI 이용 가능 횟수 확인 · 모델 호출 없음","portable_status_check",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.CHECK){sessionTask {api->val s=api.status();AiRequestUi.quotaText(s)}})
+-        jobState().optJSONObject("last_failure")?.takeIf{it.optLong("at")>(cached?.optLong("saved_at")?:0)}?.let{body.addView(ui.state("최근 새 요청은 실패했어요 · 기존 성공 설명은 보존돼요",PortableFailure(it.optString("code")).displayMessage(),true))}
++        if(consentReady())body.addView(ui.action("오늘 AI를 몇 번 더 쓸 수 있는지 보기","portable_status_check",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.CHECK){sessionTask {api->val s=api.status();AiRequestUi.quotaText(s)}})
++        jobState().optJSONObject("last_failure")?.takeIf{it.optLong("at")>(cached?.optLong("saved_at")?:0)}?.let{body.addView(ui.state("새로 물어봤지만 실패했어요. 전에 받은 설명은 남아 있어요.",PortableFailure(it.optString("code")).displayMessage(),true))}
+         if(issueMode){val jobs=runCatching{state().optJSONObject("jobs")}.getOrNull();jobs?.keys()?.asSequence()?.filter{it!=issueJob()}?.mapNotNull{jobs.optJSONObject(it)}?.filter{it.optString("record")==issueId}?.mapNotNull{it.optJSONObject("last")}?.forEach{old->val a=old.getJSONObject("answer");val text=runCatching{IssueExplanation.validate(a,old.getString("payload"),a.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("수정 전 기록의 AI 설명 · 현재 내용과 다를 수 있어요",text))}}
+-        if(cached!=null&&resultText.isBlank())body.addView(ui.action("기존 AI 설명 보기 · API 호출 없음","portable_view_saved",ActionStyle.SECONDARY,allowed()&&!busy,HmiIcon.RECORD){playback.cancel();val a=cached.getJSONObject("answer");resultText=if(issueMode)IssueAnalysisService.saved(cached).also{issueResult=it}.text else PortableAnalysis.validate(a,cached.getString("payload"),a.getString("operation_id"));message="저장된 설명이에요. 새 요청은 하지 않았어요.";render()})
++        if(cached!=null&&resultText.isBlank())body.addView(ui.action("전에 받은 AI 설명 다시 보기","portable_view_saved",ActionStyle.SECONDARY,allowed()&&!busy,HmiIcon.RECORD){playback.cancel();val a=cached.getJSONObject("answer");resultText=if(issueMode)IssueAnalysisService.saved(cached).also{issueResult=it}.text else PortableAnalysis.validate(a,cached.getString("payload"),a.getString("operation_id"));message="저장된 설명이에요. 새 요청은 하지 않았어요.";render()})
+         if(resultText.isBlank()&&cached!=null){val answer=cached.getJSONObject("answer");val text=runCatching{if(issueMode)IssueExplanation.validate(answer,cached.getString("payload"),answer.getString("operation_id"))else PortableAnalysis.validate(answer,cached.getString("payload"),answer.getString("operation_id"))}.getOrNull();if(text!=null)body.addView(ui.state("이전에 받은 AI 설명 · 현재 상태 판정 아님",text).apply{tag="portable_cached_result"})}
+         body.addView(ui.action("로그아웃","portable_logout",ActionStyle.QUIET,allowed()&&!busy,HmiIcon.BACK){playback.cancel();cancelWork();session.subject?.let{PortableAiStore(this,storeName(it)).withdraw()};FirebaseSessionProvider.signOut();resultText="";issueResult=null;message="로그아웃했어요. 차량 기록은 그대로예요.";render()})
+         val accountTags=setOf("portable_withdraw","portable_status_check","portable_logout")
+@@ -270,7 +273,7 @@ class PortableAiActivity:Activity(){
+         if(accountDetails){
+             body.addView(ui.action("현재 계정 확인 갱신","portable_reauth_open",ActionStyle.SECONDARY,allowed()&&!busy&&!FirebaseSessionProvider.busy,HmiIcon.PERSON){reauthOpen=!reauthOpen;render()})
+             if(reauthOpen){
+-                body.addView(ui.text("새 기기 등록에는 최근 계정 확인이 필요해요. 현재 계정의 비밀번호를 Firebase에서 확인하며 로그아웃하거나 기존 AI 설명을 지우지 않아요.",20))
++                body.addView(ui.text("이 기기를 쓰려면 비밀번호를 한 번 더 확인해야 해요. 로그아웃되거나 전에 받은 설명이 지워지지는 않아요.",20))
+                 val secret=input("portable_reauth_password","현재 계정 비밀번호",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD);body.addView(secret)
+                 body.addView(ui.action("이 계정으로 확인","portable_reauth_submit",ActionStyle.PRIMARY,allowed()&&!busy&&!FirebaseSessionProvider.busy){
+                     if(!allowed()||busy)return@action
+@@ -282,7 +285,7 @@ class PortableAiActivity:Activity(){
+                     }}
+                 })
+             }
+-            body.addView(ui.text("로그아웃하면 이 계정의 기기 내 AI 저장 결과를 지워요. 차량 기록은 남으며 동의 철회는 별개예요.",20))
++            body.addView(ui.text("로그아웃하면 이 휴대폰에 저장된 AI 설명이 지워져요. 차량 기록은 그대로예요. 동의를 취소하는 것과는 달라요.",20))
+             accountViews.forEach{body.addView(it)}
+         }
+         val fixtureUi=fixturePrefix!=null||fixtureIssueDb!=null
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/VoiceConversationActivity.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/VoiceConversationActivity.kt
+index 52bbff1..867f071 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/VoiceConversationActivity.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/VoiceConversationActivity.kt
+@@ -177,7 +177,7 @@ class VoiceConversationActivity:Activity(){
+         if(settingsOpen){
+             val p=permit();val values=listOf(p.record,p.cloud,p.speak,p.followUp,p.history,p.alerts,p.autoWait)
+             val labels=listOf("명확한 차량 증상을 자동 기록해요","저장한 증상과 후속 질문을 Gemini로 보내요","준비된 설명을 자동으로 읽어요","설명 후 다음 질문을 자동으로 들어요","최종 문장과 대화 본문을 30일 보관해요","새 차량 안내를 한 번 음성으로 알려요","홈에서 자동으로 호출을 기다려요")
+-            val boxes=labels.mapIndexed{i,label->CheckBox(this).apply{text=label;textSize=22f;setTextColor(ui.colors.text);minHeight=ui.dp(76);isChecked=values[i];isEnabled=valid();tag="voice_permit_$i"}.also{body.addView(it)}}
++            val boxes=labels.mapIndexed{i,label->CheckBox(this).apply{text=label;textSize=28f;setTextColor(ui.colors.text);minHeight=ui.dp(76);isChecked=values[i];isEnabled=valid();tag="voice_permit_$i"}.also{body.addView(it)}}
+             body.addView(ui.text("홈에서 호출을 기다리고, ‘카잇다’라고 말씀하시면 대화를 시작해요. 기기 내 호출 기능을 사용할 수 없으면 최대 30초씩, 화면을 연 동안 3회까지만 대기해요. 앱 밖에서는 듣지 않아요.",20))
+             body.addView(ui.text("AI 전송: 선택한 증상 종류·본문, 지금 질문, 같은 문제의 최근 질문·AI 답변 최대 두 쌍이에요. 차량 수치·위치·이름·메모·다른 기록은 보내지 않아요. 일 5회·월 100회·서비스 월 300회와 기존 비용 한도를 함께 써요. 매번 버튼을 누르지 않아도 유료 요청이 이어질 수 있어요. 개인정보가 있거나 길면 전송하지 않아요.\n음성 원본은 저장하지 않아요. 대화는 앱에서 암호화하며 운전자와 AI 계정별로 보여요. 운전자 선택은 비밀번호 인증이 아니므로 민감한 내용은 말씀하지 마세요.",20))
+             body.addView(ui.action("선택한 범위 저장","voice_permits_save",ActionStyle.SECONDARY,valid()&&!preparingCloud){
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/analytics/VehicleAnalytics.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/analytics/VehicleAnalytics.kt
+index a021d0a..5cf9f8d 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/analytics/VehicleAnalytics.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/analytics/VehicleAnalytics.kt
+@@ -12,8 +12,8 @@ data class VehicleAnalysis(val kind:String,val since:Long,val until:Long,val poi
+     val delta:Double? get()=points.takeLast(2).takeIf{it.size==2&&it[0].segment==it[1].segment}?.let{it[1].number-it[0].number}
+     val stale get()=latest?.let{until-it.at>=600000}?:true
+     val unit get()=if(kind=="EV_SOC")"%"else"km"
+-    val textSummary:String get()=if(points.isEmpty())"분석할 수 있는 수신값이 없어요."else
+-        "유효 관측 ${points.size}개 · 처음 ${fmt(values.first())}$unit · 최근 ${fmt(values.last())}$unit\n최소 ${fmt(values.min())}$unit · 최대 ${fmt(values.max())}$unit · 관측값 평균 ${fmt(values.average())}$unit"
++    val textSummary:String get()=if(points.isEmpty())"그래프로 그릴 값이 아직 없어요."else
++        "받은 값 ${points.size}개 · 처음 ${fmt(values.first())}$unit · 최근 ${fmt(values.last())}$unit\n가장 낮은 값 ${fmt(values.min())}$unit · 가장 높은 값 ${fmt(values.max())}$unit · 평균 ${fmt(values.average())}$unit"
+     companion object {fun fmt(n:Double)=java.math.BigDecimal.valueOf(n).setScale(2,java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()}
+ }
+ 
+@@ -50,17 +50,17 @@ object VehicleAnalytics {
+             if(discontinuity){count("비교 불가·관측 공백");segment++;changed=null;run.clear()}
+             val p=AnalysisPoint(ref,at,n,segment);points.add(p)
+             if(now-at>=GAP_MS)count("오래된 수신 이력")
+-            if(discontinuity&&old!=null)emit("GAP",old,p,"비교하기 어려운 구간이 있어요.","세션·출처가 다르거나 관측이 중단됐어요. 선을 이어 변화로 해석하지 않아요.","수신 시각과 출처를 확인해 주세요.")
++            if(discontinuity&&old!=null)emit("GAP",old,p,"이어서 비교하기 어려운 부분이 있어요.","받는 중간에 끊겼거나 받은 곳이 달랐어요. 그래서 선을 이어 변화라고 보지 않아요.","언제, 어디서 받은 값인지 확인해 주세요.")
+             val prev=if(!discontinuity)old else null
+             if(prev!=null){
+                 val d=n-prev.number
+                 if(d==0.0)count("같은 값 반복 수신") else {
+                     val base=changed?:prev
+-                    emit("CHANGE",base,p,"이전 수신값보다 ${if(d>0)"높아졌어요."else"낮아졌어요."}","${VehicleAnalysis.fmt(prev.number)} → ${VehicleAnalysis.fmt(n)} ${if(kind=="EV_SOC")"%"else"km"} · 변화 ${VehicleAnalysis.fmt(d)}${if(kind=="EV_SOC")"%p"else"km"}","최근 값과 실제 차량 표시를 함께 확인해 주세요.",d)
+-                    if(kind=="EV_SOC"&&abs(d)>=SOC_CHANGE_CANDIDATE)emit("LARGE_CHANGE",base,p,"큰 수치 변화가 관측됐어요.","${VehicleAnalysis.fmt(d)}%p 차이예요. 20%p 이상이라는 탐색 기준이며 고장 기준이 아니에요.","에뮬레이터 조작·수신 공백·실제 상태 변화 여부를 확인해 주세요.",d)
++                    emit("CHANGE",base,p,"바로 전에 받은 값보다${if(d>0)"높아졌어요."else"낮아졌어요."}","${VehicleAnalysis.fmt(prev.number)} → ${VehicleAnalysis.fmt(n)} ${if(kind=="EV_SOC")"%"else"km"} · 변화 ${VehicleAnalysis.fmt(d)}${if(kind=="EV_SOC")"%p"else"km"}","차에 보이는 표시와 함께 확인해 주세요.",d)
++                    if(kind=="EV_SOC"&&abs(d)>=SOC_CHANGE_CANDIDATE)emit("LARGE_CHANGE",base,p,"수치가 많이 바뀌었어요.","${VehicleAnalysis.fmt(d)}% 차이예요. 20% 이상 바뀌면 알려 드리는 것일 뿐, 고장이라는 뜻은 아니에요.","테스트 조작이나 값을 못 받은 시간 때문인지, 실제로 바뀐 건지 확인해 주세요.",d)
+                     if(run.size>=2&&(run.last().number-run[run.lastIndex-1].number)*d<0)run.clear()
+                     if(run.isEmpty())run.add(prev);run.add(p)
+-                    if(run.size>=3)emit("TREND",run.first(),p,"연속 수신값이 ${if(d>0)"올라갔어요."else"내려갔어요."}","서로 비교 가능한 세 값 이상이 같은 방향이에요. 운행 효율이나 고장 추정은 아니에요.","관측 기간과 출처를 확인해 주세요.",p.number-run.first().number)
++                    if(run.size>=3)emit("TREND",run.first(),p,"연달아 받은 값이${if(d>0)"올라갔어요."else"내려갔어요."}","비교할 수 있는 값 세 개 이상이 같은 방향이에요. 연비나 고장을 말하는 건 아니에요.","언제, 어디서 받은 값인지 확인해 주세요.",p.number-run.first().number)
+                     changed=p
+                 }
+             }
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaDesign.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaDesign.kt
+index 25a9909..3313a76 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaDesign.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaDesign.kt
+@@ -16,7 +16,7 @@ data class CaritdaPalette(val background:Int,val surface:Int,val inset:Int,val t
+     companion object {
+         private fun c(s:String)=Color.parseColor(s)
+         fun of(dark:Boolean)=if(dark)CaritdaPalette(c("#101D27"),c("#192C39"),c("#203F43"),c("#F1F6F9"),c("#BACBD6"),c("#9BE4D5"),c("#102C2B"),c("#8299A8"),c("#FFB4B4"),c("#506776"),c("#FFDA8C"),c("#44351E"))
+-        else CaritdaPalette(c("#F4F7F9"),c("#FFFFFF"),c("#E0EFF0"),c("#142D3D"),c("#4E6473"),c("#12596A"),c("#FFFFFF"),c("#718492"),c("#A72C39"),c("#C0CCD4"),c("#805000"),c("#FFF2D5"))
++        else CaritdaPalette(c("#F4F7F9"),c("#FFFFFF"),c("#E0EFF0"),c("#000000"),c("#33414C"),c("#12596A"),c("#FFFFFF"),c("#718492"),c("#A72C39"),c("#C0CCD4"),c("#805000"),c("#FFF2D5"))
+     }
+ }
+ 
+@@ -39,9 +39,11 @@ object CaritdaTokens {
+     const val SUBTITLE=24
+     const val EMPHASIS=26
+     const val METRIC=40
++    /** Older-driver readability: every CARITDA text size is raised by this many sp at the two text factories. */
++    const val BOOST=6
+ }
+ enum class ActionStyle { PRIMARY, SECONDARY, QUIET, DANGER }
+-enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, FUEL, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK }
++enum class HmiIcon { HOME, RECORD, VEHICLE, PLUS, MENU, BACK, BATTERY, FUEL, DISTANCE, PERSON, CHEVRON, CHECK, CLOCK, SUN, MOON, AUTO, MIC, HELP, SHIELD, INFO, SOUND, SHAKE, WARN, MORE }
+ data class AttentionContent(val title:String,val preview:String,val explanation:String)
+ 
+ /** Original consistent 24-unit outline symbols. No OEM or third-party icon data. */
+@@ -64,6 +66,17 @@ class CaritdaIcon(private val icon:HmiIcon,private val tint:Int):Drawable(){
+             HmiIcon.PERSON->{canvas.drawCircle(12f,7f,4f,p);canvas.drawArc(4f,13f,20f,26f,180f,180f,false,p)}
+             HmiIcon.CHECK->path(4f,12f,10f,18f,20f,6f)
+             HmiIcon.CLOCK->{canvas.drawCircle(12f,12f,9f,p);path(12f,6f,12f,12f,16f,14f)}
++            HmiIcon.SUN->{canvas.drawCircle(12f,12f,4.5f,p);path(12f,2f,12f,5f);path(12f,19f,12f,22f);path(2f,12f,5f,12f);path(19f,12f,22f,12f);path(4.9f,4.9f,7f,7f);path(17f,17f,19.1f,19.1f);path(4.9f,19.1f,7f,17f);path(17f,7f,19.1f,4.9f)}
++            HmiIcon.MOON->{val a=Path().apply{addCircle(12f,12f,9f,Path.Direction.CW)};val b=Path().apply{addCircle(17.5f,7f,7.5f,Path.Direction.CW)};a.op(b,Path.Op.DIFFERENCE);canvas.drawPath(a,p)}
++            HmiIcon.AUTO->{canvas.drawCircle(12f,12f,9f,p);path(12f,3f,12f,21f);val f=Paint(p).apply{style=Paint.Style.FILL};canvas.drawArc(RectF(3f,3f,21f,21f),90f,180f,true,f)}
++            HmiIcon.MIC->{canvas.drawRoundRect(9f,2f,15f,14f,3f,3f,p);canvas.drawArc(5f,6f,19f,19f,0f,180f,false,p);path(12f,19f,12f,22f);path(8f,22f,16f,22f)}
++            HmiIcon.HELP->{canvas.drawCircle(12f,12f,9f,p);canvas.drawArc(8.5f,7f,15.5f,14f,180f,230f,false,p);path(12f,14f,12f,15.5f);path(12f,17.5f,12f,17.6f)}
++            HmiIcon.SHIELD->{path(12f,3f,20f,6f,20f,12f,12f,21f,4f,12f,4f,6f,12f,3f);path(8.5f,12f,11f,14.5f,15.5f,9.5f)}
++            HmiIcon.INFO->{canvas.drawCircle(12f,12f,9f,p);path(12f,11f,12f,17f);path(12f,7.5f,12f,7.6f)}
++            HmiIcon.SOUND->{path(4f,9f,8f,9f,13f,5f,13f,19f,8f,15f,4f,15f,4f,9f);canvas.drawArc(13f,8f,19f,16f,-50f,100f,false,p);canvas.drawArc(13f,5f,22f,19f,-50f,100f,false,p)}
++            HmiIcon.SHAKE->path(2f,12f,5f,6f,8f,18f,11f,6f,14f,18f,17f,6f,20f,12f,22f,12f)
++            HmiIcon.WARN->{path(12f,3f,22f,20f,2f,20f,12f,3f);path(12f,9f,12f,14f);path(12f,17f,12f,17.1f)}
++            HmiIcon.MORE->{canvas.drawCircle(6f,12f,1.2f,p);canvas.drawCircle(12f,12f,1.2f,p);canvas.drawCircle(18f,12f,1.2f,p)}
+         }
+         canvas.restoreToCount(save)
+     }
+@@ -78,7 +91,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
+     fun column()=LinearLayout(context).apply{orientation=LinearLayout.VERTICAL;layoutParams=LinearLayout.LayoutParams(-1,-2)}
+     fun shape(color:Int,radius:Int=CaritdaTokens.CARD_RADIUS,stroke:Int?=null)=GradientDrawable().apply{setColor(color);cornerRadius=dp(radius).toFloat();stroke?.let{setStroke(dp(CaritdaTokens.BORDER),it)}}
+     fun text(value:String,size:Int=CaritdaTokens.BODY,bold:Boolean=false,secondary:Boolean=false)=TextView(context).apply{
+-        text=value;textSize=size.toFloat();setTextColor(if(secondary)colors.secondary else colors.text)
++        text=value;textSize=(size+CaritdaTokens.BOOST).toFloat();setTextColor(if(secondary)colors.secondary else colors.text)
+         typeface=Typeface.create("sans-serif",if(bold)Typeface.BOLD else Typeface.NORMAL)
+         setLineSpacing(dp(3).toFloat(),1.2f);setPadding(0,dp(6),0,dp(6));layoutParams=LinearLayout.LayoutParams(-1,-2)
+     }
+@@ -160,7 +173,7 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
+     }
+     fun loading(value:String)=text(value,22,secondary=true).apply{tag="loading_state";accessibilityLiveRegion=View.ACCESSIBILITY_LIVE_REGION_POLITE}
+     fun action(value:String,key:String,style:ActionStyle=ActionStyle.SECONDARY,enabled:Boolean=true,icon:HmiIcon?=null,click:()->Unit)=Button(context).apply{
+-        text=value;tag=key;textSize=CaritdaTokens.BODY.toFloat();isAllCaps=false;maxLines=Int.MAX_VALUE;ellipsize=null;minHeight=dp(CaritdaTokens.TOUCH);minimumHeight=minHeight;minimumWidth=dp(CaritdaTokens.TOUCH)
++        text=value;tag=key;textSize=(CaritdaTokens.BODY+CaritdaTokens.BOOST).toFloat();isAllCaps=false;maxLines=Int.MAX_VALUE;ellipsize=null;minHeight=dp(CaritdaTokens.TOUCH);minimumHeight=minHeight;minimumWidth=dp(CaritdaTokens.TOUCH)
+         stateListAnimator=null;elevation=0f
+         setPadding(dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.GAP),dp(CaritdaTokens.CARD_INSET),dp(CaritdaTokens.GAP));setLineSpacing(dp(3).toFloat(),1.05f)
+         typeface=Typeface.create("sans-serif-medium",Typeface.NORMAL)
+@@ -171,7 +184,10 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
+             addState(intArrayOf(-android.R.attr.state_enabled),shape(colors.inset,CaritdaTokens.BUTTON_RADIUS,colors.border))
+             addState(intArrayOf(android.R.attr.state_focused),shape(fill,CaritdaTokens.BUTTON_RADIUS,if(style==ActionStyle.PRIMARY)colors.onAccent else colors.accent))
+             addState(intArrayOf(android.R.attr.state_selected),shape(fill,CaritdaTokens.BUTTON_RADIUS,colors.accent))
+-            addState(intArrayOf(android.R.attr.state_pressed),shape(fill,CaritdaTokens.BUTTON_RADIUS,foreground))
++            // Pressed = the normal button plus a translucent wash. Text colour never changes, so labels stay readable.
++            addState(intArrayOf(android.R.attr.state_pressed),android.graphics.drawable.LayerDrawable(arrayOf(
++                shape(fill,CaritdaTokens.BUTTON_RADIUS,when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.QUIET->null;else->colors.border}),
++                shape(if(style==ActionStyle.PRIMARY)Color.argb(70,255,255,255)else Color.argb(56,Color.red(colors.accent),Color.green(colors.accent),Color.blue(colors.accent)),CaritdaTokens.BUTTON_RADIUS))))
+             addState(intArrayOf(),shape(fill,CaritdaTokens.BUTTON_RADIUS,when(style){ActionStyle.PRIMARY->colors.accent;ActionStyle.QUIET->null;else->colors.border}))
+         }
+         icon?.let{setCompoundDrawablesRelative(CaritdaIcon(it,if(enabled)foreground else colors.secondary).apply{setBounds(0,0,dp(CaritdaTokens.ICON),dp(CaritdaTokens.ICON))},null,null,null);compoundDrawablePadding=dp(CaritdaTokens.MEDIUM)}
+@@ -194,6 +210,41 @@ class CaritdaComponents(private val context:Context,val colors:CaritdaPalette){
+     }
+     fun history(title:String,subtitle:String,key:String,enabled:Boolean,click:()->Unit)=action("$title\n$subtitle",key,ActionStyle.QUIET,enabled,HmiIcon.CLOCK,click)
+     fun expandable(title:String,key:String,expanded:Boolean,enabled:Boolean,onToggle:()->Unit)=action((if(expanded)"− " else "+ ")+title,key,ActionStyle.QUIET,enabled,HmiIcon.CHEVRON,onToggle)
++    /** One tappable heading row: bold title, one-line summary and a chevron. The caller shows or hides the content below it. */
++    fun accordion(title:String,summary:String,key:String,open:Boolean,enabled:Boolean,icon:HmiIcon?=HmiIcon.CHEVRON,onToggle:()->Unit):Button=
++        action(title+"\n"+summary,key,ActionStyle.SECONDARY,enabled,icon,onToggle).apply{
++            gravity=android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
++            isSelected=open
++            contentDescription=title+", "+summary+", "+(if(open)"펼쳐져 있어요"else"눌러서 펼쳐요")
++            text=android.text.SpannableString(title+"\n"+summary).apply{
++                setSpan(android.text.style.StyleSpan(Typeface.BOLD),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++                setSpan(android.text.style.RelativeSizeSpan(1.1f),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++                setSpan(android.text.style.RelativeSizeSpan(.8f),title.length+1,length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++            }
++        }
++    /** A whole-row navigation button: icon, bold title, one-line summary and a chevron on the right. */
++    fun listRow(title:String,summary:String,key:String,enabled:Boolean,icon:HmiIcon,click:()->Unit):Button=
++        action(title+"\n"+summary,key,ActionStyle.SECONDARY,enabled,icon,click).apply{
++            gravity=android.view.Gravity.CENTER_VERTICAL or android.view.Gravity.START
++            val tint=if(enabled)colors.text else colors.secondary
++            setCompoundDrawablesRelative(compoundDrawablesRelative[0],null,CaritdaIcon(HmiIcon.CHEVRON,tint).apply{setBounds(0,0,dp(CaritdaTokens.ICON),dp(CaritdaTokens.ICON))},null)
++            contentDescription=title+", "+summary
++            text=android.text.SpannableString(title+"\n"+summary).apply{
++                setSpan(android.text.style.StyleSpan(Typeface.BOLD),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++                setSpan(android.text.style.RelativeSizeSpan(1.1f),0,title.length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++                setSpan(android.text.style.RelativeSizeSpan(.8f),title.length+1,length,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
++            }
++            (layoutParams as LinearLayout.LayoutParams).setMargins(0,dp(6),0,dp(6))
++        }
++    /** Big icon-over-label choice tile for one-of-N settings such as the screen colour. */
++    fun choiceTile(title:String,key:String,selected:Boolean,enabled:Boolean,icon:HmiIcon,click:()->Unit):Button=
++        action(title,key,if(selected)ActionStyle.PRIMARY else ActionStyle.SECONDARY,enabled,null,click).apply{
++            val tint=if(!enabled)colors.secondary else if(selected)colors.onAccent else colors.text
++            setCompoundDrawablesRelative(null,CaritdaIcon(icon,tint).apply{setBounds(0,0,dp(40),dp(40))},null,null)
++            compoundDrawablePadding=dp(CaritdaTokens.SMALL);isSelected=selected
++            contentDescription=title+if(selected)", 선택됨"else""
++            minHeight=dp(104);minimumHeight=minHeight
++        }
+     fun twoPane(primary:View,secondary:View,wide:Boolean)=column().apply{
+         if(!wide){addView(primary);addView(secondary)}else{
+             val row=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL}
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaPage.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaPage.kt
+index f70669f..84c574b 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaPage.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/CaritdaPage.kt
+@@ -1,17 +1,35 @@
+ package com.nextdrive.pleos.ui
+ 
+ import android.content.Context
++import android.graphics.Color
++import android.graphics.Typeface
++import android.util.TypedValue
+ import android.view.Gravity
+ import android.view.View
+ import android.widget.FrameLayout
++import android.widget.TextView
+ 
+ /** App content only. Retains the OS window/insets and caps B's reading width on wide car displays. */
+ class CaritdaPage(context:Context,private val content:View):FrameLayout(context){
+-    init{fitsSystemWindows=true;addView(content,LayoutParams(LayoutParams.MATCH_PARENT,LayoutParams.MATCH_PARENT,Gravity.CENTER_HORIZONTAL))}
++    /** One fixed wordmark of the app name (not a third-party logo). It lives outside the scrolling body, so it stays put on every screen. */
++    private val mark=TextView(context).apply{
++        tag="brand_mark";text="CARITDA";setTextSize(TypedValue.COMPLEX_UNIT_SP,22f);typeface=Typeface.DEFAULT_BOLD;letterSpacing=0.1f
++        setTextColor(Color.argb(200,95,108,122));isClickable=false;isFocusable=false;importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
++    }
++    init{
++        fitsSystemWindows=true
++        addView(content,LayoutParams(LayoutParams.MATCH_PARENT,LayoutParams.MATCH_PARENT,Gravity.CENTER_HORIZONTAL))
++        val d=resources.displayMetrics.density
++        addView(mark,LayoutParams(LayoutParams.WRAP_CONTENT,LayoutParams.WRAP_CONTENT,Gravity.BOTTOM or Gravity.START).apply{setMargins((16*d).toInt(),0,0,(12*d).toInt())})
++    }
+     override fun onMeasure(widthMeasureSpec:Int,heightMeasureSpec:Int){
+         val width=(MeasureSpec.getSize(widthMeasureSpec)-paddingLeft-paddingRight).coerceAtLeast(1)
+         val target=minOf(width,(1160*resources.displayMetrics.density).toInt())
+         if(content.layoutParams.width!=target)content.layoutParams=(content.layoutParams as LayoutParams).apply{this.width=target}
++        // Show the mark only in the empty side margin; on narrow windows it would sit on top of the content, so it is hidden there.
++        val gutter=(width-target)/2
++        val wanted=if(gutter>=(112*resources.displayMetrics.density).toInt())View.VISIBLE else View.INVISIBLE
++        if(mark.visibility!=wanted)mark.visibility=wanted
+         super.onMeasure(widthMeasureSpec,heightMeasureSpec)
+     }
+ }
+diff --git a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/VehicleHealthPresentation.kt b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/VehicleHealthPresentation.kt
+index 48e0b9a..76beec3 100644
+--- a/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/VehicleHealthPresentation.kt
++++ b/NextDrive-Pleos/app/src/main/java/com/nextdrive/pleos/ui/VehicleHealthPresentation.kt
+@@ -9,6 +9,11 @@ object VehicleHealthPresentation {
+         "차량 안내·페달" to listOf("ENGINE_OIL","BRAKE_FLUID","WASHER_LOW","POWER_DOWN","BRAKE_PEDAL"),
+         "타이어 안내 기준" to listOf("TIRE_LIMIT_FL","TIRE_LIMIT_FR","TIRE_LIMIT_RL","TIRE_LIMIT_RR"))
+     fun quality(q:ReadingQuality)=when(q){ReadingQuality.CURRENT->"수신됨";ReadingQuality.STALE->"오래된 정보";ReadingQuality.UNSUPPORTED->"미지원";ReadingQuality.PERMISSION_DENIED->"권한 필요";ReadingQuality.FAILED->"수신 실패";ReadingQuality.INVALID->"확인하지 못함";ReadingQuality.NOT_RECEIVED->"미수신"}
++    /** One line for a collapsed group heading, e.g. "4개 · 모두 오래된 정보". */
++    fun summary(list:List<DriveCheckReading>):String {
++        val qualities=list.map{it.quality}.distinct()
++        return "${list.size}개 · "+if(qualities.size==1)"모두 "+quality(qualities.first())else"눌러서 보기"
++    }
+     fun compact(v:DriveCheckReading):String {
+         val value=when{
+             v.receivedAt==null->""

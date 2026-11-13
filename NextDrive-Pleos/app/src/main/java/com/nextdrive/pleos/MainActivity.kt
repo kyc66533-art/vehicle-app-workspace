@@ -112,7 +112,10 @@ class MainActivity : Activity() {
     private val locationReader by lazy{OneShotLocation(this){visible&&canWrite()}}
     private val navigation by lazy{InspectionNavigation(this){visible&&canEdit()}}
     private val nearbyWorker=java.util.concurrent.Executors.newSingleThreadExecutor()
-    private var nearbyGeneration=0
+    @Volatile private var nearbyGeneration=0
+    private val nearbySession by lazy{com.nextdrive.pleos.ai.auth.FirebasePortableSession(this) as com.nextdrive.pleos.ai.auth.PortableSession}
+    private var nearbyLookup:NearbyRepairLookup=NearbyRepairClient
+    private var nearbyScope=""
     private var nearbyBusy=false
     private var nearbyStatus=""
     private var nearbyPlaces=emptyList<NearbyRepairPlace>()
@@ -127,7 +130,11 @@ class MainActivity : Activity() {
     private val fixturePrefix by lazy { intent.getStringExtra("validation_fixture")?.takeIf {
         packageName=="com.nextdrive.pleos.validation" && Regex("gleo-ui-[a-f0-9-]{36}").matches(it)
     } }
-    private fun stopAssistance(){nearbyGeneration++;nearbyBusy=false;nearbyPlaces=emptyList();nearbyStatus="";homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
+    private fun clearNearby(){nearbyGeneration++;nearbyBusy=false;nearbyPlaces=emptyList();nearbyStatus="";nearbyScope=""}
+    private fun nearbyContext()=if(canWrite()&&nearbySession.signedIn&&!nearbySession.subject.isNullOrBlank())
+        service.driver().id+":"+nearbySession.subject+":"+selectedIssue.orEmpty() else ""
+    private fun nearbyCurrent(run:Int,scope:String)=run==nearbyGeneration&&visible&&canWrite()&&screen==Screen.SUMMARY&&scope.isNotBlank()&&scope==nearbyContext()
+    private fun stopAssistance(){clearNearby();homeVoice?.pause();speechOutput.stop();speechInput.stop();locationReader.stop()
         if(navigation.busy)navigationEvents=navigation.events+InspectionNavigation.Event("NAVI_MONITOR_STOPPED",System.currentTimeMillis())
         navigation.stop();permissionAction=null}
     private fun locationStore()=IssueLocationStore(this,fixturePrefix?.let{it+"-locations.db"}?:"caritda-issue-location.db")
@@ -210,14 +217,17 @@ class MainActivity : Activity() {
      */
     private fun findNearbyRepair(){
         if(!canWrite()||nearbyBusy||navigation.busy)return
+        val scope=nearbyContext()
+        if(scope.isBlank()){nearbyStatus=NearbyRepairClient.message("AUTH_SIGN_IN_REQUIRED");draw();return}
         confirm("주변 정비소를 찾을까요?",
             "차량의 최근 확인 위치를 CARITDA 중계 서버에 전송하고, 카카오 장소 검색에는 약 100m 단위로 줄여 전달해요. 문제 내용·운전자 정보는 보내지 않아요. 정비소를 선택해야 길찾기를 시작해요."){
             permission("pleos.car.permission.FUSED_LOCATION"){
-                if(!visible||screen!=Screen.SUMMARY||!canEdit())return@permission
+                if(!visible||screen!=Screen.SUMMARY||!canWrite()||scope!=nearbyContext())return@permission
                 val run=++nearbyGeneration
+                nearbyScope=scope
                 nearbyBusy=true;nearbyStatus="차량의 마지막 확인 위치를 조회하고 있어요.";nearbyPlaces=emptyList();draw()
                 locationReader.read{value,code->
-                    if(run!=nearbyGeneration||screen!=Screen.SUMMARY||!visible)return@read
+                    if(!nearbyCurrent(run,scope))return@read
                     if(value==null){
                         nearbyBusy=false;nearbyStatus=LocationPresentation.failure(code);draw()
                         return@read
@@ -227,16 +237,17 @@ class MainActivity : Activity() {
                         return@read
                     }
                     nearbyStatus="정비소 목록을 검색하고 있어요.";draw()
-                    com.nextdrive.pleos.ai.auth.FirebaseSessionProvider.withSession{_,bearer,error->
+                    nearbySession.acquire{uid,bearer,error->
                         runOnUiThread{
-                            if(run!=nearbyGeneration||screen!=Screen.SUMMARY||!visible)return@runOnUiThread
-                            if(bearer.isNullOrBlank()){
+                            if(!nearbyCurrent(run,scope))return@runOnUiThread
+                            if(bearer.isNullOrBlank()||uid.isNullOrBlank()||!nearbySession.matches(uid)){
                                 nearbyBusy=false;nearbyStatus=NearbyRepairClient.message(error?:"AUTH_SIGN_IN_REQUIRED");draw()
                             }else{
                                 nearbyWorker.execute{
-                                    val result=runCatching{NearbyRepairClient.search(value.latitude,value.longitude,bearer)}
+                                    if(run!=nearbyGeneration)return@execute
+                                    val result=runCatching{nearbyLookup.search(value.latitude,value.longitude,bearer)}
                                     runOnUiThread{
-                                        if(run==nearbyGeneration&&screen==Screen.SUMMARY&&visible&&canEdit()){
+                                        if(nearbyCurrent(run,scope)){
                                             nearbyBusy=false
                                             result.onSuccess{
                                                 nearbyPlaces=it
@@ -259,11 +270,13 @@ class MainActivity : Activity() {
     }
 
     private fun selectedRepairDestination(place:NearbyRepairPlace){
-        if(!canEdit()||navigation.busy)return
+        if(!canWrite()||navigation.busy||nearbyScope.isBlank()||nearbyScope!=nearbyContext()||place !in nearbyPlaces)return
+        val target=place.navigationTarget();val scope=nearbyScope
+        if(!target.valid()){nearbyStatus=NearbyRepairClient.message("PLACES_RESPONSE_INVALID");draw();return}
         confirm("이 정비소로 길찾기를 시작할까요?",
             "${place.name}\n${place.address}\n업체 정보·영업 여부는 별도로 확인해 주세요. 정비 예약이나 견인 신청은 하지 않아요."){
-            if(!canEdit()||screen!=Screen.SUMMARY||navigation.busy)return@confirm
-            navigation.request(place.latitude,place.longitude,place.name){code->
+            if(!canWrite()||screen!=Screen.SUMMARY||navigation.busy||scope!=nearbyContext())return@confirm
+            navigation.request(target.latitude,target.longitude,target.name){code->
                 notice=InspectionNavigation.message(code);navigationEvents=navigation.events
                 feedback?.apply{text=notice;visibility=View.VISIBLE}
                 if(screen==Screen.SUMMARY){positions[screen]=scrollView?.scrollY?:0;draw()}
@@ -274,7 +287,7 @@ class MainActivity : Activity() {
     private fun repairNearbyPanel(body:LinearLayout){
         val section=panel()
         section.addView(ui.sectionTitle("가까운 정비소 찾기",HmiIcon.VEHICLE))
-        section.addView(label("현재 위치를 기준으로 정비소를 검색해요. 좌표 입력은 필요 없어요.",22))
+        section.addView(label("차량에서 마지막으로 확인한 위치를 기준으로 검색해요. 좌표 입력은 필요 없어요.",22))
         section.addView(ui.action(if(nearbyBusy)"검색 중..."else"현재 위치로 주변 정비소 찾기",
             "repair_nearby_search",ActionStyle.PRIMARY,canWrite()&&!nearbyBusy&&!navigation.busy){findNearbyRepair()})
         if(nearbyStatus.isNotBlank())section.addView(label(nearbyStatus,20))
@@ -462,6 +475,7 @@ class MainActivity : Activity() {
         super.onStart()
         visible=true
         removeVoiceAuth=com.nextdrive.pleos.ai.auth.FirebaseSessionProvider.observe{
+            if(nearbyScope.isNotBlank()&&nearbyScope!=nearbyContext()){clearNearby();locationReader.stop();if(visible&&screen==Screen.SUMMARY)draw()}
             if(visible&&com.nextdrive.pleos.ai.auth.FirebaseSessionProvider.initialized){val deferred=deferredAttention;deferredAttention=null;if(deferred!=null)runCatching{receiveAttention(deferred)}}
             homeVoice?.evaluate()
         }
@@ -625,8 +639,8 @@ class MainActivity : Activity() {
         body.addView(ui.grid(listOf(left,right),columns(840)))
     }
     private fun draw() {
-        if(screen!=Screen.SUMMARY && (nearbyBusy||nearbyPlaces.isNotEmpty()||nearbyStatus.isNotBlank())){
-            nearbyGeneration++;nearbyBusy=false;nearbyPlaces=emptyList();nearbyStatus="";locationReader.stop()
+        if((screen!=Screen.SUMMARY||nearbyScope.isNotBlank()&&nearbyScope!=nearbyContext()) && (nearbyBusy||nearbyPlaces.isNotEmpty()||nearbyStatus.isNotBlank())){
+            clearNearby();locationReader.stop()
         }
         if(::service.isInitialized)ActionDriverSession.id=if(service.confirmed())service.driver().id else null
         if(screen!=Screen.RECORD&&speechFormVisible){speechInput.stop();speechFormVisible=false}

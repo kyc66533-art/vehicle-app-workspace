@@ -15,7 +15,7 @@ export async function handlePortable(request:Request,env:any,authenticate=verify
   const auth=request.headers.get('authorization')||'';reject(/^Bearer [A-Za-z0-9_.-]{1,8192}$/.test(auth),'AUTH_REQUIRED',401);
   reject(/^application\/json(?:;\s*charset=utf-8)?$/i.test(request.headers.get('content-type')||'')&&!request.headers.has('content-encoding'),'CONTENT_TYPE',415);
   const principal=await authenticate(auth.slice(7),env.FIREBASE_PROJECT_ID);
-  if(route==='nearby-repair')return nearbyRepair(await bodyJson(request,512),env);
+  if(route==='nearby-repair')return await nearbyRepair(await bodyJson(request,512),env);
   const body=await bodyJson(request,8192),device=request.headers.get('x-caritda-device-id')||'',version=Number(request.headers.get('x-caritda-key-version')||'1');
   if(route==='read')reject(body.operation_id===url.pathname.slice('/v2/operations/'.length),'OPERATION_MISMATCH');
   const stub=env.BUDGET.get(env.BUDGET.idFromName(GLOBAL));

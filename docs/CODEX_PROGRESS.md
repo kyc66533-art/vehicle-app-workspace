@@ -1,5 +1,16 @@
 # Codex 개발 진행 기록
 
+## 2026-11-13 22:59 +09:00 — PR #3 주변 정비소 로컬 통합·NaviHelper 재검증
+
+- PR #3 Draft/head a71bdc1d3a5de395b419f597542aedd0f46f0ea4/base PR #2 a4e0cf5와 로컬302파일 일치, 원격 전용 연구29개 보존. 소스/최신 일반·validation 백업 후 PR7파일을 반영했다. main/PR #2 병합·일반 APK 교체·서버 배포·추가 Gemini 유료 호출0.
+- 새 검색의 기존 FirebasePortableSession/OneShotLocation/InspectionNavigation을 재사용했다. 업체명100자 표시와 내비80자 제한 연결, 결과 스키마/중복/거리/HTTP 오류 검증, 계정·운전자·기록·화면 범위/generation 무효화, 새 Worker 경로 return await 예외 처리,64KiB 스트림 제한/공급자 합계6초를 보완했다. 기존 음성/DB/SDK/서명/AI 예산 정책은 수정하지 않았다.
+- PR 원본 Kotlin compile2m7초 성공. 기존 Gradle 캐시 경로 실패는 프로젝트 전용 캐시에 기존 의존성을 복사해 offline 해결/새 설치·전역 설정0. 최종 Debug/Validation/AndroidTest/Lint/Unit 작업3m35초 성공, Lint0오류68경고·Unit NO-SOURCE 제외. 동일 서명 validation/test만 업데이트했다.
+- Node 새40+기존169=209 assertion/TypeScript 성공, 실제 Kakao/Gemini0. Android 새 UI/계약34+관련 회귀407+운영 진단2+실제Navi 진단6=449 assertion/22분기 성공. 기존477/198 전체 반복 아님. SDK/fixture/사람 발화와 기능 성공을 구분했다.
+- 실제 에뮬레이터 health200/repair404: endpoint 미배포. 로컬 키/PLACES 설정도 없고 운영 Secret은 미조회다. 실제 업체 검색은 BLOCKED이며 목록 UI는 TEST fixture만 검증했다. 전체 검색→실제 업체→길찾기 성공으로 보고하지 않는다.
+- 실제 NaviHelper3.0.5/서비스3.0.4에서 공식 예제 목적지1회 요청: PREFLIGHT/REQUEST_SENT/SEARCH_STARTED/ROUTE_DRIVE/ROUTE_GUIDING/DESTINATION_CONFIRMED, 실제 내비 안내 화면 확인. onRoutingCompleted는 미수신/30초TIMEOUT. 엄격 완료 조건을 낮추지 않았으며 새 일치 시험 경로만 취소해 routing=false/SAFE_GUIDING·‘어디로 갈까요?’로 복원했다.
+- 원본1075DB/19119행 키 누락0·schema/version/integrity/FK 정상. 일반31문제/113이벤트/10운전자/0초안·validation 루트1/1/2/0 보존. 일반 관측/파생425행/validation 고유DB74개 추가. strict행 동일성은 FAIL: 이미 ENDED인 일반 음성 세션1개의 ended만 화면 전환 시21:30:13.559→22:45:25.918 KST 재기록. 나머지19118행/본문/상태/이력 동일, 기존 종료 처리로 판단/원본 복원·음성 코드 수정0. 일반private17동일/삭제0·validation435동일7변경/삭제0. 전후 사본/감사 근거는 비공개 로컬 보존한다.
+- [최신 구현·실제 단계·검사·데이터 예외·사용 절차](NEARBY_REPAIR_INTEGRATION.md)를 갱신한다. 미완료는 실제 Kakao 키/호출 제한/배포와 실검색, 완료 콜백 누락의 플랫폼 원인, 일반 앱 사용자·실차다. 검증된 명시 파일만 GitHub 연결 도구로 PR #3의 작업 브랜치에 이어 게시하며 main/PR #2/Aside를 보존하고 Draft를 유지한다. 실제 commit/게시 결과는 최종 응답에서 보고한다.
+
 ## 2026-11-13 09:00 +09:00 — 전날 음성 수정본의 브랜치·PR 게시 재개
 
 - 사용자 지시로 어제의 게시 중단만 이어 처리한다. GitHub 연결 도구로 현재 main7f913a466490664171706029a3235885558a7584/tree8fcbde02d030b175474216b143d3affc5547fabf를 재확인했으며 어제 기준과 같다. 이후 다시 원격을 확인하고 별도 `fix/stt-home-wake-confirmation-20261113` 브랜치·main 대상 PR로 게시한다. main 직접 갱신/병합은 하지 않는다.

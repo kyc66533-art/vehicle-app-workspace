@@ -1,3 +1,4 @@
+import {nearbyRepair} from './nearby-repair.ts';
 import {handle as legacy} from './index.ts';
 import {BudgetGate,GLOBAL} from './portable-gate.ts';
 import {verifyFirebase} from './firebase-token.ts';
@@ -10,10 +11,11 @@ export async function handlePortable(request:Request,env:any,authenticate=verify
   if(url.pathname.startsWith('/v1/'))return legacy(request,{...env,POC_ENABLED:'false'});
   reject(request.method==='POST','METHOD',405);reject(!request.headers.has('origin'),'BROWSER_ORIGIN_REJECTED',403);
   reject(env.PORTABLE_ENABLED==='true'&&env.BUDGET,'PORTABLE_DISABLED',503);
-  const route=url.pathname==='/v2/devices/challenge'?'challenge':url.pathname==='/v2/devices/register'?'register':url.pathname==='/v2/explanations'?'explain':url.pathname==='/v2/issues/explanations'?'issue-explain':url.pathname==='/v2/issues/dialogue'?'dialogue-explain':url.pathname==='/v2/issues/dialogue/consent/revoke'?'dialogue-revoke':url.pathname==='/v2/issues/consent/revoke'?'issue-revoke':url.pathname==='/v2/devices/revoke'?'revoke':url.pathname==='/v2/account/status'?'status':/^\/v2\/operations\/o2\.\d{13}\.[0-9a-f-]{36}$/.test(url.pathname)?'read':null;reject(route,'NOT_FOUND',404);
+  const route=url.pathname==='/v2/devices/challenge'?'challenge':url.pathname==='/v2/devices/register'?'register':url.pathname==='/v2/explanations'?'explain':url.pathname==='/v2/issues/explanations'?'issue-explain':url.pathname==='/v2/issues/dialogue'?'dialogue-explain':url.pathname==='/v2/issues/dialogue/consent/revoke'?'dialogue-revoke':url.pathname==='/v2/issues/consent/revoke'?'issue-revoke':url.pathname==='/v2/devices/revoke'?'revoke':url.pathname==='/v2/account/status'?'status':url.pathname==='/v2/repair/nearby'?'nearby-repair':/^\/v2\/operations\/o2\.\d{13}\.[0-9a-f-]{36}$/.test(url.pathname)?'read':null;reject(route,'NOT_FOUND',404);
   const auth=request.headers.get('authorization')||'';reject(/^Bearer [A-Za-z0-9_.-]{1,8192}$/.test(auth),'AUTH_REQUIRED',401);
   reject(/^application\/json(?:;\s*charset=utf-8)?$/i.test(request.headers.get('content-type')||'')&&!request.headers.has('content-encoding'),'CONTENT_TYPE',415);
   const principal=await authenticate(auth.slice(7),env.FIREBASE_PROJECT_ID);
+  if(route==='nearby-repair')return await nearbyRepair(await bodyJson(request,512),env);
   const body=await bodyJson(request,8192),device=request.headers.get('x-caritda-device-id')||'',version=Number(request.headers.get('x-caritda-key-version')||'1');
   if(route==='read')reject(body.operation_id===url.pathname.slice('/v2/operations/'.length),'OPERATION_MISMATCH');
   const stub=env.BUDGET.get(env.BUDGET.idFromName(GLOBAL));

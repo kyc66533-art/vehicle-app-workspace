@@ -3,6 +3,8 @@ package com.nextdrive.pleos.integration
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.InputStream
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 
 /** One explicit, Firebase-authenticated repair-place lookup.
@@ -14,6 +16,14 @@ data class NearbyRepairPlace(
 )
 class NearbyRepairError(val code:String):Exception(code)
 object NearbyRepairClient {
+    private fun InputStream.readLimited(limit:Int):ByteArray=ByteArrayOutputStream().use {out->
+        val chunk=ByteArray(2048);var total=0
+        while(true){val count=read(chunk);if(count<0)break;total+=count
+            if(total>limit)throw NearbyRepairError("PLACES_RESPONSE_LIMIT")
+            out.write(chunk,0,count)
+        }
+        out.toByteArray()
+    }
     private const val ENDPOINT="https://caritda-ai-relay-dev.kyc66533.workers.dev/v2/repair/nearby"
     fun search(latitude:Double,longitude:Double,bearer:String):List<NearbyRepairPlace> {
         if(!latitude.isFinite()||!longitude.isFinite()||latitude !in 33.0..39.5||longitude !in 124.0..132.0)
@@ -34,14 +44,13 @@ object NearbyRepairClient {
             if(status!=200){
                 val code=runCatching {
                     conn.errorStream?.use {stream->
-                        val bytes=stream.readNBytes(4096)
+                        val bytes=stream.readLimited(4096)
                         JSONObject(String(bytes,StandardCharsets.UTF_8)).optJSONObject("error")?.optString("code")
                     }
                 }.getOrNull()
                 throw NearbyRepairError(code?.takeIf{Regex("[A-Z_]{2,60}").matches(it)}?:"PLACES_HTTP_$status")
             }
-            val bytes=conn.inputStream.use{it.readNBytes(32769)}
-            if(bytes.size>32768)throw NearbyRepairError("PLACES_RESPONSE_LIMIT")
+            val bytes=conn.inputStream.use{it.readLimited(32768)}
             val root=JSONObject(String(bytes,StandardCharsets.UTF_8))
             if(root.optString("source")!="KAKAO_LOCAL")throw NearbyRepairError("PLACES_RESPONSE_INVALID")
             val items=root.getJSONArray("places")

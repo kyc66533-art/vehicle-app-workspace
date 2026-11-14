@@ -38,7 +38,9 @@ class DesignChecks(private val inst:Instrumentation){
         val obs=ObservationStore(c);val snapshots=SnapshotStore(c)
         var a=launch();await("input allowed"){main{tag(a,"driver_A")?.isEnabled==true}}
         click(a,"driver_A");click(a,"start_driving")
-        await("real entry SDK complete"){obs.latest(3).size==3&&snapshots.latest()!=null}
+        // Core SOC/distance/fuel rows and their snapshot can precede the other public signals.
+        // Count only after the whole batch finishes; late first-batch callbacks are not redraw reads.
+        await("real entry SDK complete"){main{SdkBatchSettlement.complete(BLightHarness(inst),a,obs)}&&obs.latest(3).size==3&&snapshots.latest()!=null}
         verify(main{listOf("vehicle_health","all_issues","new_issue","voice_conversation").all{tag(a,it)!=null}&&tag(a,"metric_EV_SOC")==null},"PX01 home has three plain entry cards (vehicle status, records, new problem) and no raw metric rows")
         verify(main{tag(a,"help")==null}&&!text(a).contains("Capability")&&!text(a).contains("세션 ID")&&!text(a).contains("스냅샷"),"PX02 technical details and name administration do not occupy home")
         val count=obs.refs().size

@@ -1,5 +1,28 @@
 # CARITDA(가칭) — 차량 시계열·자동 인사이트
 
+## 공모전 제출 후보 — 2026-11-14
+
+**제출 안내(심사자용):** 심사 대상은 기본 브랜치 `main`이 아니라 제출 브랜치 `release/submission-readiness-20261114`의 최종 커밋입니다. `main`에는 `apk/` 폴더가 없습니다. 최종 커밋 번호(40자리)는 접수 이메일과 [PR #8](https://github.com/kyc66533-art/vehicle-app-workspace/pull/8) 본문에 적었습니다.
+
+- 팀명: 주시조 / 앱 이름: CARITDA(카잇다, 상표 검증 전 잠정 명칭. 앱 안의 표시 이름은 "CARITDA(가칭)")
+- 제출 APK: [`apk/주시조_CARITDA_release.apk`](apk/주시조_CARITDA_release.apk) (SHA-256 `72a001e9d2f4b0d42f7aa68155f976fc7fc4846b975a2f33168555a9717539db`, package `com.nextdrive.pleos`)
+- 시연 영상: [현대차 앱개발 공모전 시연 영상](https://www.youtube.com/watch?v=zlbre6JdCAY)
+- 실행 환경: Pleos Connect v2.1.0 / API34, 화면 2560×1440, density160 (아래 "환경" 참고)
+- 기술 검증 결과: [docs/SUBMISSION_READINESS.md](docs/SUBMISSION_READINESS.md)
+
+**한 줄 소개:** 차가 알려 준 정보와 운전자가 남긴 문제를 함께 확인하고, 점검 참고 설명과 다음 운전자 인계로 이어 주는 Pleos Connect 차량용 앱입니다. 고장이나 수리 완료를 자동 판정하지 않습니다.
+
+- 기준: [PR #7](https://github.com/kyc66533-art/vehicle-app-workspace/pull/7), `7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1`. 제출 준비 후속 브랜치: `release/submission-readiness-20261114`. main과 기존 PR은 자동 병합하지 않습니다. 제출 시 후속 PR의 최종 HEAD SHA를 명시합니다.
+- 저장소는 이번 작업 시작 전 API 응답부터 Public이었습니다. 공개 범위는 변경하지 않았습니다. 이전 개발 기록의 Private 표기는 당시의 안내이며 현재 상태로 사용하지 마세요.
+- 팀명 주시조의 제출 APK 경로는 `apk/주시조_CARITDA_release.apk`입니다. 현재 서명·실행 검증 및 게시 상태는 [제출 준비 결과](docs/SUBMISSION_READINESS.md)를 확인하세요. 서명 전 파일이나 Debug APK를 제출 APK로 대신하지 않습니다.
+- 실행: 정차 상태에서 운전자 선택 → **내 차 상태 보기** / **문제 남기기** → 음성 또는 글 입력 → 확인·저장 → 선택적 AI 설명/TTS → 기록·인계. 정비 상담 준비의 **내비에서 정비소 찾기**는 설치된 Pleos 내비를 엽니다. 업체의 지역·주소를 확인하고 선택하세요.
+- 환경: Windows11/Android Studio/Pleos Connect v2.1.0(API34), 전체2560×1440·density160. 앱은 OS Driving View·시스템바·공조를 제외한 앱 창에서 표시됩니다. Vehicle2.3.2/NaviHelper3.0.5/Fused1.1.3/STT·TTS3.3.1. 기존 AVD·앱 데이터·서명키를 지우지 마세요.
+- 설정: 마이크는 사용자가 허용해야 하며 홈 자동 대기는 운전자/계정별 기본 OFF입니다. 전면·정차·안전 허용 상태에서만 동작합니다. Gemini는 기존 Firebase 로그인·기기 등록·전송 범위 동의와 일5/월100/서비스 월300·비용 한도가 필요합니다. 이번 제출 준비에서는 유료 요청·Worker 배포를 하지 않습니다.
+- 처음 설치하면 ‘시작하기’ → 운전자 등록 → 이름 선택·확정으로 홈을 엽니다. 첫 안내 이후 차량값이 없으면 ‘내 차 상태 보기’ → ‘차 상태 불러오기’를 한 번 눌러 주세요. 새 Release의 이 수동 경로에서 실제 SOC100%·거리0km를 확인했으며 첫 자동 조회 미동작은 남아 있습니다.
+- 기존 일반 앱은 Debug 서명이므로 새 Release 서명 APK로 덮어쓸 수 없습니다. 별도 Pleos AVD에서 같은 제출 APK를 시험하며, 원래 앱을 삭제해 해결하지 않습니다. 정확한 서명·설치 상태와 실제/합성/미검증 구분은 위 보고서를 따릅니다.
+
+아래는 이전 단계의 개발·검증 이력입니다. 수치와 APK 상태는 각 기록의 시점 기준이며 최신 제출 준비 결과를 우선합니다.
+
 ## B안 라이트 Android UI — 2026-11-11 22:54 +09:00
 
 일반 CARITDA에 B안 라이트 기본/선택 다크를 적용했습니다. 홈은 운전자·미확인 인계·현재 유효한 차량 안내·문제 작성·차량/기록 순서이며 전역4탭을 정리했습니다. 위치/차량 기술·수정/상태/이력은 상세에 남겼고 SOC 자동 안내와 그래프는 별도입니다.
@@ -30,7 +53,7 @@ Android Studio에서 `NextDrive-Pleos`를 엽니다. 기존 Pleos_Connect_v2.1.0
 | 일반 Debug | `NextDrive-Pleos/app/build/outputs/apk/debug/app-debug.apk` — 기존 Debug 서명, 일반 앱 교체·실행 검증 |
 | TEST | `NextDrive-Pleos/app/build/outputs/apk/validation/app-validation.apk` |
 | 계측 | `NextDrive-Pleos/app/build/outputs/apk/androidTest/validation/app-validation-androidTest.apk` |
-| 서명 전 Release | `NextDrive-Pleos/app/build/outputs/apk/release/app-release-unsigned.apk` — 빌드만 성공, 설치 가능한 제출 APK 아님 |
+| 서명 전 Release | `NextDrive-Pleos/app/build/outputs/apk/release/app-release-unsigned.apk` — 빌드만 성공, 설치 가능한 제출 APK 아님 (과거 단계 기록. 현재 제출 APK는 apk/주시조_CARITDA_release.apk) |
 
 기존 서명을 사용한 Debug/validation/AndroidTest, Lint, Release 빌드를 실행했습니다. AndroidTest는 격리 분기만 사용하며 인자 없는 기존 runner는 DB 준비 경로가 있어 실행하지 마세요. 정확한 분기·결과는 통합 보고서에 있습니다. Firebase 공개 Android 설정 파일은 로컬 구성으로 유지하며 인증 파일/DB/백업/음성/개인 캡처/APK는 이번 소스 커밋에 포함하지 않았습니다.
 
@@ -38,9 +61,9 @@ Android Studio에서 `NextDrive-Pleos`를 엽니다. 기존 Pleos_Connect_v2.1.0
 
 이번에 [공식 공모전](https://appdevchallenge.auto-hmg.io/), [FAQ](https://appdevchallenge.auto-hmg.io/faq), [개발 가이드](https://appdevchallenge.auto-hmg.io/guide/development), [제출 가이드](https://appdevchallenge.auto-hmg.io/guide/submission)를 직접 확인했습니다. 접수양식(기획서)이 필수이고 영상·소스/APK GitHub는 선택 가산점 산출물입니다. 공식1차 마감은2026-11-15 23:59 KST, 2차 PT는12-03~04입니다.
 
-- 공식 안내의 제출 APK 위치는 같은 저장소의 `apk/팀명_앱이름_release.apk`입니다. **현재 그 파일은 게시하지 않았습니다.** 기존 소유 Release 서명키 사용·서명/설치 검증과 사용자 게시 승인이 필요합니다. Debug를 Release로 이름만 바꾸지 않습니다.
-- 시연 영상과 기획서 파일은 아직 이번 작업에서 생성·제출하지 않았습니다. 실제 일반 앱 STT 초안·저장/인계, SDK 차량 정보·그래프, 저장된 AI 설명을 구분해 촬영하세요. 신규 Gemini와 Gleo 왕복을 시연하려면 해당 실제 검증이 먼저 필요합니다.
-- 저장소는 현재 Private입니다. 공식 FAQ는11-16까지 Public 전환 후11-23까지 유지를 안내합니다. 공개 불가하면 마감 전에 공식 대체 다운로드 제출 경로를 확인해야 합니다. 코드/과거 이력 전체의 비밀정보 검토와 최종 승인 없이 공개·초대·외부 제출하지 않습니다.
+- 공식 안내의 제출 APK 위치는 같은 저장소의 `apk/팀명_앱이름_release.apk`입니다. 제출용 Release APK는 `apk/주시조_CARITDA_release.apk`로 게시되어 있습니다(SHA-256 `72a001e9d2f4b0d42f7aa68155f976fc7fc4846b975a2f33168555a9717539db`, 서명·실행 검증 결과는 [제출 준비 결과](docs/SUBMISSION_READINESS.md) 참고). Debug를 Release로 이름만 바꾸지 않았습니다.
+- 시연 영상은 위 "제출 안내"의 YouTube 링크로 제출합니다. 기획서(접수양식)는 개인정보가 있어 이 저장소에 올리지 않고 이메일로 제출합니다. 실제 일반 앱 STT 초안·저장/인계, SDK 차량 정보·그래프, 저장된 AI 설명을 구분해 촬영하세요. 신규 Gemini와 Gleo 왕복을 시연하려면 해당 실제 검증이 먼저 필요합니다.
+- 과거 Private 준비 안내와 달리 2026-11-14 작업 시작 시점 API의 저장소 상태는 Public입니다. 이번 공개 범위 변경은0회입니다. 공식 FAQ의 심사 기간 공개 유지 또는 ZIP 대안은 최신 제출 안내를 따르며, 외부 제출은 별도 사용자 결정으로 남깁니다.
 - 심사 기준 SHA는 최종 GitHub 연결 도구 게시 커밋을 사용합니다. 본 보고서에 자기 자신의 SHA를 넣기 위한 반복 커밋은 만들지 않습니다.
 
 아래는 이전 단계의 실행 기록이며 현재 기능·검증 범위는 위 링크를 우선합니다.
@@ -89,7 +112,7 @@ Pleos v2.1.0에서 기존215+신규31=246 assertion 통과, 일반 APK 데이터
 
 기존174 + 신규 자동 기록41 = 215 assertion 통과. 일반 문제22건/원문·이력·초안 보존, 관측 원본 전체 보존/추가 메타데이터 이전을 확인했습니다. [구현·AM36 판정·실제 값/제약·실행 순서](docs/AUTOMATIC_RECORDING_ACCEPTANCE.md)를 확인하세요. 전체 AM36/사용성/실차가 통과했다는 뜻은 아닙니다.
 
-기존 Android Studio에서 NextDrive-Pleos를 열고 기존 Pleos v2.1.0 AVD를 선택해 app Run을 사용합니다. 일반 APK는 현재 PC에 데이터 보존 방식으로 이미 설치됐습니다. 로컬 Debug APK는 app/build/outputs/apk/debug/app-debug.apk(프로젝트 내부 경로)이며 저장소에 APK를 게시하지 않았습니다. Release 서명/실행 검증·제출 APK 위치와 Private 저장소 심사 계정 접근은 아직 준비해야 합니다. 키/개인 DB/백업/로그는 공유하지 않습니다.
+기존 Android Studio에서 NextDrive-Pleos를 열고 기존 Pleos v2.1.0 AVD를 선택해 app Run을 사용합니다. 일반 APK는 현재 PC에 데이터 보존 방식으로 이미 설치됐습니다. 로컬 Debug APK는 app/build/outputs/apk/debug/app-debug.apk(프로젝트 내부 경로)이며 이 Debug APK는 저장소에 게시하지 않았습니다. 제출용 Release APK는 `apk/주시조_CARITDA_release.apk`로 게시되어 있고, 저장소는 Public입니다. 키/개인 DB/백업/로그는 공유하지 않습니다.
 
 아래는 이전 버전의 개발 기록과 실행 안내입니다. 현재 기능/검증 상태는 위 링크가 우선합니다.
 

@@ -74,8 +74,12 @@ class HomeVoiceMicrophoneChecks(private val inst:Instrumentation){
                 phase("DRIVER_SELECTED")
                 h.click(a,"start_driving")
             }
-            await(180000){runtime.microphoneActive};phase("WAKE_LISTENING")
-            ck(monitor.hits==0,"home "+(if(fixtureInput)"fixture ASR"else"actual microphone")+" starts after driver confirmation without voice screen/start button")
+            // READY permits prompting the human. STARTED can require the first spoken sound.
+            // Do not claim microphone activity before STARTED, or wait for the next utterance
+            // to begin before reporting that the SDK is ready to accept it.
+            fun ready(input:SpeechInput)=input.busy&&input.state.ready
+            await(180000){runtime.microphoneActive||ready(h.get(runtime,"wake") as SpeechInput)};phase("WAKE_LISTENING")
+            ck(monitor.hits==0,"home "+(if(fixtureInput)"fixture ASR"else"actual SDK STT request")+" is ready after driver confirmation without voice screen/start button")
             if(fixtureInput)say("카잇다")
             try{await(180000){runtime.controller?.sessionId!=null}}catch(e:Exception){error(e.message+" "+runtime.wakeDiagnostics)}
             phase("WAKE_ACCEPTED")
@@ -88,13 +92,16 @@ class HomeVoiceMicrophoneChecks(private val inst:Instrumentation){
             val c=runtime.controller!!;val id=c.issueId!!;val revision=c.issueRevision;val sid=c.sessionId!!
             val issue=SqliteIssueRepository(ctx,"$prefix.db").use{it.issues().single()}
             ck(issue.id==id&&issue.reporter.id==owner,(if(fixtureInput)"explicit validation symptom"else"actual human symptom")+" committed once to fixture driver/issue")
-            await(210000){c.state==VoiceConversationController.State.LISTENING&&runtime.microphoneActive&&c.lastReply.isNotBlank()}
+            await(210000){c.state==VoiceConversationController.State.LISTENING&&ready(h.get(runtime,"input") as SpeechInput)&&c.lastReply.isNotBlank()}
             if(realModel)ck(c.replyOrigin in setOf("GEMINI_NEW","GEMINI_RECOVERED"),"actual initial Gemini response followed full TTS DONE")
             else ck(c.replyOrigin=="LOCAL_RULE","actual local record acknowledgement followed TTS DONE; model disabled")
             phase("FOLLOW_UP_LISTENING")
             val input=h.get(runtime,"input") as SpeechInput
+            // A confirmed ambiguous wake can itself consume one real STT completion.
+            // Require a NEW completion after the symptom/ack, not the old absolute count of two.
+            val beforeFollowUp=input.completions
             if(fixtureInput)say("그럼 어떻게 해야 해?")
-            await(210000){input.completions>=2&&c.state==VoiceConversationController.State.LISTENING&&runtime.microphoneActive}
+            await(210000){input.completions>beforeFollowUp&&c.state==VoiceConversationController.State.LISTENING&&ready(input)}
             ck(c.issueId==id&&c.issueRevision==revision&&c.sessionId==sid,(if(fixtureInput)"validation follow-up"else"actual next human utterance")+" retains issue/revision/session without microphone button")
             if(realModel){
                 ck(c.replyOrigin in setOf("GEMINI_NEW","GEMINI_RECOVERED"),"actual new dialogue response followed full TTS DONE")

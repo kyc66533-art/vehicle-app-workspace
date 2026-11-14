@@ -1,5 +1,20 @@
 # Codex 개발 진행 기록
 
+## 2026-11-14 13:55 +09:00 — PR #7 제출 후보·실제 음성/SOC·기존 Studio Release 검증
+
+- 공개 상태 정정: 초기 PR7 API `head.repo.private=false/visibility=public`와 최종 repository API 모두 Public이다. 과거 문서에 따른 Private 안내를 바로잡았으며 공개 범위 변경 API 호출0. 검증된 APK의 별도 게시 승인은 받았고 민감 자료는 게시에서 제외했다.
+
+- PR7 `7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1`/main `7f913a4`와 로컬330파일 일치, 기존177입력 및531assertion/1600배치 증거 일치를 확인했다. UI 통합·내비100회·전체531검사 재실행0. main/PR2/3/6/7/Aside 직접 갱신·병합0, 후속 `release/submission-readiness-20261114` 브랜치·Draft PR로 게시한다.
+- Issue5의11/14 최종 댓글을 반영해 내비 안내 진입100/100과 지역85/100을 구분했다. 세종/창원 서울 결과10·광주→경기도5는 내비 내부 도시 검색/첫 결과 선택의 증거이며 CARITDA는 SearchPlace(자동차 정비소)만 보낸다. 업체 주소 확인을 안내하며 새 API·순위/지역 필터·카카오·서버는 추가하지 않았다.
+- CP 기기 시간 검사의 KST 별칭 오류와 PX03 최초 SDK 배치/Safety 구독 응답 경합을 검사 코드에서 보완했다. prepare 이전 새 UUID `submissionReadinessOnly`12PASS. 앱의 시각·기존 원본·정상 STT 종료/마이크 표시를 수정하지 않았다. 위험한 기존 compatOnly/designOnly/인자 없는 prepare는 실행하지 않았다.
+- 사람 Console P/0/100 준비→실제100→중간14/15/17/18/19→18 재수신→45→100 복원을 확인했다. 홈 안내/실제 자동TTS DONE1·한 episode/한 전달·복귀 시 카드 해제 보존. 기존 SOC 자동검사 전체는 고정18 기대와 당시 최신19의 차이로 FAIL했으며 개별실측과 구분했다. 재접속 뒤에도 SDK100/CarSafetyGate ALLOWED를 재확인했다.
+- 첫 사람 발화 계측은 사용자 에뮬레이터 재접속으로 중단됐다. 사용자 직접 TEST 음성 저장1건/receipt1/DONE3을 보존했다. 새 질문을 확인 발화와 혼동하지 않고 READY/STARTED를 구분하도록 **검사기만** 보완한 최종 고유fixture 실제 발화는6PASS: 호출→자동저장→실제TTS→추가발화→같은 문맥→해제. SQLite재조회 문제1/CREATED1/receipt1/turns8/DONE4/ENDED/AI op0, Noise·미해결·rev1. 독립 엔진/시스템 wake/새 Gemini 응답 성공으로 확대하지 않는다.
+- Debug/Validation/AndroidTest/Release/submissionCheck, Lint Debug0오류70경고/Release0오류69경고 성공. 필요한 AndroidTest만 변경 후 재컴파일했다. Unit NO-SOURCE는 제외했다. 유료 Gemini0/Worker배포0/새 외부API0.
+- 사용자가 새 Release 키를 Android Studio에서 생성했다. CMD 서명 비밀번호 입력 실패 후 **기존 같은 키/alias로 Studio release 성공**. 실제 `app/release/app-release.apk` 서명/Pkg/비debuggable 확인, 31,739,265bytes/SHA256 `72a001e9d2f4b0d42f7aa68155f976fc7fc4846b975a2f33168555a9717539db`, 원본 Release 입력109개 변경0/ZIP992개 내용 동일. 이후 Release 재빌드/재서명/키 재생성0. Verify-SubmissionApk는 기존 APK를 검증/동일바이트 복사만 한다.
+- 프로젝트 전용 새 Pleos AVD를 기존 이미지로 준비했다. Codex AEHD 접근 거부 후 사용자의 정상 CMD 실행으로5556 부팅, 기존5554/DB를 유지했다. **같은 서명 APK 설치·실행 PASS**, 사용자 운전자 신규등록→기록0 홈→수동 SDK SOC100/거리0/KST 확인. 첫 안내 뒤 자동 조회는 미동작해 수동 동작과 구분하고 현재 APK 유지/워크어라운드를 보고했다. 새AVD 입력기 ai.umos.inputmethod fatal2회, CARITDA fatal 관측0. OEM 앱은 수정하지 않았다.
+- 기존1452DB/21927행 변경·누락0, 스키마/버전/무결성/FK 확인. 일반44DB/4549행/31문제/113이벤트/10운전자/초안0 및 비공개17파일 동일. validation 기존1408DB/17378행 보존, 사용자 직접 root 기록1과 SDK/이력47행+새fixture37DB 추가(최종1445DB/17712행). 기존파일 변경5는 진단/상태/profile/heartbeat, 인증·AI캐시·동의 불변. 개인 DB/로그/키/일반 캡처는 게시하지 않는다.
+- 제출 브랜치·APK경로·실측/가상/실패·제출 규정·남은 항목은 `docs/SUBMISSION_READINESS.md`, 공개 APK메타는 `apk/ARTIFACT.json`에 정리했다. APK 신규 바이너리는 docs/GITHUB_SYNC.md의 별도 게시 규칙을 확인한다. 공개 전환·외부 제출·새 AI 인증/실모델·외부Gleo·실차 검증은 이번에 하지 않았다.
+
 ## 2026-11-14 01:23:13 +09:00 — PR #6 기반 팀원 UI·가독성 선택 통합
 
 - 로컬265파일/PR #6 6248c315 일치와 main 7f913a4를 확인하고 원본 소스·설정·일반/validation/test APK·두 앱 데이터를 비공개 백업했다. 별도 feature/ui-readability-native-nav-20261114 브랜치/PR #6 대상 Draft PR만 사용한다. main/PR #2/#3/#6/팀원 브랜치 직접 변경·병합0.

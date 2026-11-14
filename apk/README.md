@@ -1,6 +1,6 @@
 # CARITDA Release APK
 
-제출 후보: `CARITDA_CARITDA_release.apk` (팀명 CARITDA).
+제출 후보: `주시조_CARITDA_release.apk` (팀명 주시조).
 
 사용자가 Android Studio에서 기존 Release 키로 생성한 APK의 동일 바이트다. 다시 빌드하거나 재서명하지 않았다. package `com.nextdrive.pleos`, versionCode1/versionName0.1.0, debuggable=false.
 

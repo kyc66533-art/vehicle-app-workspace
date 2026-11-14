@@ -6,8 +6,8 @@ PR #7 `7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1`을 기준으로 준비한다. �
 
 ## 제출물과 실행
 
-- 팀명: CARITDA. 앱: CARITDA(카잇다, 상표 검증 전 잠정 명칭).
-- 제출 APK 목표 경로: `apk/CARITDA_CARITDA_release.apk`, package `com.nextdrive.pleos`.
+- 팀명: 주시조. 앱: CARITDA(카잇다, 상표 검증 전 잠정 명칭).
+- 제출 APK 목표 경로: `apk/주시조_CARITDA_release.apk`, package `com.nextdrive.pleos`.
 - 기존 일반 앱은 Debug 인증서로 설치돼 있다. 새 Release 인증서로 바로 업데이트할 수 없으며 기존 앱을 삭제해 해결하지 않는다.
 - 초기 준비의 `submissionCheck` 빌드 유형은 기존 앱을 보호하는 대체 경로다. 사용자는 Android Studio의 정식 `release`만 서명했으며, 확인용 APK를 추가 서명/생성하지 않는다. 실제 제출 APK 그대로를 별도 프로젝트 전용 Pleos AVD에 설치한다.
 - 환경: Windows 11, Android Studio, Pleos Connect v2.1.0/API34, 2560×1440/density160. Vehicle2.3.2/NaviHelper3.0.5/Fused1.1.3/STT·TTS3.3.1. 실제 주행·실차 검증은 없다.

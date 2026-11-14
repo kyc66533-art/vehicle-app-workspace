@@ -75,10 +75,10 @@ const result={package:pkg,versionCode:badging.match(/versionCode='([^']+)'/)?.[1
     sourceInputCount,sourceFingerprint,referenceContentIdentical,rebuilt:false,resigned:false};
 if(args.includes('--stage')){
     if(!sourceFile||!reference||!referenceContentIdentical)throw Error('Staging requires verified source manifest and unsigned reference');
-    const out=resolve('apk/CARITDA_CARITDA_release.apk');
+    const out=resolve('apk/주시조_CARITDA_release.apk');
     fs.mkdirSync(path.dirname(out),{recursive:true});
     if(fs.existsSync(out)){if(hash(fs.readFileSync(out))!==result.sha256)throw Error('Refusing to overwrite another APK')}
     else fs.copyFileSync(candidate,out,fs.constants.COPYFILE_EXCL);
-    fs.writeFileSync(resolve('apk/ARTIFACT.json'),JSON.stringify({path:'apk/CARITDA_CARITDA_release.apk',baseCommit:'7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1',...result},null,2));
+    fs.writeFileSync(resolve('apk/ARTIFACT.json'),JSON.stringify({path:'apk/주시조_CARITDA_release.apk',baseCommit:'7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1',...result},null,2));
 }
 console.log(JSON.stringify(result,null,2));

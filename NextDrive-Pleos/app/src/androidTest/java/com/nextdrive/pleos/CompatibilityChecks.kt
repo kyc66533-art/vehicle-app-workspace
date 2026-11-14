@@ -43,7 +43,7 @@ class CompatibilityChecks(private val inst:Instrumentation) {
         val obs=ObservationStore(c);val snapshots=SnapshotStore(c)
         var a=launch();await("driver allowed"){main{tag(a,"driver_A")?.isEnabled==true}}
         click(a,"driver_A");click(a,"start_driving")
-        await("actual entry complete"){obs.latest(3).size==3&&snapshots.latest()!=null}
+        await("actual entry complete"){main{SdkBatchSettlement.complete(BLightHarness(inst),a,obs)}&&obs.latest(3).size==3&&snapshots.latest()!=null}
         val count=obs.refs().size;val records=dbRows(repo)
         val settingsKeys=listOf("manage_drivers","vehicle_settings","voice_settings_history","help","replay_guide","ai_account_check","app_technical")
         for(route in listOf("nav_HOME","nav_ISSUES","nav_VEHICLE")){
@@ -74,7 +74,8 @@ class CompatibilityChecks(private val inst:Instrumentation) {
         screenshot("home-kst")
         val raw=obs.refs()
         settingsRow(a,"vehicle_settings");click(a,"time_device");click(a,"nav_VEHICLE")
-        verify(text(a).contains(ZoneId.systemDefault().id)&&obs.refs()==raw&&dbRows(repo)==records,"CP device time selection changes presentation only and preserves raw timestamps")
+        val received=obs.mostRecent("EV_SOC",true)?.receivedAt?:obs.mostRecent("ODOMETER",true)?.receivedAt?:error("No received timestamp")
+        verify(settings.deviceTime&&text(a).contains(settings.time(received))&&obs.refs()==raw&&dbRows(repo)==records,"CP device time selection changes presentation only and preserves raw timestamps (including Seoul's KST label)")
         click(a,"nav_HOME");click(a,"new_issue");main{(tag(a,"situation") as EditText).setText("메뉴 이동 중에도 보존할 초안")}
         val draft=repo.draft()!!;click(a,"menu");click(a,"back");click(a,"resume_draft")
         verify(main{(tag(a,"situation") as EditText).text.toString()==draft.body}&&repo.draft()==draft,"CP visiting settings and returning preserves authored draft without saving an issue")

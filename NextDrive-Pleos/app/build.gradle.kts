@@ -73,6 +73,13 @@ android {
         providers.gradleProperty("caritdaDebugKeystore").orNull?.let { storeFile = file(it) }
     }
     buildTypes {
+        // Same release code/settings, separate install identity: never replace the user's Debug app.
+        create("submissionCheck") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".submissioncheck"
+            matchingFallbacks += listOf("release")
+            resValue("string", "app_name", "[TEST] CARITDA Release 확인")
+        }
         create("validation") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".validation"

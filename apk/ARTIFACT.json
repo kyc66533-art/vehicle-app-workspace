@@ -1,0 +1,19 @@
+{
+  "path": "apk/CARITDA_CARITDA_release.apk",
+  "baseCommit": "7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1",
+  "package": "com.nextdrive.pleos",
+  "versionCode": "1",
+  "versionName": "0.1.0",
+  "size": 31739265,
+  "sha256": "72a001e9d2f4b0d42f7aa68155f976fc7fc4846b975a2f33168555a9717539db",
+  "gitBlobSha": "6d08cf4dcc39852ae908ccd2125fffe198587dfe",
+  "certificateSha256": "389f24bac0558701ccf7d99573bd855743d9f5b8987916618317c4108dca49f1",
+  "debuggable": false,
+  "archiveEntries": 992,
+  "archiveFingerprint": "bb55956ceb4408afcf922e4fc1940490a8954c122f8a3f1cbca0b621c761ba5d",
+  "sourceInputCount": 109,
+  "sourceFingerprint": "7e725d406e64a0709d0c36b2b36a89ae3bfc9201077670b7fb185f088cbb5bc8",
+  "referenceContentIdentical": true,
+  "rebuilt": false,
+  "resigned": false
+}

@@ -16,10 +16,10 @@ import org.json.JSONObject
 
 /** Real Console→SOC callback→Main home→automatic real TTS→local query→voice commit.
  * ONLY the follow-up ASR final/ended callbacks are fixtures. No Gemini dispatch. */
-class VoiceAttentionSocChecks(private val inst:Instrumentation,private val runId:String){
+class VoiceAttentionSocChecks(private val inst:Instrumentation,private val runId:String,private val manualConsole:Boolean=false){
     private val ctx=inst.targetContext;private val h=BLightHarness(inst);private val lines=mutableListOf<String>()
     private fun ck(ok:Boolean,label:String){check(ok){label};lines.add("PASS $label")}
-    private fun await(timeout:Long=45000,condition:()->Boolean){val end=System.currentTimeMillis()+timeout;while(System.currentTimeMillis()<end){if(h.main(condition))return;Thread.sleep(70)};error("VOICE_ATTENTION_SOC_TIMEOUT")}
+    private fun await(timeout:Long=if(manualConsole)240000 else 45000,condition:()->Boolean){val end=System.currentTimeMillis()+timeout;while(System.currentTimeMillis()<end){if(h.main(condition))return;Thread.sleep(70)};error("VOICE_ATTENTION_SOC_TIMEOUT")}
     private fun stage(phase:String){ctx.openFileOutput("drivecheck-soc-$runId.json",0).use{it.write(JSONObject().put("phase",phase).toString().toByteArray())}}
     private class Speech:SpeechBackend{
         override val source="VALIDATION_FOLLOWUP_ASR_FIXTURE";var requests=0;lateinit var events:SpeechBackend.Events
@@ -40,7 +40,7 @@ class VoiceAttentionSocChecks(private val inst:Instrumentation,private val runId
             await{FirebaseSessionProvider.initialized||FirebaseSessionProvider.configState!="READY"}
             h.main{VoiceSettings(ctx,"$prefix-settings").write(owner.id,FirebaseSessionProvider.subject().orEmpty(),VoiceSettings.Permit(false,false,true,true,true,true))}
             stage("READY_100")
-            voice=monitor.waitForActivityWithTimeout(40000) as? VoiceConversationActivity?:error("AUTO_VOICE_ACTIVITY_NOT_OPENED")
+            voice=monitor.waitForActivityWithTimeout(if(manualConsole)240000 else 40000) as? VoiceConversationActivity?:error("AUTO_VOICE_ACTIVITY_NOT_OPENED")
             val v=voice;val speech=Speech()
             h.main{h.set(v,"speech\$delegate",lazy{SpeechInput(v,factory={speech},allowed={true})})}
             await{speech.requests==1||(h.get(v,"controller") as VoiceConversationController).state in setOf(VoiceConversationController.State.ERROR_PAUSED,VoiceConversationController.State.ENDED)}

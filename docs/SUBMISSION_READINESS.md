@@ -2,6 +2,8 @@
 
 PR #7 `7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1`을 기준으로 준비한다. 기존 UI 통합과 내비게이션 100회 시험은 반복하지 않았다. main과 PR #2/#3/#6/#7은 병합하거나 갱신하지 않는다. 제출용 후속 브랜치는 `release/submission-readiness-20261114`이며 실제 최종 SHA는 해당 PR의 HEAD를 사용한다.
 
+저장소는 작업 시작 때 저장한 PR7 API의 `head.repo.private=false/visibility=public`과 최종 repository API 모두 **Public**이다. 작업 중 Private라고 안내한 것은 과거 문서 상태를 재사용한 오류이며 정정한다. 공개 범위를 바꾸는 API는 호출하지 않았다. 사용자가 검증 APK의 게시를 승인한 뒤 동일 저장소의 새 브랜치에 포함했다. 이번 게시 대상에 개인키·DB·캐시·로그·개인 캡처는 없다.
+
 ## 제출물과 실행
 
 - 팀명: CARITDA. 앱: CARITDA(카잇다, 상표 검증 전 잠정 명칭).

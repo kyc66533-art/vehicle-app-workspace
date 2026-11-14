@@ -2,6 +2,8 @@
 
 ## 2026-11-14 13:55 +09:00 — PR #7 제출 후보·실제 음성/SOC·기존 Studio Release 검증
 
+- 공개 상태 정정: 초기 PR7 API `head.repo.private=false/visibility=public`와 최종 repository API 모두 Public이다. 과거 문서에 따른 Private 안내를 바로잡았으며 공개 범위 변경 API 호출0. 검증된 APK의 별도 게시 승인은 받았고 민감 자료는 게시에서 제외했다.
+
 - PR7 `7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1`/main `7f913a4`와 로컬330파일 일치, 기존177입력 및531assertion/1600배치 증거 일치를 확인했다. UI 통합·내비100회·전체531검사 재실행0. main/PR2/3/6/7/Aside 직접 갱신·병합0, 후속 `release/submission-readiness-20261114` 브랜치·Draft PR로 게시한다.
 - Issue5의11/14 최종 댓글을 반영해 내비 안내 진입100/100과 지역85/100을 구분했다. 세종/창원 서울 결과10·광주→경기도5는 내비 내부 도시 검색/첫 결과 선택의 증거이며 CARITDA는 SearchPlace(자동차 정비소)만 보낸다. 업체 주소 확인을 안내하며 새 API·순위/지역 필터·카카오·서버는 추가하지 않았다.
 - CP 기기 시간 검사의 KST 별칭 오류와 PX03 최초 SDK 배치/Safety 구독 응답 경합을 검사 코드에서 보완했다. prepare 이전 새 UUID `submissionReadinessOnly`12PASS. 앱의 시각·기존 원본·정상 STT 종료/마이크 표시를 수정하지 않았다. 위험한 기존 compatOnly/designOnly/인자 없는 prepare는 실행하지 않았다.

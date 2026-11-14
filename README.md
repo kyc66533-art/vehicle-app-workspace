@@ -2,6 +2,14 @@
 
 ## 공모전 제출 후보 — 2026-11-14
 
+**제출 안내(심사자용):** 심사 대상은 기본 브랜치 `main`이 아니라 제출 브랜치 `release/submission-readiness-20261114`의 최종 커밋입니다. `main`에는 `apk/` 폴더가 없습니다. 최종 커밋 번호(40자리)는 접수 이메일과 [PR #8](https://github.com/kyc66533-art/vehicle-app-workspace/pull/8) 본문에 적었습니다.
+
+- 팀명: 주시조 / 앱 이름: CARITDA(카잇다, 상표 검증 전 잠정 명칭. 앱 안의 표시 이름은 "CARITDA(가칭)")
+- 제출 APK: [`apk/주시조_CARITDA_release.apk`](apk/주시조_CARITDA_release.apk) (SHA-256 `72a001e9d2f4b0d42f7aa68155f976fc7fc4846b975a2f33168555a9717539db`, package `com.nextdrive.pleos`)
+- 시연 영상: [현대차 앱개발 공모전 시연 영상](https://www.youtube.com/watch?v=zlbre6JdCAY)
+- 실행 환경: Pleos Connect v2.1.0 / API34, 화면 2560×1440, density160 (아래 "환경" 참고)
+- 기술 검증 결과: [docs/SUBMISSION_READINESS.md](docs/SUBMISSION_READINESS.md)
+
 **한 줄 소개:** 차가 알려 준 정보와 운전자가 남긴 문제를 함께 확인하고, 점검 참고 설명과 다음 운전자 인계로 이어 주는 Pleos Connect 차량용 앱입니다. 고장이나 수리 완료를 자동 판정하지 않습니다.
 
 - 기준: [PR #7](https://github.com/kyc66533-art/vehicle-app-workspace/pull/7), `7f147d9032bb00ffdc76e2e7fc9b6ce752e1c7a1`. 제출 준비 후속 브랜치: `release/submission-readiness-20261114`. main과 기존 PR은 자동 병합하지 않습니다. 제출 시 후속 PR의 최종 HEAD SHA를 명시합니다.
@@ -45,7 +53,7 @@ Android Studio에서 `NextDrive-Pleos`를 엽니다. 기존 Pleos_Connect_v2.1.0
 | 일반 Debug | `NextDrive-Pleos/app/build/outputs/apk/debug/app-debug.apk` — 기존 Debug 서명, 일반 앱 교체·실행 검증 |
 | TEST | `NextDrive-Pleos/app/build/outputs/apk/validation/app-validation.apk` |
 | 계측 | `NextDrive-Pleos/app/build/outputs/apk/androidTest/validation/app-validation-androidTest.apk` |
-| 서명 전 Release | `NextDrive-Pleos/app/build/outputs/apk/release/app-release-unsigned.apk` — 빌드만 성공, 설치 가능한 제출 APK 아님 |
+| 서명 전 Release | `NextDrive-Pleos/app/build/outputs/apk/release/app-release-unsigned.apk` — 빌드만 성공, 설치 가능한 제출 APK 아님 (과거 단계 기록. 현재 제출 APK는 apk/주시조_CARITDA_release.apk) |
 
 기존 서명을 사용한 Debug/validation/AndroidTest, Lint, Release 빌드를 실행했습니다. AndroidTest는 격리 분기만 사용하며 인자 없는 기존 runner는 DB 준비 경로가 있어 실행하지 마세요. 정확한 분기·결과는 통합 보고서에 있습니다. Firebase 공개 Android 설정 파일은 로컬 구성으로 유지하며 인증 파일/DB/백업/음성/개인 캡처/APK는 이번 소스 커밋에 포함하지 않았습니다.
 
@@ -54,7 +62,7 @@ Android Studio에서 `NextDrive-Pleos`를 엽니다. 기존 Pleos_Connect_v2.1.0
 이번에 [공식 공모전](https://appdevchallenge.auto-hmg.io/), [FAQ](https://appdevchallenge.auto-hmg.io/faq), [개발 가이드](https://appdevchallenge.auto-hmg.io/guide/development), [제출 가이드](https://appdevchallenge.auto-hmg.io/guide/submission)를 직접 확인했습니다. 접수양식(기획서)이 필수이고 영상·소스/APK GitHub는 선택 가산점 산출물입니다. 공식1차 마감은2026-11-15 23:59 KST, 2차 PT는12-03~04입니다.
 
 - 공식 안내의 제출 APK 위치는 같은 저장소의 `apk/팀명_앱이름_release.apk`입니다. 제출용 Release APK는 `apk/주시조_CARITDA_release.apk`로 게시되어 있습니다(SHA-256 `72a001e9d2f4b0d42f7aa68155f976fc7fc4846b975a2f33168555a9717539db`, 서명·실행 검증 결과는 [제출 준비 결과](docs/SUBMISSION_READINESS.md) 참고). Debug를 Release로 이름만 바꾸지 않았습니다.
-- 시연 영상과 기획서 파일은 아직 이번 작업에서 생성·제출하지 않았습니다. 실제 일반 앱 STT 초안·저장/인계, SDK 차량 정보·그래프, 저장된 AI 설명을 구분해 촬영하세요. 신규 Gemini와 Gleo 왕복을 시연하려면 해당 실제 검증이 먼저 필요합니다.
+- 시연 영상은 위 "제출 안내"의 YouTube 링크로 제출합니다. 기획서(접수양식)는 개인정보가 있어 이 저장소에 올리지 않고 이메일로 제출합니다. 실제 일반 앱 STT 초안·저장/인계, SDK 차량 정보·그래프, 저장된 AI 설명을 구분해 촬영하세요. 신규 Gemini와 Gleo 왕복을 시연하려면 해당 실제 검증이 먼저 필요합니다.
 - 과거 Private 준비 안내와 달리 2026-11-14 작업 시작 시점 API의 저장소 상태는 Public입니다. 이번 공개 범위 변경은0회입니다. 공식 FAQ의 심사 기간 공개 유지 또는 ZIP 대안은 최신 제출 안내를 따르며, 외부 제출은 별도 사용자 결정으로 남깁니다.
 - 심사 기준 SHA는 최종 GitHub 연결 도구 게시 커밋을 사용합니다. 본 보고서에 자기 자신의 SHA를 넣기 위한 반복 커밋은 만들지 않습니다.
 
